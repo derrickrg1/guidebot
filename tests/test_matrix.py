@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pandas as pd
 import pytest
 
-from guidebot import answer, config, crosscheck, library
+from guidebot import answer, config, crosscheck, extract_pdf, library
 from guidebot.extract_pdf import extract_document, parse_matrices, parse_matrix
 from guidebot.matrix_lookup import apply_adjustments, header_problems, lookup
 
@@ -41,6 +41,53 @@ def test_parse_fills_down_and_combines_headers(df):
 def test_regular_table_is_not_a_matrix():
     rows = [["Rural", "80%", "75%"], ["Condo", "90%*", "80%*"], ["Min Loan", "$150,000", ""]]
     assert parse_matrix(rows) is None
+
+
+# Shape from the FHA Standard guidelines (p. 10): topic | sub-topic | wrapped text, topic merged down.
+FHA_RAW = [
+    ["Multiple FHA Loan\nExceptions Con't", "Non-\nOccupying\nCo-\nBorrower",
+     "A non-occupying co-Borrower may qualify for another FHA-insured Mortgage.\n"
+     "A Borrower with an existing FHA-insured Mortgage may qualify as a co-\nBorrower."],
+    ["Resale Restrictions\n(Flip Transactions)",
+     "Time Restriction on Transfers of Title - The eligibility of a Property for a\nMortgage is set by time.\n"
+     "Resales Occurring Between 91 Days and 180 Days After Acquisition\n"
+     "A second appraisal must be obtained if:\n• the resale date is between 91 and 180 Days\n"
+     "following acquisition; and\n• the resale price is 100 percent or more over the price.\n"
+     "The cost of the second appraisal may not be charged to the Borrower.", N],
+]
+
+
+def test_guideline_table_grouped_by_topic():
+    text = extract_pdf._table_rows_text(FHA_RAW)
+    assert text.split("\n") == [
+        "### Multiple FHA Loan Exceptions Con't",
+        "- Non-Occupying Co-Borrower: A non-occupying co-Borrower may qualify for another FHA-insured Mortgage.",
+        "  - A Borrower with an existing FHA-insured Mortgage may qualify as a co-Borrower.",
+        "",
+        "### Resale Restrictions (Flip Transactions)",
+        "- Time Restriction on Transfers of Title - The eligibility of a Property for a Mortgage is set by time.",
+        "- Resales Occurring Between 91 Days and 180 Days After Acquisition",
+        "  - A second appraisal must be obtained if:",
+        "    - the resale date is between 91 and 180 Days following acquisition; and",
+        "    - the resale price is 100 percent or more over the price.",
+        "  - The cost of the second appraisal may not be charged to the Borrower.",
+    ]
+
+
+def test_o_bullets_nest_under_their_lead_in():
+    # Ignite puts the "o" glyph on its own line after each item; VA puts it in front.
+    rows = [["Income", "Allowable assets:\nChecking= 100%\no\nStocks= 90%\no"],
+            ["Entitlement", "For loans over $144,000:\no Veterans with Full Entitlement: 25%."]]
+    assert extract_pdf._table_rows_text(rows).split("\n") == [
+        "### Income",
+        "- Allowable assets:",
+        "  - Checking= 100%",
+        "  - Stocks= 90%",
+        "",
+        "### Entitlement",
+        "- For loans over $144,000:",
+        "  - Veterans with Full Entitlement: 25%.",
+    ]
 
 
 def test_lookup_rounds_fico_down(df):

@@ -273,17 +273,124 @@ def matrix_to_md(df: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
+def _prose(c) -> str:
+    """Cell text as one paragraph. Keeps words hyphenated across a line break ("co-\\nBorrower")."""
+    return _clean(re.sub(r"-\n(?=\w)", "-", str(c))) if c is not None else ""
+
+
+O_MARK = re.compile(r"(?:^|(?<=\s))o(?:\s+(?=[A-Z(])|$)")   # the "o" bullet glyph in NDM sheets
+
+
+def _is_title(line: str) -> bool:
+    """A sub-heading line inside a cell: no closing punctuation, mostly Capitalized Words."""
+    words = [w for w in line.split() if len(w) > 3 and w[0].isalpha()]
+    return (not re.search(r"[.:;,]$", line) and len(words) >= 2
+            and sum(w[0].isupper() for w in words) / len(words) >= 0.9)
+
+
+def _blocks(cell: str) -> list[tuple[str, str]]:
+    """Split a cell's wrapped lines back into its real parts: ("h", sub-heading), ("p", paragraph),
+    ("b", • bullet). A line ending in . or : closes a paragraph; anything else is word wrap."""
+    lines = []
+    for x in re.sub(r"-\n(?=\w)", "-", str(cell)).split("\n"):
+        x = _clean(x)
+        parts = O_MARK.split(x)
+        if len(parts) == 1:
+            lines.append(x)
+        else:   # "o" sub-bullets; pdfplumber often puts the glyph after its item, so every piece is one
+            lines += [f"◦{p.strip()}" for p in parts if p.strip()] or ["◦"]
+    lines = [x for x in lines if x]
+    for i, x in enumerate(lines):               # a lone "o" between two items marks both of them
+        if x == "◦":
+            if i and not lines[i - 1].startswith(("•", "◦")) and not lines[i - 1].endswith(":"):
+                lines[i - 1] = "◦" + lines[i - 1]
+            if i + 1 < len(lines) and not lines[i + 1].startswith(("•", "◦")):
+                lines[i + 1] = "◦" + lines[i + 1]
+    lines = [x for x in lines if x != "◦"]
+    out: list[list[str]] = []
+    closed = True
+    for i, line in enumerate(lines):
+        nxt = lines[i + 1] if i + 1 < len(lines) else ""
+        if line.startswith("•"):
+            out.append(["b", line.lstrip("• ").strip()])
+        elif line.startswith("◦"):
+            out.append(["o", line[1:]])
+        elif closed and nxt[:1].isupper() and _is_title(line):
+            out.append(["h", line])
+            continue                            # the line after a heading starts fresh
+        elif closed or (out[-1][0] == "b" and line[:1].isupper() and line.endswith(":")):
+            out.append(["p", line])             # "Ineligible Borrowers:" after a bullet list
+        else:
+            out[-1][1] += " " + line
+        closed = bool(re.search(r"[.:]$", line))
+    return [(k, t) for k, t in out]
+
+
+def _item(cells: list[str]) -> list[str]:
+    """A topic row as a list item: sub-topic label first, then the text's paragraphs,
+    sub-headings and • bullets nested under it."""
+    label = _prose(cells[0]) if len(cells) > 1 else ""
+    blocks = [b for c in (cells[1:] if label else cells) for b in _blocks(c)]
+    base = 1 if label else 0
+    lines = []
+    if label:
+        if blocks and blocks[0][0] == "p":
+            lines.append(f"- {label}: {blocks.pop(0)[1]}")
+        else:
+            lines.append(f"- {label}")
+    depth = base
+    parent = 0 if label else -1                 # depth of the line bullets hang under
+    last = parent                               # depth of the last non-"o" line
+    for kind, text in blocks:
+        if kind == "h":
+            lines.append("  " * base + f"- {text}")
+            depth, parent = base + 1, base
+            last = base
+        elif kind == "p":
+            lines.append("  " * depth + f"- {text}")
+            parent = last = depth
+        elif kind == "b":
+            lines.append("  " * (parent + 1) + f"- {text}")
+            last = parent + 1
+        else:
+            lines.append("  " * (last + 1) + f"- {text}")
+    return lines
+
+
 def _table_rows_text(rows) -> str:
-    out = []
+    """Guideline tables (topic | sub-topic | text) become a heading per topic with its rows as a
+    list, so the model sees which rule belongs to which topic. Wide tables stay as cell rows."""
+    wide = any(len(_compact(r)) > 3 for r in rows)    # a grid, not topic | sub-topic | text
+    out, last = [], None
     for r in rows:
-        cells = _compact(r)
-        if cells and (not out or out[-1] != " | ".join(cells)):
-            out.append(" | ".join(cells))
-    return "\n".join(out)
+        cells = [c for c in r if _clean(c)]
+        flat = [_prose(c) for c in cells]
+        if not cells or flat == last:
+            continue
+        last = flat
+        if wide:
+            out.append(" | ".join(flat))
+            continue
+        if _clean(r[0]) and len(cells) > 1:     # first column filled: a new topic
+            out.append(f"\n### {flat[0]}")
+            cells = cells[1:]
+        out += _item(cells)
+    return "\n".join(out).strip()
+
+
+def _top_level(tables):
+    """Drop tables nested inside another one. pdfplumber finds the label column's cell boxes as
+    their own little tables, which repeats the topic names as loose text."""
+    def inside(i, j):
+        a, b = tables[i].bbox, tables[j].bbox
+        if a == b:
+            return j < i            # exact repeat: keep the first
+        return a[0] >= b[0] and a[1] >= b[1] and a[2] <= b[2] and a[3] <= b[3]
+    return [t for i, t in enumerate(tables) if not any(inside(i, j) for j in range(len(tables)) if j != i)]
 
 
 def parse_page(page) -> dict:
-    tables = page.find_tables()
+    tables = _top_level(page.find_tables())
     outside = page
     for t in tables:
         try:
