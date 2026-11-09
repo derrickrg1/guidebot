@@ -7,6 +7,7 @@ import streamlit as st
 
 from guidebot import library
 from guidebot.extract_pdf import page_image
+from guidebot.matrix_lookup import header_problems
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from style import inject
 
@@ -34,25 +35,47 @@ path = c2.selectbox("Document", paths, format_func=lambda p: p.name)
 for dup, orig in dups:
     st.info(f"{dup.name} is an exact copy of {orig.name}. It's being skipped, and you can delete it.")
 
+def problems_by_matrix(pages) -> list[str]:
+    out = []
+    for page in pages:
+        for m in page["matrices"]:
+            out += [f"p. {page['page']} {m.attrs.get('title') or 'LTV matrix'}: {p}" for p in header_problems(m)]
+    return out
+
+
 just_approved = st.session_state.pop("just_approved", None) == str(path)
+reverify_key = f"reverify|{path}"
 doc = library.load(path)
 status = doc["status"]
+saved_problems = problems_by_matrix(doc["pages"]) if status == "verified" else []
 
 if just_approved:
     st.success("Approved.")
 
 # ── Verified and unchanged: show a compact confirmation, hide the review UI ──
-if status == "verified" and not just_approved:
-    st.success(f"✓  {path.name} is verified.")
-    if not st.button("Re-verify"):
-        st.stop()
-    # If they clicked Re-verify, fall through to the full review UI below
+if status == "verified" and not just_approved and not st.session_state.get(reverify_key):
+    if saved_problems:
+        st.error(f"{path.name} is approved, but its matrix headers look wrong. "
+                 "The bot won't quote numbers from it until you re-verify.\n\n"
+                 + "\n".join(f"- {p}" for p in saved_problems))
+    else:
+        st.success(f"✓  {path.name} is verified.")
+    if st.button("Re-verify", type="primary" if saved_problems else "secondary"):
+        st.session_state[reverify_key] = True
+        st.rerun()
+    st.stop()
 
 elif status == "changed":
-    st.warning("File changed since last approval — re-check and approve again.")
+    st.warning("File changed since last approval. Re-check and approve again.")
 
 elif status == "unverified":
     st.info("Not verified yet.")
+
+# Re-verifying: start from the saved version (keeps your edits) or a fresh read with the current parser.
+fresh = status == "verified" and st.toggle(
+    "Re-read the PDF with the current parser (drops edits you made last time)", value=bool(saved_problems))
+if fresh:
+    doc = library.load(path, fresh=True)
 
 # ── Full review UI ──
 edited = []
@@ -66,6 +89,8 @@ for page in doc["pages"]:
         mats = []
         for i, m in enumerate(page["matrices"]):
             st.markdown(f"**Matrix: {m.attrs.get('title') or 'LTV matrix'}**  \nCheck every cell against the PDF.")
+            for p in header_problems(m):
+                st.error(p)
             if m.columns.duplicated().any():
                 seen: dict[str, int] = {}
                 new_cols = []
@@ -74,17 +99,22 @@ for page in doc["pages"]:
                     new_cols.append(f"{c} ({seen[c]})" if list(m.columns).count(c) > 1 else c)
                 m = m.copy()
                 m.columns = new_cols
-            e = st.data_editor(m, key=f"m|{path}|{page['page']}|{i}|{doc['hash']}",
+            e = st.data_editor(m, key=f"m|{path}|{page['page']}|{i}|{doc['hash']}|{fresh}",
                                hide_index=True, use_container_width=True)
             e = e.copy()
             e.attrs = dict(m.attrs)
             mats.append(e)
         text = st.text_area("Text the bot reads", page["text"], height=320,
-                            key=f"t|{path}|{page['page']}|{doc['hash']}")
+                            key=f"t|{path}|{page['page']}|{doc['hash']}|{fresh}")
     edited.append({"page": page["page"], "text": text, "matrices": mats})
 
 st.divider()
-if st.button("Approve this document", type="primary"):
+blocked = problems_by_matrix(edited)
+if blocked:
+    st.error("Can't approve: some matrix headers look wrong, and headers can't be fixed by hand here. "
+             "The parser needs a fix for this layout.")
+if st.button("Approve this document", type="primary", disabled=bool(blocked)):
     library.save_verified(path, edited)
     st.session_state.just_approved = str(path)
+    st.session_state.pop(reverify_key, None)
     st.rerun()

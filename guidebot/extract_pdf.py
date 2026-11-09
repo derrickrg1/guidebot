@@ -85,38 +85,56 @@ def _split_merged_groups(text: str, n: int) -> list[str] | None:
     return [" ".join(p) for p in phrases]
 
 
-def parse_matrix(rows) -> pd.DataFrame | None:
-    """Return a wide DataFrame if this table is an LTV-style matrix, else None."""
-    compact = [_compact(r) for r in rows]
+# Header cells that are the matrix title or effective date, never a column group.
+TITLE_LIKE = re.compile(r"LTV|CLTV|Program\s+Max|Effective\s+Date|\d{1,2}\.\d{1,2}\.\d{4}", re.I)
+
+
+def _cells(row) -> tuple[list[str], bool]:
+    """Compact cells. A row pdfplumber squashed into one cell ('≤ $2,000,000 700 70% 65% ...')
+    is split back into tokens. Returns (cells, squashed)."""
+    cells = _compact(row)
+    if len(cells) == 1:
+        tokens = cells[0].split()
+        if _trailing_values(tokens) >= 3:
+            return tokens, True
+    return cells, False
+
+
+def _parse_block(compact: list[list[str]], squashed: set[int], min_rows: int = 3) -> tuple[pd.DataFrame | None, set[int]]:
+    """One matrix from pre-compacted rows. Returns (df, indices of rows it used)."""
     counts = [_trailing_values(c) for c in compact]
     data_idx = [i for i, n in enumerate(counts) if n >= 3]
-    if len(data_idx) < 3:
-        return None
+    if len(data_idx) < min_rows:
+        return None, set()
 
     n_values = max(set(counts[i] for i in data_idx), key=lambda n: sum(counts[i] == n for i in data_idx))
-    header_rows = [compact[i] for i in range(data_idx[0]) if compact[i]]
-    if not header_rows:
-        return None
+    header_idx = [i for i in range(data_idx[0]) if compact[i]]
+    if not header_idx:
+        return None, set()
+    header_rows = [compact[i] for i in header_idx]
 
     last = header_rows[-1]
     dims = len(last) - n_values
     if dims < 1:
-        return None
+        return None, set()
     dim_names = last[:dims]
     labels = last[dims:]
 
-    groups, title = None, ""
-    for upper in reversed(header_rows[:-1]):
-        for k in (len(upper), len(upper) - 1):
-            # Skip if k==2 and any element looks like a date or program name rather than a
-            # property-type group — those rows are title/date rows, not group headers.
+    groups, title, group_src = None, "", None
+    for j in reversed(range(len(header_rows) - 1)):
+        upper = header_rows[j]
+        # A leading title cell ("Program Maximum LTV/CLTVs") sits in the same row as the groups.
+        # Try dropping it first, or 3 cells over 6 columns gets read as 3 groups of 2.
+        ks = (len(upper) - 1, len(upper)) if TITLE_LIKE.search(upper[0]) else (len(upper), len(upper) - 1)
+        for k in ks:
             if k > 1 and n_values % k == 0:
                 candidates = upper[-k:]
-                if k == 2 and any(re.search(r'\d{1,2}\.\d{1,2}\.\d{4}', c) for c in candidates):
-                    continue  # date row, not a group header
+                if any(TITLE_LIKE.search(c) for c in candidates):
+                    continue  # title/date row, not a group header
                 title = upper[0] if k == len(upper) - 1 else ""
                 span = n_values // k
                 groups = [g for g in candidates for _ in range(span)]
+                group_src = j
                 break
         if groups:
             break
@@ -128,16 +146,17 @@ def parse_matrix(rows) -> pd.DataFrame | None:
             n_groups = len(labels) // period
             unique_labels = labels[:period]
             found_groups = None
-            for upper in reversed(header_rows[:-1]):
-                if len(upper) == n_groups:
-                    found_groups = upper
+            for j in reversed(range(len(header_rows) - 1)):
+                if len(header_rows[j]) == n_groups:
+                    found_groups, group_src = header_rows[j], j
                     break
             if found_groups is None:
                 # Try splitting a single merged header cell into n_groups tokens
-                for upper in reversed(header_rows[:-1]):
-                    if len(upper) == 1:
-                        found_groups = _split_merged_groups(upper[0], n_groups)
+                for j in reversed(range(len(header_rows) - 1)):
+                    if len(header_rows[j]) == 1:
+                        found_groups = _split_merged_groups(header_rows[j][0], n_groups)
                         if found_groups:
+                            group_src = j
                             break
             if found_groups:
                 groups = [g for g in found_groups for _ in range(period)]
@@ -152,12 +171,21 @@ def parse_matrix(rows) -> pd.DataFrame | None:
 
     columns = [f"{g} / {l}" for g, l in zip(groups, labels)] if groups else labels
 
-    records, prev = [], None
+    # A plain one-cell row above the headers ("Full Doc with Asset Utilization") names a sub-matrix.
+    names = [r[0] for j, r in enumerate(header_rows[:-1])
+             if len(r) == 1 and j != group_src and not TITLE_LIKE.search(r[0])]
+    title = " - ".join(names + ([title] if title else []))
+
+    records, prev, used = [], None, set(range(data_idx[0]))
     for i in data_idx:
         cells = compact[i]
         if counts[i] != n_values:
             continue
         lead, vals = cells[: len(cells) - n_values], cells[len(cells) - n_values:]
+        if len(lead) > dims and i in squashed:
+            # Squashed row: "≤ $2,000,000 700" -> ["≤ $2,000,000", "700"]
+            cut = len(lead) - (dims - 1)
+            lead = [" ".join(lead[:cut])] + lead[cut:]
         if len(lead) > dims:
             lead = lead[-dims:]
         if len(lead) < dims:
@@ -166,11 +194,53 @@ def parse_matrix(rows) -> pd.DataFrame | None:
             lead = prev[: dims - len(lead)] + lead
         prev = lead
         records.append(lead + vals)
+        used.add(i)
 
     df = pd.DataFrame(records, columns=dim_names + columns)
     df.attrs["title"] = title
     df.attrs["dims"] = dim_names
-    return df
+    return df, used
+
+
+def parse_matrices(rows) -> tuple[list[pd.DataFrame], list]:
+    """All LTV matrices in a table, plus the rows that aren't part of any matrix
+    (overlay tables, requirements) so their text still reaches the bot.
+    A new matrix starts wherever the column-label row repeats."""
+    parsed = [_cells(r) for r in rows]
+    compact = [c for c, _ in parsed]
+    squashed = {i for i, (_, s) in enumerate(parsed) if s}
+    counts = [_trailing_values(c) for c in compact]
+    data_idx = [i for i, n in enumerate(counts) if n >= 3]
+    if len(data_idx) < 3:
+        return [], rows
+    label = next((compact[i] for i in reversed(range(data_idx[0])) if compact[i]), None)
+    if label is None:
+        return [], rows
+
+    starts = [0]
+    for i in range(data_idx[0] + 1, len(rows)):
+        if counts[i] < 3 and compact[i] == label:
+            before = [j for j in data_idx if starts[-1] <= j < i]
+            if before:
+                starts.append(before[-1] + 1)
+
+    mats, used = [], set()
+    for a, b in zip(starts, starts[1:] + [len(rows)]):
+        # Later blocks follow a repeated label row, so one data row is enough to trust them.
+        df, block_used = _parse_block(compact[a:b], {i - a for i in squashed if a <= i < b},
+                                      min_rows=3 if a == 0 else 1)
+        if df is not None:
+            mats.append(df)
+            used |= {i + a for i in block_used}
+    if not mats:
+        return [], rows
+    return mats, [r for i, r in enumerate(rows) if i not in used]
+
+
+def parse_matrix(rows) -> pd.DataFrame | None:
+    """Return a wide DataFrame if this table is an LTV-style matrix, else None."""
+    mats, _ = parse_matrices(rows)
+    return mats[0] if mats else None
 
 
 def matrix_to_md(df: pd.DataFrame) -> str:
@@ -200,12 +270,9 @@ def parse_page(page) -> dict:
     text_parts = [outside.extract_text() or ""]
     matrices = []
     for t in tables:
-        rows = t.extract()
-        df = parse_matrix(rows)
-        if df is not None:
-            matrices.append(df)
-        else:
-            text_parts.append(_table_rows_text(rows))
+        mats, rest = parse_matrices(t.extract())
+        matrices += mats
+        text_parts.append(_table_rows_text(rest))
     return {"page": page.page_number, "text": "\n\n".join(p for p in text_parts if p.strip()), "matrices": matrices}
 
 

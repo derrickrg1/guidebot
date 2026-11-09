@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from guidebot.llm import ask_json
-from guidebot.matrix_lookup import apply_adjustments, dimension_columns, lookup, value_columns
+from guidebot.matrix_lookup import apply_adjustments, dimension_columns, header_problems, lookup, value_columns
 
 RULES = """Rules:
 - Read everything before answering. Don't stop at the first thing that looks relevant.
@@ -163,6 +163,9 @@ def compare_programs(
         if not 0 <= crit.matrix < len(mats):
             results.append({"program": prog, "eligible": None, "error": "Matrix index out of range"})
             continue
+        if header_problems(mats[crit.matrix]["df"]):
+            results.append({"program": prog, "eligible": None, "error": "Matrix headers need re-verifying"})
+            continue
 
         res = lookup(mats[crit.matrix]["df"], {d.name: d.value for d in crit.dims}, crit.column)
         if not res["ok"]:
@@ -299,6 +302,11 @@ def scenario_answer(question: str, history: list[dict], mats: list[dict], docs_t
     if m["status"] != "verified":
         return (f"**{m['file']}** hasn't been verified yet, so I won't quote numbers from it. "
                 "Open **Verify Documents** in the sidebar, check the matrix against the PDF, and approve it.")
+    probs = header_problems(m["df"])
+    if probs:
+        return (f"The column headers on **{m['file']}** look wrong, so I won't quote numbers from it:\n"
+                + "\n".join(f"- {p}" for p in probs)
+                + "\n\nOpen **Verify Documents**, re-read the PDF, and approve it again.")
 
     res = lookup(m["df"], {d.name: d.value for d in crit.dims}, crit.column)
     out = [f"*Matrix: {m['file']} p. {m['page']}*"] + [f"- {t}" for t in res["trace"]]

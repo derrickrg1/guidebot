@@ -50,6 +50,34 @@ def value_columns(df: pd.DataFrame) -> list[str]:
     return [c for c in df.columns if c not in dims]
 
 
+HEADER_JUNK = re.compile(r"Program\s+Max|CLTV|Effective\s+Date|\d{1,2}\.\d{1,2}\.\d{4}", re.I)
+
+
+def header_problems(df: pd.DataFrame) -> list[str]:
+    """Signs the parser got the column headers wrong. Any of these means a lookup could
+    return the right-looking number from the wrong column."""
+    cols = [str(c) for c in df.columns]
+    vals = value_columns(df)
+    probs = []
+    dups = sorted({c for c in cols if cols.count(c) > 1})
+    if dups:
+        probs.append(f"Duplicate column names: {', '.join(dups)}")
+    for c in vals:
+        if re.search(r"\(\d+\)$", c):
+            probs.append(f"'{c}' has a number tacked on, so its occupancy/group header was lost")
+        if HEADER_JUNK.search(c):
+            probs.append(f"'{c}' has title or date text in it, so the headers likely shifted")
+    groups: dict[str, list[str]] = {}
+    for c in vals:
+        if " / " in c:
+            g, label = c.rsplit(" / ", 1)
+            groups.setdefault(g, []).append(label)
+    if len({tuple(v) for v in groups.values()}) > 1:
+        probs.append("Column groups don't line up: "
+                     + "; ".join(f"{g}: {', '.join(v)}" for g, v in groups.items()))
+    return probs
+
+
 def lookup(df: pd.DataFrame, dims: dict, column: str) -> dict:
     """dims: {"Loan Amount": "1200000", "FICO": "705"}; column: exact matrix column name."""
     dim_names = dimension_columns(df)

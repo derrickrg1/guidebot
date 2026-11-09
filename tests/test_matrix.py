@@ -3,11 +3,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import pandas as pd
 import pytest
 
-from guidebot import answer, library
-from guidebot.extract_pdf import parse_matrix
-from guidebot.matrix_lookup import apply_adjustments, lookup
+from guidebot import answer, config, library
+from guidebot.extract_pdf import extract_document, parse_matrices, parse_matrix
+from guidebot.matrix_lookup import apply_adjustments, header_problems, lookup
 
 N = None
 # Shape copied from how pdfplumber actually returns an NDM matrix: merged cells come back as None,
@@ -123,3 +124,128 @@ def test_unverified_matrix_blocks_numbers(monkeypatch, df):
         is_scenario=True, matrix=0, column="x", missing=[], dims=[]))
     mats = [{"df": df, "file": "guide.pdf", "page": 1, "title": "LTV", "status": "unverified"}]
     assert "hasn't been verified" in answer.scenario_answer("q", [], mats, "", "m")
+
+
+# ---------- one test per matrix layout seen in the real NDM PDFs ----------
+
+# Ignite Express DSCR: title cell sits in the same row as the two DSCR groups.
+# Old bug: read as 3 groups of 2, shifting every DSCR label one column.
+DSCR_RAW = [
+    ["", "Program Maximum LTV/CLTVs", N, N, N, "", "DSCR > 1.00", N, N, N, N, "", "DSCR .75 to .99", N, N, N, ""],
+    ["", "Loan Amount", "", "FICO", "", "Purchase", N, "Rate & Term", "", "Cash Out", "", "Purchase", N, "Rate & Term", "", "Cash Out", ""],
+    ["$100,000 to\n$1,000,000", N, "720", N, "85%", N, "85%", N, "80%", N, "80%", N, "80%", N, "70%", N, N],
+    [N, N, "700", N, "80%", N, "80%", N, "80%", N, "75%", N, "75%", N, "70%", N, N],
+    [N, N, "660", N, "75%", N, "75%", N, "75%", N, "N/A", N, "N/A", N, "N/A", N, N],
+]
+
+
+def test_dscr_title_cell_not_read_as_group():
+    df = parse_matrix(DSCR_RAW)
+    assert list(df.columns)[2:] == [
+        "DSCR > 1.00 / Purchase", "DSCR > 1.00 / Rate & Term", "DSCR > 1.00 / Cash Out",
+        "DSCR .75 to .99 / Purchase", "DSCR .75 to .99 / Rate & Term", "DSCR .75 to .99 / Cash Out"]
+    assert df.attrs["title"] == "Program Maximum LTV/CLTVs"
+    assert lookup(df, {"Loan Amount": "500000", "FICO": "720"}, "DSCR .75 to .99 / Purchase")["ltv"] == 80
+    assert lookup(df, {"Loan Amount": "500000", "FICO": "720"}, "DSCR > 1.00 / Purchase")["ltv"] == 85
+    assert header_problems(df) == []
+
+
+# NonQM P&L: title, date, and all three occupancy groups merged into one cell.
+PL_RAW = [
+    ["NONQM PROFIT & LOSS ONLY Effective Date: 3.2.2026\nProgram Maximum LTV/CLTVs Primary Second Home* Investment Property*",
+     N, N, N, N, N, N, N, N, N, N, N],
+    ["Loan Amount", N, "FICO", "Purchase", "Rate & Term", "Cash Out", "Purchase", "Rate & Term", "Cash Out",
+     "Purchase", "Rate & Term", "Cash Out"],
+    ["≤ $1,000,000", N, "700+", "80%", "75%", "70%", "80%", "75%", "70%", "80%", "75%", "70%"],
+    [N, N, "680", "80%", "75%", "70%", "80%", "75%", "70%", "80%", "75%", "70%"],
+    [N, N, "660", "75%", "75%", "70%", "75%", "75%", "70%", "70%", "70%", "65%"],
+]
+
+
+def test_merged_title_and_groups_cell():
+    df = parse_matrix(PL_RAW)
+    assert list(df.columns)[2:5] == ["Primary / Purchase", "Primary / Rate & Term", "Primary / Cash Out"]
+    assert list(df.columns)[-1] == "Investment Property* / Cash Out"
+    assert lookup(df, {"Loan Amount": "800000", "FICO": "665"}, "Investment Property* / Cash Out")["ltv"] == 65
+    assert header_problems(df) == []
+
+
+# NonQM Premier Full Doc: two matrices in one table, the second one's only row squashed into a
+# single cell, and the overlay/requirements grid below them in the same table.
+FULL_DOC_RAW = [
+    ["", "NON QM PREMIER FULL DOC", N, N, N, "Effective Date: 6.15.2023", N, N],
+    ["Program Max LTV/CLTVs Primary Second Home Investment Property", N, N, N, N, N, N, N],
+    ["Loan Amount", "FICO", "Purch. & R/T", "Cash Out", "Purch. & R/T", "Cash Out", "Purch. & R/T", "Cash Out"],
+    ["≤ $1,000,000", "700+", "75%", "70%", "70%", "65%", "70%", "65%"],
+    [N, "680", "70%", "65%", "65%", "60%", "65%", "60%"],
+    ["$1,000,001 - $1,500,000", "700", "75%", "70%", "70%", "65%", "70%", "65%"],
+    ["", N, "Full Doc with Asset Utilization", N, N, N, N, N],
+    ["Program Max LTVs/CLTVs", N, "Primary", N, "Second Home", N, "Investment Property", N],
+    ["Loan Amount", "FICO", "Purch. & R/T", "Cash Out", "Purch. & R/T", "Cash Out", "Purch. & R/T", "Cash Out"],
+    ["≤ $2,000,000 700 70% 65% 65% 60% 60% 55%", N, N, N, N, N, N, N],
+    ["Program Requirements", N, "Property Overlays", N, "Max LTV/CLTV", N, "Products", N],
+    ["Min Loan Amount", "$250,000", "Low Rise Condos", N, "75%", N, "30 Year Fixed", N],
+]
+
+
+def test_two_matrices_in_one_table_and_overlays_kept():
+    mats, rest = parse_matrices(FULL_DOC_RAW)
+    assert len(mats) == 2
+    main, asset = mats
+    assert list(main.columns)[2] == "Primary / Purch. & R/T"
+    assert asset.attrs["title"].startswith("Full Doc with Asset Utilization")
+    assert asset.iloc[0].tolist() == ["≤ $2,000,000", "700", "70%", "65%", "65%", "60%", "60%", "55%"]
+    assert lookup(asset, {"Loan Amount": "1500000", "FICO": "740"}, "Investment Property / Cash Out")["ltv"] == 55
+    text = " ".join(c for r in rest for c in r if c)
+    assert "Low Rise Condos" in text and "Min Loan Amount" in text
+    assert "Full Doc with Asset Utilization" not in text  # consumed as the matrix title
+
+
+def test_header_problems_catch_old_bad_parses():
+    shifted = pd.DataFrame([["< $1,000,000", "720", "85%", "85%", "80%", "80%"]], columns=[
+        "Loan Amount", "FICO", "Program Maximum LTV/CLTVs / Purchase", "Program Maximum LTV/CLTVs / Rate & Term",
+        "DSCR > 1.00 / Cash Out", "DSCR > 1.00 / Purchase"])
+    shifted.attrs["dims"] = ["Loan Amount", "FICO"]
+    assert header_problems(shifted)
+    numbered = pd.DataFrame([["< $1,000,000", "720", "80%", "75%"]],
+                            columns=["Loan Amount", "FICO", "Purchase (1)", "Purchase (2)"])
+    numbered.attrs["dims"] = ["Loan Amount", "FICO"]
+    assert any("tacked on" in p for p in header_problems(numbered))
+
+
+def test_bad_headers_block_numbers(monkeypatch):
+    bad = parse_matrix(DSCR_RAW)
+    bad.columns = ["Loan Amount", "FICO"] + [f"Purchase ({i})" for i in range(1, 7)]
+    monkeypatch.setattr(answer, "ask_json", lambda *a, **k: answer.Criteria(
+        is_scenario=True, matrix=0, column="Purchase (1)", missing=[],
+        dims=[answer.DimValue(name="Loan Amount", value="500000"), answer.DimValue(name="FICO", value="720")]))
+    mats = [{"df": bad, "file": "dscr.pdf", "page": 1, "title": "LTV", "status": "verified"}]
+    out = answer.scenario_answer("q", [], mats, "", "m")
+    assert "won't quote numbers" in out and "%" not in out.split("\n")[0]
+
+
+# ---------- against the real PDFs (skipped when docs/ isn't present) ----------
+
+REAL = {
+    "Ignite Express DSCR/Ignite Express DSCR Expanded.pdf": (1, "DSCR .75 to .99 / Purchase", "80%"),
+    "NonQM P&L/NonQM-Profit-Loss-Only-Matrix.pdf": (1, "Investment Property* / Cash Out", "70%"),
+    "NonQM Full Doc/NonQM-Premier-Full-Doc-Matrix.pdf": (2, "Primary / Purch. & R/T", "75%"),
+    "Ignite 1099/Ignite 1099 Expanded.pdf": (1, "Investment Property / Cash Out", None),
+    "NonQM 1099/NonQM-1099-Matrix.pdf": (1, "Primary / Purchase", None),
+    "NonQM Bank Statements/NonQM-Bank-Statements-Matrix.pdf": (1, "Primary / Purchase", None),
+}
+
+
+@pytest.mark.parametrize("rel", REAL)
+def test_real_pdf_headers(rel):
+    path = config.DOCS_DIR / rel
+    if not path.exists():
+        pytest.skip(f"{rel} not in docs/")
+    n, col, first = REAL[rel]
+    mats = [m for p in extract_document(path) for m in p["matrices"]]
+    assert len(mats) == n
+    for m in mats:
+        assert header_problems(m) == [], rel
+    assert col in mats[0].columns
+    if first:
+        assert mats[0][col].iloc[0] == first

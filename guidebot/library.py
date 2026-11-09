@@ -77,12 +77,13 @@ def _extract(path: Path):
     return [{"page": i, "text": b.text, "matrices": []} for i, b in enumerate(load_file(path), start=1)]
 
 
-def load(path: Path, docs_dir: Path = config.DOCS_DIR) -> dict:
-    """Verified content if you've approved this exact file, otherwise fresh extraction."""
+def load(path: Path, docs_dir: Path = config.DOCS_DIR, fresh: bool = False) -> dict:
+    """Verified content if you've approved this exact file, otherwise fresh extraction.
+    fresh=True re-reads the PDF even if it's verified (status is still reported)."""
     h = file_hash(path)
     vp = _verified_path(path, docs_dir)
     stamp = vp.stat().st_mtime if vp.exists() else 0
-    key = (str(path), h, stamp)
+    key = (str(path), h, stamp, fresh)
     if key in _cache:
         return _cache[key]
 
@@ -90,7 +91,9 @@ def load(path: Path, docs_dir: Path = config.DOCS_DIR) -> dict:
     if vp.exists():
         data = json.loads(vp.read_text())
         if data["source_hash"] == h:
-            status, pages = "verified", _from_json(data["pages"])
+            status = "verified"
+            if not fresh:
+                pages = _from_json(data["pages"])
         else:
             status = "changed"
     if pages is None:
