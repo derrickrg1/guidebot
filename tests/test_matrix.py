@@ -90,6 +90,36 @@ def test_o_bullets_nest_under_their_lead_in():
     ]
 
 
+def test_grid_by_position_fills_merged_cells_and_splits_group_headers():
+    # Ignite p. 2 overlay box: "Max LTV/CLTV" over "Purch/R&T | Cash Out", a note spanning both
+    # columns, and a footnote stacked under one cell that must not become its own row.
+    cells = [
+        ((272, 81, 387, 131), "Property Overlays"), ((387, 81, 508, 94), "Max LTV/CLTV"),
+        ((387, 94, 452, 131), "Purch/R&T"), ((452, 94, 508, 131), "Cash Out"),
+        ((272, 131, 387, 144), "Rural"), ((387, 131, 452, 144), "80%"), ((452, 131, 508, 144), "75%"),
+        ((272, 144, 387, 168), "Condo"), ((387, 144, 452, 160), "90%*"), ((452, 144, 508, 168), "80%*"),
+        ((387, 160, 452, 168), "see note"),
+        ((272, 168, 387, 181), "Declining Markets"), ((387, 168, 508, 181), "5% reduction from max LTV"),
+    ]
+    assert extract_pdf._layout_text(cells).split("\n") == [
+        "| Property Overlays | Max LTV/CLTV Purch/R&T | Max LTV/CLTV Cash Out |",
+        "|---|---|---|",
+        "| Rural | 80% | 75% |",
+        "| Condo | 90%* see note | 80%* |",
+        "| Declining Markets | 5% reduction from max LTV | 5% reduction from max LTV |",
+    ]
+
+
+@pytest.mark.skipif(not (config.DOCS_DIR / "FHA/FHA Standard Matrix.pdf").exists(), reason="FHA PDF not in docs/")
+def test_fha_grid_keeps_footnotes_off_the_numbers():
+    text = extract_document(config.DOCS_DIR / "FHA/FHA Standard Matrix.pdf")[0]["text"]
+    # "5801" in the raw PDF is FICO 580 with footnote 1; $75,000 is one cell merged down every row
+    assert "| Purchase | 580¹ | 1 – 4 Units³, Manufactured | 96.5%, 100%³ | $75,000 |" in text
+    assert "| Cash-Out | 550 | 1 – 4 Units³, Manufactured | 80.0% | $75,000 |" in text
+    assert "5801" not in text
+    assert "| 4 Unit | $2,402,625 |" in text          # loan limits panel, not mixed in with the AUS box
+
+
 def test_lookup_rounds_fico_down(df):
     r = lookup(df, {"Loan Amount": "1200000", "FICO": "705"}, "Investment Property / Cash Out")
     assert r["ltv"] == 75 and "700 row" in r["trace"][1]

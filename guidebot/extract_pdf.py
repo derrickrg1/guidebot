@@ -378,6 +378,245 @@ def _table_rows_text(rows) -> str:
     return "\n".join(out).strip()
 
 
+SUPERSCRIPT = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
+LABEL_ONLY = re.compile(r"^(?![^$%]*[$%])(?!.*(^|\s)[\d.,<>≤≥–-]+(\s|$)).*$", re.S)   # header cells: no money, %, or numbers
+
+
+def _mark_superscripts(page):
+    """Footnote markers are small digits glued to the text: "5801" on the FHA sheet is FICO 580 with
+    note 1. Rewrite them as ¹ so a number can't swallow its footnote."""
+    chars = page.chars
+    for i, c in enumerate(chars):
+        if not c["text"].isdigit():
+            continue
+        near = [n for n in chars[max(i - 1, 0):i + 2] if n is not c and n["text"].strip()
+                and abs(n["top"] - c["top"]) < n["size"] / 2
+                and min(abs(n["x0"] - c["x1"]), abs(c["x0"] - n["x1"])) < 1.5]
+        if near and c["size"] < 0.8 * max(n["size"] for n in near):
+            c["text"] = c["text"].translate(SUPERSCRIPT)
+
+
+def _lines(text: str) -> list[str]:
+    """Cell text as logical lines: wrapped lines rejoined, footnotes (¹...) and bullets kept apart."""
+    out = []
+    text = re.sub(r"\s+(?=[⁰¹²³⁴⁵⁶⁷⁸⁹]+(\W|$))", "", re.sub(r"-\n(?=\w)", "-", text))   # "Units ³," -> "Units³,"
+    for x in (_clean(x) for x in text.split("\n")):
+        if not x:
+            continue
+        if out and not re.search(r"[.:;]$", out[-1]) and x[0] not in "⁰¹²³⁴⁵⁶⁷⁸⁹•" and (
+                x[0].islower() or out[-1].endswith(",")
+                or re.search(r"\b(the|a|an|of|to|and|or|with|for|in|on|by|from|than)$", out[-1])):
+            out[-1] += " " + x
+        else:
+            out.append(x)
+    return out
+
+
+def _dedupe_cells(cells):
+    """Drop a cell sitting inside a bigger cell that already has its text (NDM sheets draw text boxes
+    inside table cells, so pdfplumber sees the same words twice)."""
+    norm = lambda s: re.sub(r"\W", "", s).lower()
+    def inside(a, b):
+        return a[0] >= b[0] - 1 and a[1] >= b[1] - 1 and a[2] <= b[2] + 1 and a[3] <= b[3] + 1
+    return [(bb, t) for i, (bb, t) in enumerate(cells)
+            if not any(j != i and inside(bb, ob) and (bb != ob or j < i) and norm(t) in norm(ot)
+                       for j, (ob, ot) in enumerate(cells))]
+
+
+def _strips(cells):
+    """Group cells into horizontal strips no cell crosses (a merged cell keeps its rows together)."""
+    out = []
+    for c in sorted(cells, key=lambda c: (c[0][1], c[0][0])):
+        if out and c[0][1] < max(o[0][3] for o in out[-1]) - 1:
+            out[-1].append(c)
+        else:
+            out.append([c])
+    return out
+
+
+def _side_by_side(strip) -> bool:
+    return any(a[0][2] <= b[0][0] + 1 and min(a[0][3], b[0][3]) > max(a[0][1], b[0][1])
+               for a in strip for b in strip if a is not b)
+
+
+def _overlap(a, b) -> float:
+    return min(a[2], b[2]) - max(a[0], b[0])
+
+
+def _columns(header):
+    """Columns from a header strip. A cell with nothing under it is a column; the cells above it
+    are its group ("Max LTV/CLTV" over "Purch/R&T" and "Cash Out", "Terms" over "Available")."""
+    cells = [(bb, " ".join(_lines(t.replace("\n", " ")))) for bb, t in header]
+    def over(a, b):          # a sits above b, sharing its x-range
+        return a[1] < b[1] - 1 and _overlap(a, b) > 0.5 * min(a[2] - a[0], b[2] - b[0])
+    cols = []
+    for bb, t in sorted(cells, key=lambda c: c[0][0]):
+        if any(over(bb, ob) for ob, _ in cells):
+            continue
+        group = [ot for ob, ot in sorted(cells, key=lambda c: c[0][1]) if over(ob, bb)]
+        cols.append({"x0": bb[0], "x1": bb[2], "label": " ".join(group + [t])})
+    return cols
+
+
+def _cols_of(bb, cols) -> list[int]:
+    """Columns a cell covers: one normally, several for a cell merged across them."""
+    span = [k for k, c in enumerate(cols) if _overlap(bb, (c["x0"], 0, c["x1"], 0)) > 0.5 * (c["x1"] - c["x0"])]
+    if span:
+        return span
+    best = max(range(len(cols)), key=lambda k: _overlap(bb, (cols[k]["x0"], 0, cols[k]["x1"], 0)))
+    c = cols[best]
+    return [best] if _overlap(bb, (c["x0"], 0, c["x1"], 0)) > 0.5 * min(bb[2] - bb[0], c["x1"] - c["x0"]) else []
+
+
+def _grid_md(cols, body) -> str:
+    """Header columns plus body strips as a markdown table. Every row band gets the value of each
+    cell covering it, so a merged cell ($75,000 across three loan purposes) repeats on each row."""
+    cells = [(bb, " ".join(_lines(t)), k) for bb, t in body for k in _cols_of(bb, cols)]
+    bands = sorted({round(bb[1]) for bb, _, _ in cells})
+    rows = []
+    for y in bands:
+        starting = [(t, k) for bb, t, k in cells if round(bb[1]) == y]
+        # A real row starts cells in 2+ columns (or a new first-column label in a 2-column grid).
+        # Anything else is a text box stacked in one cell, like a footnote under "$500": keep it there.
+        real = len({k for _, k in starting}) >= 2 if len(cols) > 2 else any(k == 0 for _, k in starting)
+        if rows and not real:
+            for t, k in starting:
+                rows[-1][k] = f"{rows[-1][k]} {t}".strip()
+            continue
+        row = [" ".join(t for bb, t, k in cells if k == i and bb[1] - 1 <= y < bb[3] - 1) for i in range(len(cols))]
+        if any(row) and (not rows or row != rows[-1]):
+            rows.append(row)
+    lines = ["| " + " | ".join(c["label"] for c in cols) + " |", "|" + "---|" * len(cols)]
+    return "\n".join(lines + ["| " + " | ".join(r) + " |" for r in rows])
+
+
+def _panel_split(strips, i):
+    """Side-by-side panels (Loan Limits beside AUS, Requirements | Overlays | Products): the x no cell
+    crosses for the most strips from strip i, and how many strips that holds. Leftmost split wins
+    a tie; each side is laid out again, so three panels split twice."""
+    best = None
+    for b in sorted({c[0][2] for c in strips[i]})[:-1]:
+        n = 0
+        for strip in strips[i:]:
+            if any(c[0][0] < b - 1 and c[0][2] > b + 1 for c in strip):
+                break
+            n += 1
+        # A real panel has its own columns inside (Property Type | Ceiling). Label | text rows don't.
+        inner = any(_side_by_side([c for c in strip if c[0][2] <= b + 1])
+                    or _side_by_side([c for c in strip if c[0][2] > b + 1]) for strip in strips[i:i + n])
+        # and opens with titles on both sides ("Maximum Loan Limits | AUS"), unlike a grid's rows
+        titled = all(all(LABEL_ONLY.match(t) for bb, t in side if bb[1] <= min(o[1] for o, _ in side) + 1)
+                     for side in ([c for c in strips[i] if c[0][2] <= b + 1], [c for c in strips[i] if c[0][2] > b + 1]))
+        # A left side that's only a column of labels (Details, Assets, Credit...) labels the rows beside it
+        left = [c for strip in strips[i:i + n] for c in strip if c[0][2] <= b + 1]
+        label_col = all(LABEL_ONLY.match(t) for _, t in left) and not _side_by_side(left)
+        if n >= 2 and inner and titled and not label_col and (best is None or n > best[1]):
+            best = (b, n)
+    return best
+
+
+def _topic_rows(strip):
+    """A strip whose first cell is a label spanning all its rows (Bankruptcy | Ch. 7 | text,
+    Ch. 13 | text) as rows for _table_rows_text, or None if it isn't shaped like that."""
+    first = min(strip, key=lambda c: c[0][0])
+    top, bottom = min(c[0][1] for c in strip), max(c[0][3] for c in strip)
+    if (len(strip) < 2 or first[0][1] > top + 1 or first[0][3] < bottom - 1
+            or len(first[1]) > 80 or not re.search(r"[A-Za-z]{3}", first[1])):
+        return None
+    rows = []
+    for c in sorted((c for c in strip if c is not first), key=lambda c: (c[0][1], c[0][0])):
+        if rows and c[0][1] < rows[-1][-1][0][3] - 1:
+            rows[-1].append(c)
+        else:
+            rows.append([c])
+    if any(len(r) > 2 for r in rows):
+        return None
+    return [[first[1] if k == 0 else None] + [t for _, t in sorted(r, key=lambda c: c[0][0])]
+            for k, r in enumerate(rows)]
+
+
+def _flat_rows(cells) -> str:
+    """Cells we couldn't make sense of, one line per table row like pdfplumber gives them."""
+    rows: dict[int, list] = {}
+    for bb, t in sorted(cells, key=lambda c: (c[0][1], c[0][0])):
+        rows.setdefault(round(bb[1]), []).append(" ".join(_lines(t)))
+    return "\n".join(" | ".join(r) for r in rows.values())
+
+
+def _layout_text(cells, unplaced: list | None = None) -> str:
+    """Wide tables, read by position: title and note rows as lines, header + rows as a markdown
+    table, and side-by-side panels one after the other instead of interleaved."""
+    strips = _strips(_dedupe_cells(cells))
+    out, i = [], 0
+    while i < len(strips):
+        s = strips[i]
+        if not _side_by_side(s):                # run of plain rows: titles, notes, a footnote over 3 rows
+            texts = []
+            while i < len(strips) and not _side_by_side(strips[i]):
+                texts += [t for _, t in sorted(strips[i], key=lambda c: (c[0][1], c[0][0]))]
+                i += 1
+            out += _lines("\n".join(texts))
+            continue
+        split = _panel_split(strips, i)
+        if split and len(_columns(s)) == 2:
+            pass                # two titles side by side: panels (Loan Amounts | Property Overlays), not a grid
+        elif all(LABEL_ONLY.match(t) for _, t in s) and i + 1 < len(strips):
+            cols = _columns(s)
+            right = max(c["x1"] for c in cols)
+            beyond = [bb for strip in strips[i + 1:] for bb, _ in strip if bb[0] >= right - 1]
+            if beyond:          # cells past the last header ("Details | OO/2nd | NOO", then • and the text)
+                cols.append({"x0": right, "x1": max(bb[2] for bb in beyond), "label": ""})
+
+            def fits(strip):
+                """Rows under this header: numbers in them, or cells in all but one column of a 3+ column grid."""
+                ks = [_cols_of(bb, cols) for bb, _ in strip]
+                if not _side_by_side(strip) or [] in ks:
+                    return False
+                return (not all(LABEL_ONLY.match(t) for _, t in strip)
+                        or (len(cols) >= 3 and len({k for kk in ks for k in kk}) >= len(cols) - 1))
+
+            body = []
+            for nxt in strips[i + 1:]:
+                if not fits(nxt):
+                    break
+                body.append(nxt)
+            if body:
+                out.append(_grid_md(cols, [c for strip in body for c in strip]))
+                i += 1 + len(body)
+                continue
+        if split:
+            b, n = split
+            region = [c for strip in strips[i:i + n] for c in strip]
+            missed = []
+            sides = [_layout_text([c for c in region if c[0][2] <= b + 1], missed),
+                     _layout_text([c for c in region if c[0][2] > b + 1], missed)]
+            # Panels whose insides can't be placed were really one grid with group headers
+            # (NonQM 2nd: Owner Occupied | 2nd Home | Non Owner Occupied). Read those rows as rows.
+            out += sides if len(missed) <= 0.25 * len(region) else [_flat_rows(region)]
+            i += n
+            continue
+        topic = _topic_rows(s)
+        if topic:
+            if len(topic) == 1 and len(topic[0]) == 2 and len(_prose(topic[0][1])) <= 40:
+                out.append(f"{_prose(topic[0][0])}: {_prose(topic[0][1])}")    # Max Loan Amount: $4,000,000
+            else:
+                out.append("\n" + _table_rows_text(topic) + "\n")
+            i += 1
+            continue
+        first = min(s, key=lambda c: c[0][0])
+        if _topic_rows([first, *[c for c in s if c is not first][:1]]) is not None and \
+                first[0][1] <= min(c[0][1] for c in s) + 1 and first[0][3] >= max(c[0][3] for c in s) - 1:
+            # A label beside a whole sub-layout (IRRRL Borrower Eligibility | text + a yes/no grid)
+            out.append(f"\n### {_prose(first[1])}\n" + _layout_text([c for c in s if c is not first]) + "\n")
+            i += 1
+            continue
+        if unplaced is not None:
+            unplaced += s
+        out.append(_flat_rows(s))
+        i += 1
+    return "\n".join(x for x in out if x)
+
+
 def _top_level(tables):
     """Drop tables nested inside another one. pdfplumber finds the label column's cell boxes as
     their own little tables, which repeats the topic names as loose text."""
@@ -390,6 +629,7 @@ def _top_level(tables):
 
 
 def parse_page(page) -> dict:
+    _mark_superscripts(page)
     tables = _top_level(page.find_tables())
     outside = page
     for t in tables:
@@ -400,9 +640,16 @@ def parse_page(page) -> dict:
     text_parts = [outside.extract_text() or ""]
     matrices = []
     for t in tables:
-        mats, rest = parse_matrices(t.extract())
+        rows = t.extract()
+        mats, rest = parse_matrices(rows)
         matrices += mats
-        text_parts.append(_table_rows_text(rest))
+        if any(len(_compact(r)) > 3 for r in rest):     # a grid or side-by-side boxes: read by position
+            keep = {id(r) for r in rest}
+            cells = [(bb, txt) for r, row in zip(rows, t.rows) if id(r) in keep
+                     for txt, bb in zip(r, row.cells) if bb and _clean(txt)]
+            text_parts.append(_layout_text(cells))
+        else:
+            text_parts.append(_table_rows_text(rest))
     return {"page": page.page_number, "text": "\n\n".join(p for p in text_parts if p.strip()), "matrices": matrices}
 
 
