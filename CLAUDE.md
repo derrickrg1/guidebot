@@ -52,10 +52,18 @@ word against the doc) and full-document Q\&A mode (whole program in context, not
 
 ## Current status
 
-* 18 tests passing. Parser verified against the real Ignite 1099 PDF: all 26 matrix rows match.
-* `Ignite 1099.pdf` and `Ignite 1099 Expanded.pdf` are byte-identical. Likely true for the other Ignite pairs too.
-App skips exact duplicates automatically.
-* Derrick has Ollama, the models, and the venv set up. Next he verifies Ignite 1099 and tests scenarios.
+* 36 tests passing. Every NonQM/Ignite matrix parses with clean headers; one test per layout shape.
+* The Ignite pairs (`X.pdf` and `X Expanded.pdf`) are byte-identical. App skips exact duplicates automatically.
+* `guidebot/crosscheck.py` compares parsed grids to the hand-typed grids in the Revo site repo
+(`../site/tools/matrices/build_*.py`, checked there by `verify.py`), matched by PDF hash. 7 grids match cell
+for cell. A mismatch blocks numbers and approval. 1099, P\&L and Units+ have no site grid yet.
+* `header_problems` blocks numbers from matrices with shifted/numbered headers. Approved JSONs saved by the old
+parser (Ignite Express DSCR, NonQM P\&L) need re-verifying with "Re-read the PDF".
+* Unverified programs: full-doc answers are told not to state any LTV (`NO\_LTV\_RULE`).
+* NonQM Full Doc was the 2023 Premier matrix; replaced with Express Full Doc 3.2.2026 (old one in `archive/`).
+* FHA, VA (from site originals) and NonQM 2nd (Express 8.15.2026, Premier 3.2.2026) added. They parse as text
+only, no LTV grid yet. Conventional still empty (only "Old" PDFs exist, currency unconfirmed).
+* NonQM Shared guidelines PDF changed since it was approved: needs a re-check.
 
 ## Open questions to confirm with underwriting (flagged in answers, not guessed)
 
@@ -66,12 +74,12 @@ separate 5% reduction. Confirm interpretation.
 
 ## Next steps
 
-1. Verify and test Ignite 1099 with known scenarios, including overlays (condo, 2-4 units, IO, FTHB no rental history).
-2. Run `parse\_matrix` on every other program's PDF. NonQM and DSCR matrices may have different layouts
-(DSCR ratio dimension, prepay columns). Fix the parser per layout and add a test for each shape.
-3. If a layout can't be parsed reliably, add a vision fallback (Qwen2.5-VL in Ollama) that transcribes the page
-image to a grid, still gated by human verification.
-4. Optional: a scenario form (dropdowns) alongside chat for the most common lookups.
+1. Derrick re-verifies the flagged docs and verifies the new ones, then tests scenarios with overlays.
+2. Port the site's calculators (`../site/assets/dscr.js`, `va-irrrl.js`, `fha-streamline.js`, `buydown.js`) to
+Python so DSCR picks the right DSCR tier/matrix and IRRRL/streamline answers are computed, not generated.
+3. Use the site's `pdf\_rows.py` to keep green NDM-overlay and yellow recent-update highlights from FHA/VA sheets.
+4. LTV grids for FHA, VA and 2nds (2nds have doc-type columns), each with a test, or a vision fallback.
+5. Optional: Express vs Ignite comparison sheets and the Loan Setup SOP as programs; a scenario form.
 
 ## Related, parked
 

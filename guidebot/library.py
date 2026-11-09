@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from guidebot import config
+from guidebot import config, crosscheck
 from guidebot.extract_pdf import extract_document, matrix_to_md
 from guidebot.ingest.loaders import load_file
 
@@ -130,8 +130,10 @@ def render(doc: dict) -> str:
 def matrices(docs: list[dict]) -> list[dict]:
     out = []
     for d in docs:
+        refs = iter(crosscheck.check(d))
         for p in d["pages"]:
             for m in p["matrices"]:
                 out.append({"df": m, "file": d["path"].name, "page": p["page"],
-                            "title": m.attrs.get("title") or "LTV matrix", "status": d["status"]})
+                            "title": m.attrs.get("title") or "LTV matrix", "status": d["status"],
+                            "reference": next(refs)})
     return out

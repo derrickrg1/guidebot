@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pandas as pd
 import pytest
 
-from guidebot import answer, config, library
+from guidebot import answer, config, crosscheck, library
 from guidebot.extract_pdf import extract_document, parse_matrices, parse_matrix
 from guidebot.matrix_lookup import apply_adjustments, header_problems, lookup
 
@@ -229,7 +229,8 @@ def test_bad_headers_block_numbers(monkeypatch):
 REAL = {
     "Ignite Express DSCR/Ignite Express DSCR Expanded.pdf": (1, "DSCR .75 to .99 / Purchase", "80%"),
     "NonQM P&L/NonQM-Profit-Loss-Only-Matrix.pdf": (1, "Investment Property* / Cash Out", "70%"),
-    "NonQM Full Doc/NonQM-Premier-Full-Doc-Matrix.pdf": (2, "Primary / Purch. & R/T", "75%"),
+    "NonQM Full Doc/NonQM-Express-Full-Doc-Matrix.pdf": (1, "Primary / Purchase", "*90%"),
+    "NonQM Express DSCR/NonQM-Express-DSCR-Matrix.pdf": (2, "Purchase", "80%"),
     "Ignite 1099/Ignite 1099 Expanded.pdf": (1, "Investment Property / Cash Out", None),
     "NonQM 1099/NonQM-1099-Matrix.pdf": (1, "Primary / Purchase", None),
     "NonQM Bank Statements/NonQM-Bank-Statements-Matrix.pdf": (1, "Primary / Purchase", None),
@@ -249,3 +250,112 @@ def test_real_pdf_headers(rel):
     assert col in mats[0].columns
     if first:
         assert mats[0][col].iloc[0] == first
+
+
+# NonQM Express DSCR: second DSCR tier starts with its own title row and no repeated label row.
+EX_DSCR_RAW = [
+    ["NON QM EXPRESS DSCR", "Effective Date: 8.17.2026"],
+    ["Full Doc Only\nProgram Max LTVs/CLTVs DSCR > 1.00", N],
+    ["Loan Amount", "FICO", "Purchase", "Rate and Term", "Cash Out"],
+    ["$100,000* to $1,000,000", "720", "80%", "80%", "75%"],
+    [N, "700", "80%", "75%", "75%"],
+    ["$1,000,001 - $1,500,000", "720", "80%", "75%", "75%"],
+    ["Program Max LTVs/CLTVs", "DSCR .75 TO .99**"],
+    ["$150,000 to $1,000,000", "700", "75%", "75%", "70%"],
+    [N, "680", "70%", "70%", "60%"],
+]
+
+
+def test_dscr_tiers_split_into_two_matrices():
+    mats, _ = parse_matrices(EX_DSCR_RAW)
+    assert len(mats) == 2
+    ge, lt = mats
+    assert "DSCR > 1.00" in ge.attrs["title"] and "DSCR .75 TO .99" in lt.attrs["title"]
+    assert len(ge) == 3 and len(lt) == 2
+    assert list(lt.columns) == ["Loan Amount", "FICO", "Purchase", "Rate and Term", "Cash Out"]
+    assert lookup(lt, {"Loan Amount": "500000", "FICO": "690"}, "Cash Out")["ltv"] == 60
+
+
+# NonQM Express Full Doc: "Loan Amount" lands on the first data row and that row's values sit one row up.
+EX_FD_RAW = [
+    ["NON QM FULL DOC Effective Date: 3.2.2026\nProgram Maximum LTV/CLTVs Primary Second Home Investment Property",
+     N, N, N, N, N, N, N, N, N, N],
+    ["", "FICO", "Purchase", "Rate & Term", "Cash Out", "Purchase", "Rate & Term", "Cash Out", "Purchase", "Rate & Term", "Cash Out"],
+    ["Loan Amount", "", "*90%", "90%", "80%", "85%", "85%", "75%", "85%", "80%", "75%"],
+    ["≤ $1,000,000", "740", N, N, N, N, N, N, N, N, N],
+    [N, "720", "90%", "85%", "80%", "85%", "85%", "75%", "85%", "80%", "75%"],
+    [N, "700", "90%", "85%", "80%", "85%", "85%", "75%", "85%", "80%", "75%"],
+]
+
+
+def test_displaced_loan_amount_label_and_starred_cell():
+    df = parse_matrix(EX_FD_RAW)
+    assert df.attrs["dims"] == ["Loan Amount", "FICO"]
+    assert df.iloc[0].tolist()[:4] == ["≤ $1,000,000", "740", "*90%", "90%"]
+    r = lookup(df, {"Loan Amount": "900000", "FICO": "745"}, "Primary / Purchase")
+    assert r["ltv"] == 90 and any("footnote" in n for n in r["notes"])
+
+
+def _site(tmp_path, grid_src):
+    site = tmp_path / "site"
+    (site / "originals").mkdir(parents=True)
+    (site / "originals" / "full-doc-express.pdf").write_bytes(b"ndm sheet")
+    # the f-string with a backslash is why the builder can't go through ast on Python 3.11
+    builder = "\n".join(['NA = "N/A"', "EXPRESS = " + grid_src, r"""x = f'{"a" if 1 else "\""}'"""])
+    (site / "build_full_doc.py").write_text(builder, encoding="utf-8")
+    return site
+
+
+GRID_SRC = """[
+    ("≤ $1,000,000", [
+        ("740", "*90%", "90%", "80%", "85%", "85%", "75%", "85%", "80%", "75%"),
+        ("720", "90%", "85%", "80%", "85%", "85%", "75%", "85%", "80%", "75%"),
+        ("700", "90%", "85%", "80%", "85%", "85%", "75%", "85%", "80%", "75%")]),
+]"""
+
+
+def test_crosscheck_match_mismatch_and_other_version(tmp_path):
+    import hashlib
+    df = parse_matrix(EX_FD_RAW)
+    doc = {"hash": hashlib.sha256(b"ndm sheet").hexdigest(), "pages": [{"page": 1, "text": "", "matrices": [df]}]}
+    crosscheck._original_hashes.cache_clear(); crosscheck.site_grid.cache_clear()
+    assert crosscheck.check(doc, _site(tmp_path / "a", GRID_SRC))[0]["status"] == "match"
+
+    crosscheck._original_hashes.cache_clear(); crosscheck.site_grid.cache_clear()
+    bad = crosscheck.check(doc, _site(tmp_path / "b", GRID_SRC.replace('("720", "90%", "85%"', '("720", "90%", "80%"')))
+    assert bad[0]["status"] == "mismatch" and "Row 2" in bad[0]["diffs"][0]
+
+    other = dict(doc, hash="0" * 64)   # a newer NDM sheet: no reference, not a false match
+    assert crosscheck.check(other, tmp_path / "a" / "site")[0]["status"] == "none"
+
+
+def test_crosscheck_mismatch_blocks_numbers(monkeypatch, df):
+    monkeypatch.setattr(answer, "ask_json", lambda *a, **k: answer.Criteria(
+        is_scenario=True, matrix=0, column="Primary Residence / Purchase", missing=[],
+        dims=[answer.DimValue(name="Loan Amount", value="500000"), answer.DimValue(name="FICO", value="720")]))
+    mats = [{"df": df, "file": "g.pdf", "page": 1, "title": "LTV", "status": "verified",
+             "reference": {"status": "mismatch", "source": "build_x.py X", "diffs": ["Row 1: ..."]}}]
+    out = answer.scenario_answer("q", [], mats, "", "m")
+    assert "doesn't match the Revo site" in out and "Max LTV" not in out
+
+
+def test_unverified_docs_forbid_ltv_in_full_doc_answers():
+    assert answer.NO_LTV_RULE in answer.full_doc_messages("q", "text", [], ltv_ok=False)[0]["content"]
+    assert answer.NO_LTV_RULE not in answer.full_doc_messages("q", "text", [], ltv_ok=True)[0]["content"]
+
+
+def test_real_pdfs_match_revo_site():
+    if not config.SITE_MATRICES.exists():
+        pytest.skip("Revo site repo not next to guidebot")
+    checked = 0
+    for prog, paths in library.programs().items():
+        keep, _ = library.unique_docs(paths)
+        for p in keep:
+            if p.suffix != ".pdf" or "Guidelines" in p.name:
+                continue
+            for r in crosscheck.check(library.load(p, fresh=True)):
+                assert r["status"] != "mismatch", (p.name, r["diffs"][:3])
+                checked += r["status"] == "match"
+    if checked == 0:
+        pytest.skip("no docs/ PDFs with a site reference")
+    assert checked >= 7

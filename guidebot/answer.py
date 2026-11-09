@@ -72,9 +72,18 @@ SEARCH_SYSTEM = (
 )
 
 
-def full_doc_messages(question: str, docs_text: str, history: list[dict]) -> list[dict]:
+NO_LTV_RULE = (
+    "\n\nIMPORTANT: These documents haven't been verified yet. Do NOT state any LTV, CLTV, or max loan-to-value"
+    " percentage, even if it appears in the text. If asked, say the program's documents need to be approved on"
+    " the Verify Documents page before LTV numbers can be quoted. Everything else you may answer."
+)
+
+
+def full_doc_messages(question: str, docs_text: str, history: list[dict], ltv_ok: bool = True) -> list[dict]:
+    """ltv_ok=False when any of the program's docs is unverified: the model must not quote LTVs."""
+    system = FULL_DOC_SYSTEM + ("" if ltv_ok else NO_LTV_RULE)
     return (
-        [{"role": "system", "content": FULL_DOC_SYSTEM + "\n\nGUIDELINES:\n\n" + docs_text}]
+        [{"role": "system", "content": system + "\n\nGUIDELINES:\n\n" + docs_text}]
         + history[-6:]
         + [{"role": "user", "content": question}]
     )
@@ -165,6 +174,9 @@ def compare_programs(
             continue
         if header_problems(mats[crit.matrix]["df"]):
             results.append({"program": prog, "eligible": None, "error": "Matrix headers need re-verifying"})
+            continue
+        if mats[crit.matrix].get("reference", {}).get("status") == "mismatch":
+            results.append({"program": prog, "eligible": None, "error": "Matrix disagrees with the Revo site matrix"})
             continue
 
         res = lookup(mats[crit.matrix]["df"], {d.name: d.value for d in crit.dims}, crit.column)
@@ -307,9 +319,16 @@ def scenario_answer(question: str, history: list[dict], mats: list[dict], docs_t
         return (f"The column headers on **{m['file']}** look wrong, so I won't quote numbers from it:\n"
                 + "\n".join(f"- {p}" for p in probs)
                 + "\n\nOpen **Verify Documents**, re-read the PDF, and approve it again.")
+    ref = m.get("reference") or {}
+    if ref.get("status") == "mismatch":
+        return (f"**{m['file']}** doesn't match the Revo site's copy of this matrix ({ref['source']}), "
+                "so I won't quote numbers from it:\n" + "\n".join(f"- {d}" for d in ref["diffs"][:5])
+                + "\n\nCheck the PDF in **Verify Documents** and fix whichever side is wrong.")
 
     res = lookup(m["df"], {d.name: d.value for d in crit.dims}, crit.column)
     out = [f"*Matrix: {m['file']} p. {m['page']}*"] + [f"- {t}" for t in res["trace"]]
+    if ref.get("status") == "match":
+        out.append("- ✅ Matrix matches the Revo site's copy cell for cell")
     if not res["ok"]:
         return "\n".join(out + ["", f"**Can't price this off the matrix:** {res['error']}"])
     if not res["eligible"]:

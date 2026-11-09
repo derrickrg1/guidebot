@@ -5,7 +5,7 @@ import re
 import pandas as pd
 import pdfplumber
 
-VALUE = re.compile(r"^(\d+(\.\d+)?%\*?|N/?A|n/a|-)$")
+VALUE = re.compile(r"^(\*?\d+(\.\d+)?%\*?|N/?A|n/a|-)$")
 
 
 def _clean(c) -> str:
@@ -100,8 +100,13 @@ def _cells(row) -> tuple[list[str], bool]:
     return cells, False
 
 
-def _parse_block(compact: list[list[str]], squashed: set[int], min_rows: int = 3) -> tuple[pd.DataFrame | None, set[int]]:
-    """One matrix from pre-compacted rows. Returns (df, indices of rows it used)."""
+DATE_LIKE = re.compile(r"Effective\s+Date|\d{1,2}\.\d{1,2}\.\d{4}", re.I)
+
+
+def _parse_block(compact: list[list[str]], squashed: set[int], min_rows: int = 3,
+                 label: list[str] | None = None) -> tuple[pd.DataFrame | None, set[int]]:
+    """One matrix from pre-compacted rows. Returns (df, indices of rows it used).
+    label: the table's column-label row, for a later block that doesn't repeat it."""
     counts = [_trailing_values(c) for c in compact]
     data_idx = [i for i, n in enumerate(counts) if n >= 3]
     if len(data_idx) < min_rows:
@@ -112,6 +117,8 @@ def _parse_block(compact: list[list[str]], squashed: set[int], min_rows: int = 3
     if not header_idx:
         return None, set()
     header_rows = [compact[i] for i in header_idx]
+    if label and header_rows[-1] != label:
+        header_rows.append(label)
 
     last = header_rows[-1]
     dims = len(last) - n_values
@@ -171,10 +178,11 @@ def _parse_block(compact: list[list[str]], squashed: set[int], min_rows: int = 3
 
     columns = [f"{g} / {l}" for g, l in zip(groups, labels)] if groups else labels
 
-    # A plain one-cell row above the headers ("Full Doc with Asset Utilization") names a sub-matrix.
-    names = [r[0] for j, r in enumerate(header_rows[:-1])
-             if len(r) == 1 and j != group_src and not TITLE_LIKE.search(r[0])]
-    title = " - ".join(names + ([title] if title else []))
+    # Header rows that aren't the groups or the date row name the matrix: "Full Doc with Asset Utilization",
+    # "Program Max LTVs/CLTVs DSCR .75 TO .99**". That's how the AI tells sub-matrices apart.
+    names = [" ".join(r) for j, r in enumerate(header_rows[:-1])
+             if j != group_src and not DATE_LIKE.search(" ".join(r))]
+    title = " - ".join(names + ([title] if title and not any(title in n for n in names) else []))
 
     records, prev, used = [], None, set(range(data_idx[0]))
     for i in data_idx:
@@ -205,7 +213,8 @@ def _parse_block(compact: list[list[str]], squashed: set[int], min_rows: int = 3
 def parse_matrices(rows) -> tuple[list[pd.DataFrame], list]:
     """All LTV matrices in a table, plus the rows that aren't part of any matrix
     (overlay tables, requirements) so their text still reaches the bot.
-    A new matrix starts wherever the column-label row repeats."""
+    A new matrix starts wherever the column-label row repeats, or a title row
+    ("Program Max LTVs/CLTVs DSCR .75 TO .99") sits between data rows."""
     parsed = [_cells(r) for r in rows]
     compact = [c for c, _ in parsed]
     squashed = {i for i, (_, s) in enumerate(parsed) if s}
@@ -213,13 +222,27 @@ def parse_matrices(rows) -> tuple[list[pd.DataFrame], list]:
     data_idx = [i for i, n in enumerate(counts) if n >= 3]
     if len(data_idx) < 3:
         return [], rows
+
+    # NonQM Full Doc: pdfplumber drops the "Loan Amount" label onto the first data row, and that row's
+    # percentages land one row above its "≤ $1,000,000 | 740" cells. Put both back where they belong.
+    i = data_idx[0]
+    lead = compact[i][:len(compact[i]) - counts[i]]
+    if (lead and not any(re.search(r"\d", c) for c in lead) and i + 1 < len(compact)
+            and counts[i + 1] == 0 and any(re.search(r"\d", c) for c in compact[i + 1])):
+        above = next((j for j in reversed(range(i)) if compact[j]), None)
+        if above is not None:
+            compact[above] = lead + compact[above]
+            compact[i + 1] = compact[i + 1] + compact[i][len(lead):]
+            compact[i] = []
+            counts = [_trailing_values(c) for c in compact]
+            data_idx = [k for k, n in enumerate(counts) if n >= 3]
     label = next((compact[i] for i in reversed(range(data_idx[0])) if compact[i]), None)
     if label is None:
         return [], rows
 
     starts = [0]
     for i in range(data_idx[0] + 1, len(rows)):
-        if counts[i] < 3 and compact[i] == label:
+        if counts[i] < 3 and (compact[i] == label or TITLE_LIKE.search(" ".join(compact[i]))):
             before = [j for j in data_idx if starts[-1] <= j < i]
             if before:
                 starts.append(before[-1] + 1)
@@ -228,7 +251,7 @@ def parse_matrices(rows) -> tuple[list[pd.DataFrame], list]:
     for a, b in zip(starts, starts[1:] + [len(rows)]):
         # Later blocks follow a repeated label row, so one data row is enough to trust them.
         df, block_used = _parse_block(compact[a:b], {i - a for i in squashed if a <= i < b},
-                                      min_rows=3 if a == 0 else 1)
+                                      min_rows=3 if a == 0 else 1, label=None if a == 0 else label)
         if df is not None:
             mats.append(df)
             used |= {i + a for i in block_used}

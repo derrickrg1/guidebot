@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import streamlit as st
 
-from guidebot import library
+from guidebot import crosscheck, library
 from guidebot.extract_pdf import page_image
 from guidebot.matrix_lookup import header_problems
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -35,11 +35,17 @@ path = c2.selectbox("Document", paths, format_func=lambda p: p.name)
 for dup, orig in dups:
     st.info(f"{dup.name} is an exact copy of {orig.name}. It's being skipped, and you can delete it.")
 
-def problems_by_matrix(pages) -> list[str]:
+def problems_by_matrix(pages, file_hash: str) -> list[str]:
+    """Header problems plus any disagreement with the Revo site's hand-checked copy."""
     out = []
+    refs = iter(crosscheck.check({"hash": file_hash, "pages": pages}))
     for page in pages:
         for m in page["matrices"]:
-            out += [f"p. {page['page']} {m.attrs.get('title') or 'LTV matrix'}: {p}" for p in header_problems(m)]
+            name = f"p. {page['page']} {m.attrs.get('title') or 'LTV matrix'}"
+            out += [f"{name}: {p}" for p in header_problems(m)]
+            ref = next(refs)
+            if ref["status"] == "mismatch":
+                out += [f"{name}: differs from Revo site ({ref['source']}): {d}" for d in ref["diffs"][:5]]
     return out
 
 
@@ -47,7 +53,7 @@ just_approved = st.session_state.pop("just_approved", None) == str(path)
 reverify_key = f"reverify|{path}"
 doc = library.load(path)
 status = doc["status"]
-saved_problems = problems_by_matrix(doc["pages"]) if status == "verified" else []
+saved_problems = problems_by_matrix(doc["pages"], doc["hash"]) if status == "verified" else []
 
 if just_approved:
     st.success("Approved.")
@@ -55,7 +61,7 @@ if just_approved:
 # ── Verified and unchanged: show a compact confirmation, hide the review UI ──
 if status == "verified" and not just_approved and not st.session_state.get(reverify_key):
     if saved_problems:
-        st.error(f"{path.name} is approved, but its matrix headers look wrong. "
+        st.error(f"{path.name} is approved, but its matrices have problems. "
                  "The bot won't quote numbers from it until you re-verify.\n\n"
                  + "\n".join(f"- {p}" for p in saved_problems))
     else:
@@ -79,6 +85,7 @@ if fresh:
 
 # ── Full review UI ──
 edited = []
+refs = iter(crosscheck.check(doc))
 for page in doc["pages"]:
     st.divider()
     st.subheader(f"Page {page['page']}")
@@ -91,6 +98,14 @@ for page in doc["pages"]:
             st.markdown(f"**Matrix: {m.attrs.get('title') or 'LTV matrix'}**  \nCheck every cell against the PDF.")
             for p in header_problems(m):
                 st.error(p)
+            ref = next(refs)
+            if ref["status"] == "match":
+                st.success(f"Matches the Revo site's copy cell for cell ({ref['source']}).")
+            elif ref["status"] == "mismatch":
+                st.error(f"Differs from the Revo site's copy ({ref['source']}):\n\n"
+                         + "\n".join(f"- {d}" for d in ref["diffs"][:8]))
+            else:
+                st.caption("No Revo site copy of this matrix to cross-check. Check every cell by eye.")
             if m.columns.duplicated().any():
                 seen: dict[str, int] = {}
                 new_cols = []
@@ -109,10 +124,10 @@ for page in doc["pages"]:
     edited.append({"page": page["page"], "text": text, "matrices": mats})
 
 st.divider()
-blocked = problems_by_matrix(edited)
+blocked = problems_by_matrix(edited, doc["hash"])
 if blocked:
-    st.error("Can't approve: some matrix headers look wrong, and headers can't be fixed by hand here. "
-             "The parser needs a fix for this layout.")
+    st.error("Can't approve yet:\n\n" + "\n".join(f"- {b}" for b in blocked[:10])
+             + "\n\nA wrong cell can be fixed in the table above. Wrong headers need a parser fix.")
 if st.button("Approve this document", type="primary", disabled=bool(blocked)):
     library.save_verified(path, edited)
     st.session_state.just_approved = str(path)

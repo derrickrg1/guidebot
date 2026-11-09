@@ -3,6 +3,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DOCS_DIR = ROOT / "docs"
 DB_DIR = ROOT / "db"
+SITE_MATRICES = ROOT.parent / "site" / "tools" / "matrices"   # Revo site repo: hand-checked LTV grids
 
 CHAT_MODEL = "qwen3:14b"
 EMBED_MODEL = "nomic-embed-text"

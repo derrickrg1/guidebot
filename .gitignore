@@ -8,3 +8,4 @@ docs/**
 !docs/README.txt
 *.xlsx
 *.pdf
+archive/

@@ -36,7 +36,7 @@ def _dim_kind(values: list[str]) -> str:
     return "text"
 
 
-CELL = re.compile(r"^(\d+(\.\d+)?%\*?|N/?A|n/a|-)$")
+CELL = re.compile(r"^(\*?\d+(\.\d+)?%\*?|N/?A|n/a|-)$")
 
 
 def dimension_columns(df: pd.DataFrame) -> list[str]:
@@ -126,9 +126,11 @@ def lookup(df: pd.DataFrame, dims: dict, column: str) -> dict:
         return {"ok": False, "error": f"Column '{column}' not in matrix", "trace": trace, "notes": notes}
     cell = str(rows[column].iloc[0])
     trace.append(f"Column: {column}")
-    if not cell.rstrip("*").endswith("%"):
+    if "*" in cell:
+        notes.append(f"The matrix cell {cell} has a footnote marker (*). Check the footnote before quoting it.")
+    if not cell.strip("*").endswith("%"):
         return {"ok": True, "eligible": False, "cell": cell, "ltv": None, "trace": trace, "notes": notes}
-    return {"ok": True, "eligible": True, "cell": cell, "ltv": float(cell.rstrip("*%")), "trace": trace, "notes": notes}
+    return {"ok": True, "eligible": True, "cell": cell, "ltv": float(cell.strip("*%")), "trace": trace, "notes": notes}
 
 
 def apply_adjustments(base: float, adjustments: list[dict]) -> dict:
