@@ -203,7 +203,7 @@ def load(program: str, doc: dict | None) -> dict | None:
         return None
     raw = p.read_bytes()
     data = json.loads(raw)
-    data["rules_hash"] = hashlib.sha256(raw).hexdigest()
+    data["rules_hash"] = hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest()   # git may swap line endings
     data["doc_hash"] = doc["hash"] if doc else ""
     text = _norm("\n".join(pg["text"] for pg in doc["pages"])) if doc else ""
     data["bad_quotes"] = [r["id"] for r in data["rules"] if _norm(r["quote"]) not in text]
