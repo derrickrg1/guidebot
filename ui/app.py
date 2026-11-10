@@ -5,8 +5,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import streamlit as st
 
-from guidebot import config, library
-from guidebot.answer import full_doc_messages, filter_to_cited, full_section_messages, scenario_answer, search_messages, compare_programs
+from guidebot import config, library, overlay_rules
+from guidebot.answer import full_doc_messages, filter_to_cited, full_section_messages, scenario_answer, search_messages, compare_programs, comparison_md
 from guidebot.section_reader import route_and_load
 from ui.style import inject
 from guidebot.ingest.indexer import get_collection, sync_index
@@ -30,52 +30,9 @@ def load_retriever():
 
 def _render_comparison(comp: dict) -> str:
     """Render cross-program scenario comparison. Returns markdown string for history."""
-    if comp["missing"]:
-        msg = f"To compare programs I need: **{', '.join(comp['missing'])}**."
-        st.markdown(msg)
-        return msg
-
-    results = comp["results"]
-    if not results:
-        msg = "No programs with verified matrices found. Run **Update index** then verify matrices in Verify Documents."
-        st.markdown(msg)
-        return msg
-
-    eligible = [r for r in results if r.get("eligible") is True]
-    ineligible = [r for r in results if r.get("eligible") is False]
-    errors = [r for r in results if r.get("eligible") is None]
-
-    lines = []
-    if eligible:
-        st.markdown("**Eligible programs**")
-        rows = [("Program", "Base LTV", "Matrix cell")]
-        for r in eligible:
-            rows.append((r["program"], f"{r['max_ltv']:g}%", r.get("cell", "")))
-        # render as simple markdown table
-        header = f"| {rows[0][0]} | {rows[0][1]} | {rows[0][2]} |"
-        sep = "|---|---|---|"
-        body = "\n".join(f"| {r[0]} | {r[1]} | {r[2]} |" for r in rows[1:])
-        tbl = f"{header}\n{sep}\n{body}"
-        st.markdown(tbl)
-        lines.append("**Eligible programs**\n" + tbl)
-
-    if ineligible:
-        st.markdown("**Not eligible**")
-        for r in ineligible:
-            reason = r.get("error") or r.get("cell") or "ineligible per matrix"
-            item = f"- {r['program']}: {reason}"
-            st.markdown(item)
-            lines.append(item)
-
-    if errors:
-        with st.expander("Could not check", expanded=False):
-            for r in errors:
-                st.caption(f"{r['program']}: {r.get('error', 'unknown error')}")
-
-    note = "*Base LTV from matrix only — overlays not applied. Select a specific program for full overlay analysis.*"
-    st.caption(note)
-    lines.append(note)
-    return "\n\n".join(lines)
+    md = comparison_md(comp)
+    st.markdown(md)
+    return md
 
 
 import re as _re_src
@@ -345,6 +302,7 @@ with st.chat_message("assistant"):
                                 "program": prog,
                                 "mats": mats,
                                 "docs_text": "\n\n".join(library.render(d) for d in pdocs),
+                                "rules": overlay_rules.for_program(prog, pdocs),
                             })
                     comp = compare_programs(question, history, program_data, model)
                 answer = _render_comparison(comp)
@@ -354,7 +312,8 @@ with st.chat_message("assistant"):
             docs_text = "\n\n".join(library.render(d) for d in docs)
             try:
                 with st.spinner("Checking the matrix"):
-                    scen = scenario_answer(question, history, library.matrices(docs), docs_text, model)
+                    scen = scenario_answer(question, history, library.matrices(docs), docs_text, model,
+                                           overlay_rules.for_program(choice, docs))
                 if scen:
                     st.markdown(scen)
                     answer = scen

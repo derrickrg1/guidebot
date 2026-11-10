@@ -7,6 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+from guidebot import overlay_rules
 from guidebot.llm import ask_json
 from guidebot.matrix_lookup import apply_adjustments, dimension_columns, header_problems, lookup, value_columns
 
@@ -125,7 +126,7 @@ _AMOUNT = re.compile(r"\$\s*(\d[\d,]*(?:\.\d+)?)\s*([km]\b)?|\b(\d+(?:\.\d+)?)\s
 _OCCUPANCY = {"Investment Property": r"invest|rental|non[- ]?owner|\bnoo\b",
               "Second Home": r"second home|2nd home|vacation home",
               "Primary Residence": r"primary|owner[- ]occupied|\boo\b"}
-_PURPOSE = {"Cash Out Refinance": r"cash[- ]?out|\bc/?o\b",
+_PURPOSE = {"Cash Out Refinance": r"cash[- ]?out|\bc/o\b",   # not bare "co": that's co-borrower
             "Rate/Term Refinance": r"rate[ /&-]*(and )?term|\br/?t\b|no cash|refi",
             "Purchase": r"purchas|buying|\bbuy\b"}
 REQUIRED = ("fico", "loan_amount", "occupancy", "purpose")
@@ -167,14 +168,14 @@ def extract_scenario(question: str, history: list[dict], model: str) -> RawScena
 def compare_programs(
     question: str,
     history: list[dict],
-    program_data: list[dict],  # [{program, mats, docs_text}]
+    program_data: list[dict],  # [{program, mats, docs_text, rules}]
     model: str,
 ) -> dict:
     """
     Run a scenario across multiple programs.
     Returns {missing, results: [{program, eligible, max_ltv, cell, trace, error}]}
     Results sorted: eligible first by LTV desc, then ineligible, then errors.
-    Overlays are skipped for speed — select a program for detail.
+    Eligible programs get the same checked overlay step as single-program mode, so max_ltv is after overlays.
     """
     raw = extract_scenario(question, history, model)
     if not raw:
@@ -191,6 +192,10 @@ def compare_programs(
             if pd["mats"]:
                 results.append({"program": prog, "eligible": None, "error": "Matrix not verified"})
             continue
+        blocked = occupancy_block(raw.occupancy, mats, pd.get("docs_text", ""))
+        if blocked:
+            results.append({"program": prog, "eligible": False, "error": blocked})
+            continue
         try:
             crit = ask_json(
                 CRITERIA_SYSTEM,
@@ -206,15 +211,20 @@ def compare_programs(
         if 0 <= crit.matrix < len(mats) and header_problems(mats[crit.matrix]["df"]):
             results.append({"program": prog, "eligible": None, "error": "Matrix headers need re-verifying"})
             continue
-        if crit.missing:
-            # The user already gave the basics (raw.missing is empty), so this is a mapping problem, not missing info
-            results.append({"program": prog, "eligible": None,
-                            "error": f"Couldn't map the deal onto this matrix (AI asked for: {', '.join(crit.missing)}). "
-                                     "Pick this program for a direct lookup."})
-            continue
         if not 0 <= crit.matrix < len(mats):
             results.append({"program": prog, "eligible": None, "error": "Matrix index out of range"})
             continue
+        if crit.missing:
+            # The user already gave the basics (raw.missing is empty), so this is a mapping problem, not missing info
+            mapped = python_mapping(mats[crit.matrix]["df"], raw)
+            if not mapped:
+                results.append({"program": prog, "eligible": None,
+                                "error": f"Couldn't map the deal onto this matrix (AI asked for: {', '.join(crit.missing)}). "
+                                         "Pick this program for a direct lookup."})
+                continue
+            crit.column = mapped[0]
+            crit.dims = [DimValue(name=k, value=v) for k, v in mapped[1].items()]
+            crit.missing = []
         if mats[crit.matrix].get("reference", {}).get("status") == "mismatch":
             results.append({"program": prog, "eligible": None, "error": "Matrix disagrees with the Revo site matrix"})
             continue
@@ -225,7 +235,21 @@ def compare_programs(
         elif not res["eligible"]:
             results.append({"program": prog, "eligible": False, "cell": res.get("cell", "N/A"), "trace": res.get("trace", [])})
         else:
-            results.append({"program": prog, "eligible": True, "max_ltv": res["ltv"], "cell": res["cell"], "trace": res["trace"]})
+            row = {"program": prog, "eligible": True, "max_ltv": res["ltv"], "cell": res["cell"], "trace": res["trace"]}
+            try:
+                kept, rejected, _, calc = checked_overlays(question, history, crit, res, pd.get("docs_text", ""), model,
+                                                           pd.get("rules"))
+                generic = {"cap", "reduction", "footnote", "overlay", "ineligible", "property type overlay"}
+                label = lambda a: (f"{a.kind} {a.value:g}%: {a.quote[:50]}" if a.reason.strip().lower() in generic
+                                   else a.reason)
+                row.update(overlays=[label(a) for a in kept], skipped=len(rejected), stacked=calc.get("stacked"))
+                if not calc["eligible"]:
+                    row.update(eligible=False, error="; ".join(a.reason for a in kept) or "ineligible after overlays")
+                else:
+                    row["max_ltv"] = calc["final"]
+            except Exception as e:
+                row.update(eligible=None, error=f"Overlay check failed ({e}). Pick this program for a direct lookup.")
+            results.append(row)
 
     results.sort(key=lambda r: (r.get("eligible") is not True, -(r.get("max_ltv") or 0)))
     return {"missing": [], "results": results}
@@ -337,6 +361,27 @@ def _norm(s: str) -> str:
     return re.sub(r"[^a-z0-9%$.]+", " ", s.lower()).strip()
 
 
+def _occ_keys(text: str) -> set[str]:
+    t = f" {_norm(text)} "
+    return {occ for occ, words in OCCUPANCY.items() if any(f" {w}" in t for w in words)}
+
+
+_OCC_LINE = re.compile(r"^(?:#+\s*)?Occupancy\s*[|:]\s*(.+)$", re.I | re.M)
+
+
+def occupancy_block(occupancy: str | None, mats: list[dict], docs_text: str) -> str | None:
+    """Matrices without occupancy columns (DSCR) can't say no to a primary residence. The program's own
+    'Occupancy | ...' line can. Returns why the deal is ineligible, or None."""
+    if not occupancy or any(_occ_keys(c) for m in mats for c in value_columns(m["df"])):
+        return None
+    line = _OCC_LINE.search(docs_text)
+    allowed = _occ_keys(line.group(1)) if line else set()
+    stated = _occ_keys(occupancy)
+    if allowed and stated and not stated & allowed:
+        return f"{occupancy} not allowed. Program says: Occupancy | {line.group(1).strip()[:120]}"
+    return None
+
+
 def _percents(s: str) -> set[float]:
     return {float(n) for n in re.findall(r"(\d+(?:\.\d+)?)\s*%", s)}
 
@@ -371,7 +416,114 @@ def describe_matrices(mats: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def scenario_answer(question: str, history: list[dict], mats: list[dict], docs_text: str, model: str) -> str | None:
+def comparison_md(comp: dict) -> str:
+    """Markdown for compare_programs results, shared by both UIs."""
+    if comp["missing"]:
+        return f"To compare programs I need: **{', '.join(comp['missing'])}**."
+    results = comp["results"]
+    if not results:
+        return "No programs with verified matrices found. Verify matrices in Verify Documents first."
+    parts = []
+    eligible = [r for r in results if r.get("eligible") is True]
+    ineligible = [r for r in results if r.get("eligible") is False]
+    errors = [r for r in results if r.get("eligible") is None]
+    if eligible:
+        rows = "\n".join(
+            f"| {r['program']} | **{r['max_ltv']:g}%** | {r.get('cell', '')} | "
+            f"{', '.join(r.get('overlays') or []).replace('|', '/') or 'none'}{' ⚠️ stacked' if r.get('stacked') else ''} |"
+            for r in eligible)
+        parts.append("**Eligible programs**\n\n| Program | Max LTV | Matrix cell | Overlays applied |\n"
+                     f"|---|---|---|---|\n{rows}")
+    if ineligible:
+        parts.append("**Not eligible**\n\n" + "\n".join(
+            f"- {r['program']}: {r.get('error') or r.get('cell') or 'ineligible per matrix'}" for r in ineligible))
+    if errors:
+        parts.append("**Could not check**\n\n" + "\n".join(
+            f"- {r['program']}: {r.get('error', 'unknown error')}" for r in errors))
+    if any(r.get("stacked") for r in eligible):
+        parts.append("⚠️ Stacked means more than one reduction was applied. Confirm with underwriting that they stack.")
+    parts.append("*Overlays checked against each program's guidelines. Pick a program to see the quotes, "
+                 "the math, and anything left out.*")
+    return "\n\n".join(parts)
+
+
+RULES_STATUS = {
+    "unapproved": "Overlay rules for this program aren't approved yet",
+    "changed": "This program's overlay rules or PDF changed since you approved them",
+    "bad_quotes": "Some overlay rule quotes aren't in the PDF word for word",
+}
+
+
+def rules_overlays(question: str, history: list[dict], res: dict, rules: dict):
+    """Approved overlay rules, applied by Python to the facts the user stated. No model involved."""
+    said = " ".join([*(m["content"] for m in history[-4:] if m["role"] == "user"), question])
+    raw = fill_scenario(RawScenario(), said)
+    facts = overlay_rules.extract_facts(said, raw.occupancy, raw.purpose, raw.fico, raw.loan_amount)
+    out = overlay_rules.apply_rules(rules["rules"], facts, rules["source"])
+    kept = [Adjustment(trigger="", **{k: a[k] for k in ("reason", "kind", "value", "file", "page", "quote")})
+            for a in out["applied"]]
+    calc = apply_adjustments(res["ltv"], [a.model_dump() for a in kept])
+    notes = [f"⚠️ {c}" for c in out["confirm"]] + out["unknown"]
+    return kept, [], notes, calc
+
+
+def checked_overlays(question: str, history: list[dict], crit, res: dict, docs_text: str, model: str,
+                     rules: dict | None = None):
+    """Approved rules if the program has them. Otherwise the AI finds overlays, Python gates each one
+    (check_adjustment) and does the math. Returns (kept, rejected [(adj, why)], cited notes, calc)."""
+    if rules and rules["status"] == "approved":
+        return rules_overlays(question, history, res, rules)
+    kept, rejected, notes, calc = _ai_overlays(question, history, crit, res, docs_text, model)
+    if rules:
+        notes.insert(0, f"⚠️ {RULES_STATUS[rules['status']]}, so these overlays were found by the AI and checked "
+                        "by Python. Approve the rules in Verify Documents to use them instead.")
+    return kept, rejected, notes, calc
+
+
+def _ai_overlays(question: str, history: list[dict], crit, res: dict, docs_text: str, model: str):
+    convo = "\n".join(f"{m['role']}: {m['content'][:500]}" for m in history[-4:])
+    adj = ask_json(
+        ADJ_SYSTEM,
+        f"Scenario: {question}\nEarlier messages:\n{convo}\n\nBase from matrix: {res['cell']} "
+        f"({'; '.join(res['trace'])})\n\nGUIDELINES:\n\n{docs_text}",
+        Adjustments, model,
+    )
+    doc = _norm(docs_text)
+    facts = " ".join([question, crit.column, *(d.value for d in crit.dims), *res["trace"],
+                      *(m["content"] for m in history if m["role"] == "user")])
+    kept, rejected = [], []
+    for a in adj.adjustments:
+        why = check_adjustment(a, doc, facts)
+        (rejected.append((a, why)) if why else kept.append(a))
+    calc = apply_adjustments(res["ltv"], [a.model_dump() for a in kept])
+    notes = [n for n in adj.notes if re.search(r"p\.\s*\d", n)]   # uncited notes are the AI talking, not the doc
+    return kept, rejected, notes, calc
+
+
+def python_mapping(df, raw: RawScenario) -> tuple[str, dict] | None:
+    """Fallback when the AI says occupancy/purpose are missing but the user gave them:
+    pick the one column that fits and fill loan amount/FICO dims. None if it isn't clear cut."""
+    cols = value_columns(df)
+    stated = _occ_keys(raw.occupancy or "")
+    if any(_occ_keys(c) for c in cols):
+        cols = [c for c in cols if _occ_keys(c) & stated]
+    rx = {"Purchase": r"purchase", "Rate/Term Refinance": r"rate", "Cash Out Refinance": r"cash"}.get(raw.purpose or "")
+    cols = [c for c in cols if re.search(rx, c, re.I)] if rx else []
+    if len(cols) != 1:
+        return None
+    dims = {}
+    for d in dimension_columns(df):
+        if "loan" in d.lower() and raw.loan_amount:
+            dims[d] = str(raw.loan_amount)
+        elif "fico" in d.lower() and raw.fico:
+            dims[d] = str(raw.fico)
+        else:
+            return None
+    return cols[0], dims
+
+
+def scenario_answer(question: str, history: list[dict], mats: list[dict], docs_text: str, model: str,
+                    rules: dict | None = None) -> str | None:
     """Returns markdown if this is a scenario question, None if it isn't."""
     if not mats:
         return None
@@ -384,7 +536,15 @@ def scenario_answer(question: str, history: list[dict], mats: list[dict], docs_t
     if not crit.is_scenario:
         return None
     if crit.missing:
-        return "To pull the exact number I need: **" + ", ".join(crit.missing) + "**."
+        # The model sometimes says occupancy/purpose are missing when they're right there. Python decides.
+        said = " ".join([*(h["content"] for h in history[-4:] if h["role"] == "user"), question])
+        raw = fill_scenario(RawScenario(), said)
+        idx = crit.matrix if 0 <= crit.matrix < len(mats) else (0 if len(mats) == 1 else -1)
+        mapped = python_mapping(mats[idx]["df"], raw) if idx >= 0 and not raw.missing else None
+        if not mapped:
+            return "To pull the exact number I need: **" + ", ".join(raw.missing or crit.missing) + "**."
+        crit.matrix, crit.column, crit.missing = idx, mapped[0], []
+        crit.dims = [DimValue(name=k, value=v) for k, v in mapped[1].items()]
     if not 0 <= crit.matrix < len(mats):
         return None
 
@@ -403,6 +563,11 @@ def scenario_answer(question: str, history: list[dict], mats: list[dict], docs_t
                 "so I won't quote numbers from it:\n" + "\n".join(f"- {d}" for d in ref["diffs"][:5])
                 + "\n\nCheck the PDF in **Verify Documents** and fix whichever side is wrong.")
 
+    said = " ".join([*(h["content"] for h in history[-4:] if h["role"] == "user"), question])
+    blocked = occupancy_block(fill_scenario(RawScenario(), said).occupancy, mats, docs_text)
+    if blocked:
+        return f"**Not eligible.** {blocked}"
+
     res = lookup(m["df"], {d.name: d.value for d in crit.dims}, crit.column)
     out = [f"*Matrix: {m['file']} p. {m['page']}*"] + [f"- {t}" for t in res["trace"]]
     if ref.get("status") == "match":
@@ -412,27 +577,17 @@ def scenario_answer(question: str, history: list[dict], mats: list[dict], docs_t
     if not res["eligible"]:
         return "\n".join(out + ["", f"**Not eligible.** The matrix shows **{res['cell']}** for this scenario."])
 
-    adj = ask_json(
-        ADJ_SYSTEM,
-        f"Scenario: {question}\nEarlier messages:\n{convo}\n\nBase from matrix: {res['cell']} "
-        f"({'; '.join(res['trace'])})\n\nGUIDELINES:\n\n{docs_text}",
-        Adjustments, model,
-    )
-    doc = _norm(docs_text)
-    facts = " ".join([question, crit.column, *(d.value for d in crit.dims), *res["trace"],
-                      *(m["content"] for m in history if m["role"] == "user")])
-    kept, rejected = [], []
-    for a in adj.adjustments:
-        why = check_adjustment(a, doc, facts)
-        (rejected.append((a, why)) if why else kept.append(a))
-    calc = apply_adjustments(res["ltv"], [a.model_dump() for a in kept])
+    kept, rejected, notes, calc = checked_overlays(question, history, crit, res, docs_text, model, rules)
 
     head = "**Not eligible**" if not calc["eligible"] else f"**Max LTV/CLTV: {calc['final']:g}%**"
     lines = [head, ""] + out + [f"- Matrix cell: **{res['cell']}**"]
+    if rules and rules["status"] == "approved":
+        lines += ["", "*Overlays from your approved rules for this program, applied by Python. "
+                      "Assumes none of the \"If\" items under Also check apply.*"]
     if kept:
         lines += ["", "**Overlays applied**"]
         for a in kept:
-            lines.append(f"- {a.kind.title()} {'' if a.kind == 'ineligible' else f'{a.value:g}%'}: {a.reason} "
+            lines.append(f"- {a.kind.title()}{'' if a.kind == 'ineligible' else f' {a.value:g}%'}: {a.reason} "
                          f"({a.file}, p. {a.page}) ✅\n  > {a.quote}")
     if rejected:
         lines += ["", "**Not applied, check if they fit this deal**"]
@@ -445,7 +600,6 @@ def scenario_answer(question: str, history: list[dict], mats: list[dict], docs_t
         warnings.append("More than one reduction was stacked. Confirm with underwriting that they stack.")
     if warnings:
         lines += [""] + [f"⚠️ {w}" for w in warnings]
-    notes = [n for n in adj.notes if re.search(r"p\.\s*\d", n)]   # uncited notes are the AI talking, not the doc
     if notes:
         lines += ["", "**Also check**"] + [f"- {n}" for n in notes]
     return "\n".join(lines)

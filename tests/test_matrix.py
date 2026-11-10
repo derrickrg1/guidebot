@@ -240,6 +240,58 @@ def test_compare_mode_doesnt_ask_for_details_already_given(monkeypatch):
     assert answer.extract_scenario("buy a condo, 680 fico", [], "m").missing == ["loan_amount", "occupancy"]
 
 
+def _dscr():
+    import pandas as pd
+    df = pd.DataFrame({"Loan Amount": ["< $1,000,000"] * 2, "FICO": ["720", "680"],
+                       "Purchase": ["80%", "75%"], "Rate and Term Refi": ["75%", "70%"], "Cash Out Refi": ["75%", "70%"]})
+    df.attrs["dims"] = ["Loan Amount", "FICO"]
+    return {"df": df, "file": "dscr.pdf", "page": 1, "title": "LTV", "status": "verified"}
+
+
+def test_dscr_blocks_primary_residence():
+    """DSCR matrices have no occupancy columns, so a primary came back 75%. The program's Occupancy line says no."""
+    text = "Occupancy | Investment- Units cannot be occupied by the Borrower or Borrower's immediate family."
+    assert "not allowed" in answer.occupancy_block("Primary Residence", [_dscr()], text)
+    assert answer.occupancy_block("Investment Property", [_dscr()], text) is None
+    assert answer.occupancy_block("Primary Residence", [_dscr()], "no occupancy line here") is None
+
+
+def test_python_maps_column_when_ai_claims_missing():
+    raw = answer.RawScenario(fico=720, loan_amount=650000, occupancy="Investment Property", purpose="Purchase")
+    assert answer.python_mapping(_dscr()["df"], raw) == ("Purchase", {"Loan Amount": "650000", "FICO": "720"})
+    raw.purpose = "Rate/Term Refinance"
+    assert answer.python_mapping(_dscr()["df"], raw)[0] == "Rate and Term Refi"
+
+
+def test_compare_applies_checked_overlays(monkeypatch, df):
+    """Investment 2 unit showed the bare 85% cell in compare mode. It has to come out 80% like single-program mode."""
+    q = "Purchase, investment property, 2 unit, $650,000 loan, 720 FICO"
+    text = "2 - 4 Units | 85%* | 80%*\n*Reduce LTV by 5% from maximum on Investment Properties"
+    replies = iter([
+        answer.RawScenario(),
+        answer.Criteria(is_scenario=True, matrix=0, column="Investment Property / Purchase", missing=[],
+                        dims=[answer.DimValue(name="Loan Amount", value="650000"),
+                              answer.DimValue(name="FICO", value="720")]),
+        answer.Adjustments(notes=[], adjustments=[
+            answer.Adjustment(reason="investment", trigger="investment", kind="reduction", value=5,
+                              file="g.pdf", page=2, quote="Reduce LTV by 5% from maximum on Investment Properties"),
+            answer.Adjustment(reason="declining", trigger="declining market", kind="reduction", value=5,
+                              file="g.pdf", page=2, quote="Reduce LTV by 5% from maximum on Investment Properties")]),
+        answer.Criteria(is_scenario=True, matrix=0, column="Purchase", missing=["occupancy"], dims=[]),
+        answer.Adjustments(notes=[], adjustments=[]),
+    ])
+    monkeypatch.setattr(answer, "ask_json", lambda *a, **k: next(replies))
+    mats = [{"df": df, "file": "g.pdf", "page": 1, "title": "LTV", "status": "verified"}]
+    dscr_text = "Occupancy | Investment Property"
+    comp = answer.compare_programs(q, [], [{"program": "A", "mats": mats, "docs_text": text},
+                                           {"program": "DSCR", "mats": [_dscr()], "docs_text": dscr_text}], "m")
+    a, d = comp["results"]
+    assert (a["program"], a["max_ltv"], a["overlays"]) == ("A", 80, ["investment"])
+    assert d["program"] == "DSCR" and d["eligible"] is True   # Python mapped the column the AI wouldn't
+    md = answer.comparison_md(comp)
+    assert "| A | **80%** | 85% | investment |" in md
+
+
 def test_unverified_matrix_blocks_numbers(monkeypatch, df):
     monkeypatch.setattr(answer, "ask_json", lambda *a, **k: answer.Criteria(
         is_scenario=True, matrix=0, column="x", missing=[], dims=[]))

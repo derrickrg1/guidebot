@@ -5,7 +5,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import streamlit as st
 
-from guidebot import crosscheck, library
+import pandas as pd
+
+from guidebot import crosscheck, library, overlay_rules
 from guidebot.extract_pdf import page_image
 from guidebot.matrix_lookup import header_problems
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -57,6 +59,28 @@ saved_problems = problems_by_matrix(doc["pages"], doc["hash"]) if status == "ver
 
 if just_approved:
     st.success("Approved.")
+
+# ── Overlay rules built from this document (Python applies these instead of the AI) ──
+rules = overlay_rules.for_program(prog, [doc])
+if rules and rules["source"] == path.name:
+    label = {"approved": "✅ approved", "unapproved": "⚠️ not approved yet", "changed": "🔄 changed since approval",
+             "bad_quotes": "❌ quotes not found in the PDF"}[rules["status"]]
+    with st.expander(f"Overlay rules: {len(rules['rules'])} rules, {label}", expanded=rules["status"] != "approved"):
+        st.caption("Each rule is an overlay from this PDF. Scenario answers apply these with Python, no AI. "
+                   "Check each one against the PDF: when it applies, what it does, and the quote. "
+                   "Facts the user doesn't mention are never assumed; those rules show as \"If ...\" lines.")
+        if rules["bad_quotes"]:
+            st.error("These quotes aren't in the document word for word: " + ", ".join(rules["bad_quotes"]))
+        st.dataframe(pd.DataFrame(overlay_rules.rules_text(rules),
+                                  columns=["Overlay", "Applies when", "Effect", "Quote", "Page"]),
+                     hide_index=True, use_container_width=True)
+        st.caption(rules.get("built_by", ""))
+        if doc["status"] != "verified":
+            st.info("Approve the document itself first. Rule quotes are checked against its approved text.")
+        if rules["status"] != "approved" and st.button(
+                "Approve these overlay rules", disabled=doc["status"] != "verified" or bool(rules["bad_quotes"])):
+            overlay_rules.approve(prog, rules)
+            st.rerun()
 
 # ── Verified and unchanged: show a compact confirmation, hide the review UI ──
 if status == "verified" and not just_approved and not st.session_state.get(reverify_key):

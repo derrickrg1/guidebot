@@ -5,8 +5,8 @@ All LTV guards live in answer.py, so both UIs get the same rules.
 """
 import re
 
-from guidebot import config, library
-from guidebot.answer import (compare_programs, filter_to_cited, full_doc_messages, full_section_messages,
+from guidebot import config, library, overlay_rules
+from guidebot.answer import (compare_programs, comparison_md, filter_to_cited, full_doc_messages, full_section_messages,
                              scenario_answer, search_messages)
 from guidebot.llm import stream_chat
 from guidebot.section_reader import route_and_load
@@ -60,29 +60,6 @@ def find_pdf(fname: str):
                  if p.name == fname and p.suffix.lower() == ".pdf"), None)
 
 
-def _comparison_md(comp: dict) -> str:
-    if comp["missing"]:
-        return f"To compare programs I need: **{', '.join(comp['missing'])}**."
-    results = comp["results"]
-    if not results:
-        return "No programs with verified matrices found. Verify matrices in Verify Documents first."
-    parts = []
-    eligible = [r for r in results if r.get("eligible") is True]
-    ineligible = [r for r in results if r.get("eligible") is False]
-    errors = [r for r in results if r.get("eligible") is None]
-    if eligible:
-        rows = "\n".join(f"| {r['program']} | {r['max_ltv']:g}% | {r.get('cell', '')} |" for r in eligible)
-        parts.append(f"**Eligible programs**\n\n| Program | Base LTV | Matrix cell |\n|---|---|---|\n{rows}")
-    if ineligible:
-        parts.append("**Not eligible**\n\n" + "\n".join(
-            f"- {r['program']}: {r.get('error') or r.get('cell') or 'ineligible per matrix'}" for r in ineligible))
-    if errors:
-        parts.append("**Could not check**\n\n" + "\n".join(
-            f"- {r['program']}: {r.get('error', 'unknown error')}" for r in errors))
-    parts.append("*Base LTV from matrix only, overlays not applied. Pick a specific program for full overlay analysis.*")
-    return "\n\n".join(parts)
-
-
 def _sources(hits: list[dict]) -> list[dict]:
     keep = ("file", "loc", "section", "section_title", "program")
     return [{**{k: h.get(k, "") for k in keep}, "text": (h.get("text") or "")[:600]} for h in hits]
@@ -122,8 +99,9 @@ def respond(question: str, history: list[dict], choice: str = "",
                     mats = library.matrices(pdocs)
                     if mats:
                         data.append({"program": prog, "mats": mats,
-                                     "docs_text": "\n\n".join(library.render(d) for d in pdocs)})
-                answer = _comparison_md(compare_programs(question, history, data, model))
+                                     "docs_text": "\n\n".join(library.render(d) for d in pdocs),
+                                     "rules": overlay_rules.for_program(prog, pdocs)})
+                answer = comparison_md(compare_programs(question, history, data, model))
                 yield {"replace": answer}
             except Exception as e:
                 yield {"status": f"Comparison skipped: {e}"}
@@ -131,7 +109,8 @@ def respond(question: str, history: list[dict], choice: str = "",
             yield {"status": "Checking the matrix…"}
             try:
                 scen = scenario_answer(question, history, library.matrices(docs),
-                                       "\n\n".join(library.render(d) for d in docs), model)
+                                       "\n\n".join(library.render(d) for d in docs), model,
+                                       overlay_rules.for_program(choice, docs))
                 if scen:
                     answer = scen
                     yield {"replace": answer}
