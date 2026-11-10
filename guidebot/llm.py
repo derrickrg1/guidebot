@@ -13,9 +13,14 @@ def embed_query(text: str) -> list[float]:
     return ollama.embed(model=config.EMBED_MODEL, input=[config.EMBED_QUERY_PREFIX + text])["embeddings"][0]
 
 
+def _think(model: str):
+    """Thinking off for speed. gpt-oss can't turn it off, only down to "low"."""
+    return "low" if model.startswith("gpt-oss") else False
+
+
 def _open_stream(kwargs):
     try:
-        stream = ollama.chat(**kwargs, think=False)   # skip qwen3 thinking for faster answers
+        stream = ollama.chat(**kwargs, think=_think(kwargs["model"]))   # skip thinking for faster answers
         return next(stream), stream
     except (TypeError, ollama.ResponseError):
         stream = ollama.chat(**kwargs)                # model or client without thinking support
@@ -43,7 +48,7 @@ def ask_json(system: str, user: str, schema, model: str = config.CHAT_MODEL, ret
     last = None
     for _ in range(retries):
         try:
-            resp = ollama.chat(**kwargs, think=False)
+            resp = ollama.chat(**kwargs, think=_think(model))
         except (TypeError, ollama.ResponseError):
             resp = ollama.chat(**kwargs)
         try:

@@ -121,7 +121,7 @@ def respond(question: str, history: list[dict], choice: str = "",
         docs_text = "\n\n".join(library.render(d) for d in docs)
         if len(docs_text) <= config.FULL_DOC_MAX_CHARS:
             yield {"status": f"Reading {choice}…"}
-            answer = yield from _stream(full_doc_messages(question, docs_text, history, ltv_ok=ltv_ok), model)
+            answer = yield from _stream(full_doc_messages(question, docs_text, history, ltv_ok=ltv_ok, model=model), model)
         else:
             yield {"status": "Searching the program…"}
             found = retriever().search(question, programs=[choice] + ([SHARED] if choice in NONQM else []))
@@ -139,7 +139,7 @@ def respond(question: str, history: list[dict], choice: str = "",
         if routed:
             fname = routed["sections"][0]["file"] if routed["sections"] else ""
             yield {"status": "Reading guidelines…"}
-            raw = "".join(stream_chat(full_section_messages(question, routed["text"], history, filename=fname), model))
+            raw = "".join(stream_chat(full_section_messages(question, routed["text"], history, filename=fname, model=model), model))
             answer = re.sub(r"\(file,\s*p\.", f"({fname}, p.", raw)
             yield {"replace": answer}
             hits = routed["sections"]
@@ -156,7 +156,7 @@ def respond(question: str, history: list[dict], choice: str = "",
 
     if not answer and docs:
         docs_text = "\n\n".join(library.render(d) for d in docs)
-        answer = yield from _stream(full_doc_messages(question, docs_text, history, ltv_ok=ltv_ok), model)
+        answer = yield from _stream(full_doc_messages(question, docs_text, history, ltv_ok=ltv_ok, model=model), model)
 
     if hits:
         yield {"sources": _sources(hits)}

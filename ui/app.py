@@ -324,7 +324,7 @@ with st.chat_message("assistant"):
     if mode_matrix and choice and docs and not answer:
         docs_text = "\n\n".join(library.render(d) for d in docs)
         if len(docs_text) <= config.FULL_DOC_MAX_CHARS:
-            answer = st.write_stream(stream_chat(full_doc_messages(question, docs_text, history, ltv_ok=all(d["status"] == "verified" for d in docs)), model))
+            answer = st.write_stream(stream_chat(full_doc_messages(question, docs_text, history, ltv_ok=all(d["status"] == "verified" for d in docs), model=model), model))
         else:
             search_programs = [choice] + ([_SHARED] if choice in _NONQM else [])
             hits = load_retriever().search(question, programs=search_programs)
@@ -348,7 +348,7 @@ with st.chat_message("assistant"):
             # Accumulate full response, then post-process before rendering
             with st.spinner("Reading guidelines..."):
                 chunks = []
-                for chunk in stream_chat(full_section_messages(question, routed["text"], history, filename=fname), model):
+                for chunk in stream_chat(full_section_messages(question, routed["text"], history, filename=fname, model=model), model):
                     chunks.append(chunk)
                 raw = "".join(chunks)
             # Fix "(file, p. X)", make citations italic clickable links to PDF page
@@ -378,7 +378,7 @@ with st.chat_message("assistant"):
     # Fallback: full doc if matrix mode selected and no answer yet
     if not answer and choice and docs:
         docs_text = "\n\n".join(library.render(d) for d in docs)
-        answer = st.write_stream(stream_chat(full_doc_messages(question, docs_text, history, ltv_ok=all(d["status"] == "verified" for d in docs)), model))
+        answer = st.write_stream(stream_chat(full_doc_messages(question, docs_text, history, ltv_ok=all(d["status"] == "verified" for d in docs), model=model), model))
 
     if source_hits:
         _render_sources(source_hits, answer=answer)

@@ -22,7 +22,11 @@ RULES = """Rules:
 - Never infer from a negative statement. "No additional X required for Y" means only that exact case — do not extend it to mean X is not required generally or for similar cases.
 - If the document says "per program guidelines," "refer to the program matrix," or gives no specific value, say so and note the requirement varies by program.
 - If the answer is not in the provided sections, say you couldn't find it in the shared guidelines — do not infer or fill the gap.
-- Lead with a direct one-sentence answer (yes/no + the key condition if there is one).
+- Lead with a direct one-sentence answer to the exact case asked. For a yes/no question, check every condition
+  and restriction BEFORE writing the first word. If any rule excludes the case asked (wrong occupancy, purpose,
+  property type, loan amount, borrower type), the answer is **No**, and the first sentence names the rule that
+  excludes it. Never write "Yes, with restrictions" when one of those restrictions rules out the case asked.
+  Say **Yes** only when the document allows that exact case.
 - Then use bullet points for requirements, restrictions, and exceptions — never prose paragraphs for lists.
 - Bold key terms, numbers, and thresholds (e.g. **5%**, **gift letter**, **not allowed for reserves**).
 - Group related bullets under a short bold label when there are two or more distinct categories (e.g. **Requirements:**, **Restrictions:**).
@@ -43,7 +47,8 @@ FULL_SECTION_SYSTEM = (
 )
 
 
-def full_section_messages(question: str, sections_text: str, history: list[dict], filename: str = "") -> list[dict]:
+def full_section_messages(question: str, sections_text: str, history: list[dict], filename: str = "",
+                          model: str | None = None) -> list[dict]:
     cite_note = (
         f"\nIMPORTANT: The source document is '{filename}'. Every citation must use this exact filename"
         f" and include the subsection number when the fact comes from a numbered subsection visible in the text"
@@ -51,7 +56,9 @@ def full_section_messages(question: str, sections_text: str, history: list[dict]
         f" Never write '(file, p. X)'.\n"
     ) if filename else ""
     return (
-        [{"role": "system", "content": FULL_SECTION_SYSTEM + cite_note + "\n\nGUIDELINE SECTIONS:\n\n" + sections_text}]
+        [{"role": "system", "content": FULL_SECTION_SYSTEM + cite_note
+          + (yes_no_lead(question, sections_text, model) if model else "")
+          + "\n\nGUIDELINE SECTIONS:\n\n" + sections_text}]
         + history[-6:]
         + [{"role": "user", "content": question}]
     )
@@ -80,9 +87,51 @@ NO_LTV_RULE = (
 )
 
 
-def full_doc_messages(question: str, docs_text: str, history: list[dict], ltv_ok: bool = True) -> list[dict]:
-    """ltv_ok=False when any of the program's docs is unverified: the model must not quote LTVs."""
-    system = FULL_DOC_SYSTEM + ("" if ltv_ok else NO_LTV_RULE)
+YES_NO = re.compile(r"^\s*(can|could|is|are|does|do|may|will|should|am|was|were|has|have)\b", re.I)
+
+
+class Verdict(BaseModel):
+    rules: list[str]       # every sentence in the document that bears on the exact case asked, copied word for word
+    excludes: str          # the copied sentence that rules the case out, or "" if none does
+    answer: Literal["yes", "no", "depends", "not found"]
+
+
+VERDICT_SYSTEM = """You decide the answer to a yes/no guideline question before anyone writes it up.
+1. rules: copy, word for word, every sentence in the document that bears on the EXACT case asked
+   (its occupancy, purpose, property type, borrower type, loan amount). Include restrictions and "only" rules.
+2. excludes: if any of those sentences rules the asked case out, copy that sentence. Otherwise "".
+3. answer: "no" if something excludes the case. "yes" if the document allows the exact case (conditions or
+   an ineligible sub-type don't make it "no" when the case itself is allowed). "depends" if it turns on a
+   detail the user didn't give. "not found" if the document doesn't cover it."""
+
+
+def yes_no_lead(question: str, docs_text: str, model: str) -> str:
+    """For yes/no questions: settle the answer with quoted rules first, checked word for word by Python.
+    Returns an instruction for the system prompt, or "" (not a yes/no question, or the check didn't hold up)."""
+    if not YES_NO.match(question):
+        return ""
+    try:
+        v = ask_json(VERDICT_SYSTEM, f"DOCUMENT:\n{docs_text}\n\nQuestion: {question}", Verdict, model)
+    except Exception:
+        return ""
+    doc = _norm(docs_text)
+    found = [r for r in v.rules if _norm(r) and _norm(r) in doc]
+    if v.answer == "no" and not (_norm(v.excludes) and _norm(v.excludes) in doc):
+        return ""   # a "no" has to point at a real sentence, or we don't steer the answer
+    word = {"yes": "Yes", "no": "No", "depends": "It depends", "not found": "I couldn't find that"}[v.answer]
+    lines = [f"\n\nTHE ANSWER IS ALREADY DECIDED: start your first sentence with **{word}**."]
+    if v.answer == "no":
+        lines.append(f'It is excluded by: "{v.excludes}". Name that rule in the first sentence.')
+    if found:
+        lines.append("Rules that apply (from the document): " + " | ".join(found[:6]))
+    return "\n".join(lines)
+
+
+def full_doc_messages(question: str, docs_text: str, history: list[dict], ltv_ok: bool = True,
+                      model: str | None = None) -> list[dict]:
+    """ltv_ok=False when any of the program's docs is unverified: the model must not quote LTVs.
+    model: when given, yes/no questions get their answer settled first (yes_no_lead)."""
+    system = FULL_DOC_SYSTEM + ("" if ltv_ok else NO_LTV_RULE) + (yes_no_lead(question, docs_text, model) if model else "")
     return (
         [{"role": "system", "content": system + "\n\nGUIDELINES:\n\n" + docs_text}]
         + history[-6:]
