@@ -182,9 +182,10 @@ def test_scenario_uses_python_math_and_checks_quotes(monkeypatch, df):
                         dims=[answer.DimValue(name="Loan Amount", value="900000"),
                               answer.DimValue(name="FICO", value="725")]),
         answer.Adjustments(notes=["Reserves: 6 months (guide.pdf, p. 2)"], adjustments=[
-            answer.Adjustment(reason="2-4 units", kind="cap", value=80, file="guide.pdf", page=2,
+            answer.Adjustment(reason="2-4 units", trigger="2 unit", kind="cap", value=80, file="guide.pdf", page=2,
                               quote="2 - 4 Units 85%* 80%*"),
-            answer.Adjustment(reason="investment footnote", kind="reduction", value=5, file="guide.pdf", page=2,
+            answer.Adjustment(reason="investment footnote", trigger="investment", kind="reduction", value=5,
+                              file="guide.pdf", page=2,
                               quote="Reduce LTV by 5% from maximum on Investment Properties"),
         ]),
     ])
@@ -194,6 +195,49 @@ def test_scenario_uses_python_math_and_checks_quotes(monkeypatch, df):
     out = answer.scenario_answer("investment purchase 2 unit 725 fico 900k", [], mats, text, "m")
     assert "Max LTV/CLTV: 75%" in out
     assert out.count("✅") == 2
+
+
+def test_overlays_that_dont_fit_the_deal_stay_out_of_the_math(monkeypatch, df):
+    """Real miss from Ignite 1099: primary purchase came out -7% from reserves, declining market and investment."""
+    adj = lambda reason, trigger, kind, value, quote: answer.Adjustment(
+        reason=reason, trigger=trigger, kind=kind, value=value, file="guide.pdf", page=2, quote=quote)
+    replies = iter([
+        answer.Criteria(is_scenario=True, matrix=0, column="Primary Residence / Purchase", missing=[],
+                        dims=[answer.DimValue(name="Loan Amount", value="650000"),
+                              answer.DimValue(name="FICO", value="720")]),
+        answer.Adjustments(notes=[], adjustments=[
+            adj("Reserves", "650,000", "cap", 6, "For loans ≤ $1,000,000: 6 months of reserves are required"),
+            adj("Reserve reduction", "650,000", "reduction", 3,
+                "Reserve Requirement reduced by 3 months with 5% reduction from max qualifying LTV"),
+            adj("cap", "primary residence", "cap", 90, "90%"),
+            adj("Declining markets", "declining market", "reduction", 5, "Declining Markets | 5% reduction from max LTV"),
+            adj("Investment", "primary residence", "reduction", 5, "Reduce LTV by 5% from maximum on Investment Properties"),
+        ]),
+    ])
+    monkeypatch.setattr(answer, "ask_json", lambda *a, **k: next(replies))
+    mats = [{"df": df, "file": "guide.pdf", "page": 1, "title": "LTV", "status": "verified"}]
+    text = ("For loans ≤ $1,000,000: 6 months of reserves are required\n"
+            "Reserve Requirement reduced by 3 months with 5% reduction from max qualifying LTV\n"
+            "Declining Markets | 5% reduction from max LTV\n*Reduce LTV by 5% from maximum on Investment Properties")
+    out = answer.scenario_answer("Purchase, primary residence, single family, $650,000 loan, 720 FICO",
+                                 [], mats, text, "m")
+    base = df.loc[(df["Loan Amount"] == "< $1,000,000") & (df["FICO"] == "720"), "Primary Residence / Purchase"].iloc[0]
+    assert f"Max LTV/CLTV: {base}" in out
+    assert "Overlays applied" not in out and out.count("left out because") == 5
+    assert "6 months" in out and "isn't in the quote" in out
+    assert "didn't say (declining market)" in out
+    assert "not this deal's occupancy" in out
+
+
+def test_compare_mode_doesnt_ask_for_details_already_given(monkeypatch):
+    """The model returned fico/loan_amount as missing for '$650,000 loan, 720 FICO'. Python decides now."""
+    monkeypatch.setattr(answer, "ask_json", lambda *a, **k: answer.RawScenario(missing=["fico", "loan_amount"]))
+    raw = answer.extract_scenario("Purchase, primary residence, 2 unit, $650,000 loan, 720 FICO", [], "m")
+    assert (raw.fico, raw.loan_amount, raw.occupancy, raw.purpose) == (720, 650000, "Primary Residence", "Purchase")
+    assert raw.missing == []
+    raw = answer.extract_scenario("what about 1.2m?", [{"role": "user", "content": "cash out investment 705 fico"}], "m")
+    assert (raw.fico, raw.loan_amount, raw.purpose, raw.missing) == (705, 1200000, "Cash Out Refinance", [])
+    assert answer.extract_scenario("buy a condo, 680 fico", [], "m").missing == ["loan_amount", "occupancy"]
 
 
 def test_unverified_matrix_blocks_numbers(monkeypatch, df):

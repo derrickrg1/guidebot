@@ -119,12 +119,49 @@ property_type: "SFR", "Condo", "2-4 Unit", "Townhome", or "Rural"
 List any key fields not provided in 'missing' (fico, loan_amount, occupancy, purpose, property_type)."""
 
 
+# Python fallbacks for the details the model sometimes drops ("$650,000 loan, 720 FICO" came back as missing).
+_FICO = re.compile(r"\b(\d{3})\s*(?:fico|credit|score|mid)\b|\b(?:fico|score)\s*(?:of|is|:)?\s*(\d{3})\b", re.I)
+_AMOUNT = re.compile(r"\$\s*(\d[\d,]*(?:\.\d+)?)\s*([km]\b)?|\b(\d+(?:\.\d+)?)\s*([km])\b", re.I)
+_OCCUPANCY = {"Investment Property": r"invest|rental|non[- ]?owner|\bnoo\b",
+              "Second Home": r"second home|2nd home|vacation home",
+              "Primary Residence": r"primary|owner[- ]occupied|\boo\b"}
+_PURPOSE = {"Cash Out Refinance": r"cash[- ]?out|\bc/?o\b",
+            "Rate/Term Refinance": r"rate[ /&-]*(and )?term|\br/?t\b|no cash|refi",
+            "Purchase": r"purchas|buying|\bbuy\b"}
+REQUIRED = ("fico", "loan_amount", "occupancy", "purpose")
+
+
+def _amount(text: str) -> int | None:
+    for m in _AMOUNT.finditer(text):
+        num, unit = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+        value = float(num.replace(",", "")) * {"k": 1e3, "m": 1e6}.get((unit or "").lower(), 1)
+        if value >= 10000:
+            return int(value)
+    return None
+
+
+def fill_scenario(raw: RawScenario, text: str) -> RawScenario:
+    """Fill what the model missed from the user's own words, then work out what's really missing in Python."""
+    raw = raw.model_copy()
+    if raw.fico is None and (m := _FICO.search(text)):
+        raw.fico = int(m.group(1) or m.group(2))
+    if raw.loan_amount is None:
+        raw.loan_amount = _amount(text)
+    for field, table in (("occupancy", _OCCUPANCY), ("purpose", _PURPOSE)):
+        if not getattr(raw, field):
+            setattr(raw, field, next((k for k, rx in table.items() if re.search(rx, text, re.I)), None))
+    raw.missing = [f for f in REQUIRED if getattr(raw, f) in (None, "")]
+    return raw
+
+
 def extract_scenario(question: str, history: list[dict], model: str) -> RawScenario | None:
     convo = "\n".join(f"{m['role']}: {m['content'][:300]}" for m in history[-4:])
+    said = " ".join([*(m["content"] for m in history[-4:] if m["role"] == "user"), question])
     try:
-        return ask_json(RAW_SCENARIO_SYSTEM, f"Earlier messages:\n{convo}\n\nQuestion: {question}", RawScenario, model)
+        raw = ask_json(RAW_SCENARIO_SYSTEM, f"Earlier messages:\n{convo}\n\nQuestion: {question}", RawScenario, model)
     except Exception:
-        return None
+        raw = RawScenario()
+    return fill_scenario(raw, said)
 
 
 def compare_programs(
@@ -166,14 +203,17 @@ def compare_programs(
 
         if not crit.is_scenario:
             continue
+        if 0 <= crit.matrix < len(mats) and header_problems(mats[crit.matrix]["df"]):
+            results.append({"program": prog, "eligible": None, "error": "Matrix headers need re-verifying"})
+            continue
         if crit.missing:
-            results.append({"program": prog, "eligible": None, "error": f"Need: {', '.join(crit.missing)}"})
+            # The user already gave the basics (raw.missing is empty), so this is a mapping problem, not missing info
+            results.append({"program": prog, "eligible": None,
+                            "error": f"Couldn't map the deal onto this matrix (AI asked for: {', '.join(crit.missing)}). "
+                                     "Pick this program for a direct lookup."})
             continue
         if not 0 <= crit.matrix < len(mats):
             results.append({"program": prog, "eligible": None, "error": "Matrix index out of range"})
-            continue
-        if header_problems(mats[crit.matrix]["df"]):
-            results.append({"program": prog, "eligible": None, "error": "Matrix headers need re-verifying"})
             continue
         if mats[crit.matrix].get("reference", {}).get("status") == "mismatch":
             results.append({"program": prog, "eligible": None, "error": "Matrix disagrees with the Revo site matrix"})
@@ -205,6 +245,7 @@ class Criteria(BaseModel):
 
 class Adjustment(BaseModel):
     reason: str
+    trigger: str  # the user's own words that make this apply ("investment", "2 unit", "condo")
     kind: Literal["cap", "reduction", "ineligible"]
     value: float
     file: str
@@ -274,14 +315,51 @@ based only on facts the user actually stated.
   If an overlay has a footnote (like * for investment), apply what the footnote says as a separate item.
 - reduction: "X% reduction from max LTV" items. value = X.
 - ineligible: the deal isn't allowed at all (value = 0).
-- file/page: where it says so. quote: copy the supporting words EXACTLY from the document.
-Do not include overlays that depend on facts the user didn't state. Put those in notes as short
-"If ..." lines with (file, p. X). Also put other requirements that apply to this deal but don't change the LTV
-(reserves, escrows, seasoning, max loan amount) in notes, with citations."""
+- trigger: copy the words from the user's scenario that make it apply ("investment", "condo", "2 unit").
+  If you can't point to the user's own words, it doesn't apply. Put it in notes instead.
+- file/page: where it says so. quote: copy the supporting words EXACTLY from the document, including the % value.
+Only LTV percentages go in adjustments. Reserves (months), escrows, seasoning, DTI and loan amount limits are
+never adjustments, even if they mention LTV.
+An overlay for a different occupancy, purpose or property type than the user's does not apply
+(an investment property overlay never applies to a primary residence).
+Do not include overlays that depend on facts the user didn't state (declining market, non-occupant co-borrower,
+credit events, location). Put those in notes as short "If ..." lines with (file, p. X). Also put other
+requirements that apply to this deal but don't change the LTV (reserves, escrows, seasoning, max loan amount)
+in notes, with citations. Every note ends with (file, p. X). Notes never restate the base LTV, the math,
+or why something does or doesn't apply."""
+
+OCCUPANCY = {"investment": ("investment", "investor", "non owner", "rental", "noo"),
+             "second home": ("second home", "2nd home", "vacation"),
+             "primary": ("primary", "owner occupied", "owner occupant")}
 
 
 def _norm(s: str) -> str:
     return re.sub(r"[^a-z0-9%$.]+", " ", s.lower()).strip()
+
+
+def _percents(s: str) -> set[float]:
+    return {float(n) for n in re.findall(r"(\d+(?:\.\d+)?)\s*%", s)}
+
+
+def check_adjustment(a, doc_norm: str, facts: str) -> str | None:
+    """Python's gate on an overlay the AI suggested. Returns why it can't go in the math, or None if it can.
+    facts = everything the user stated plus the matrix row/column it mapped to."""
+    quote = _norm(a.quote)
+    if not quote or quote not in doc_norm:
+        return "quote not found word for word in the document"
+    if not re.search(r"[a-z]{2,}", quote):
+        return "the quote is just a number, not a guideline"
+    if a.kind != "ineligible" and float(a.value) not in _percents(a.quote):
+        return f"{a.value:g}% isn't in the quote"
+    trig = _norm(a.trigger)
+    if not trig or f" {trig} " not in f" {_norm(facts)} ":
+        return "it depends on something you didn't say" + (f" ({a.trigger})" if a.trigger else "")
+    said = f" {_norm(facts)} "
+    stated = {occ for occ, words in OCCUPANCY.items() if any(f" {w}" in said for w in words)}
+    named = {occ for occ, words in OCCUPANCY.items() if any(f" {w}" in f" {quote}" for w in words)}
+    if named and stated and not named & stated:
+        return f"it's for {', '.join(sorted(named))}, not this deal's occupancy"
+    return None
 
 
 def describe_matrices(mats: list[dict]) -> str:
@@ -340,17 +418,26 @@ def scenario_answer(question: str, history: list[dict], mats: list[dict], docs_t
         f"({'; '.join(res['trace'])})\n\nGUIDELINES:\n\n{docs_text}",
         Adjustments, model,
     )
-    calc = apply_adjustments(res["ltv"], [a.model_dump() for a in adj.adjustments])
     doc = _norm(docs_text)
+    facts = " ".join([question, crit.column, *(d.value for d in crit.dims), *res["trace"],
+                      *(m["content"] for m in history if m["role"] == "user")])
+    kept, rejected = [], []
+    for a in adj.adjustments:
+        why = check_adjustment(a, doc, facts)
+        (rejected.append((a, why)) if why else kept.append(a))
+    calc = apply_adjustments(res["ltv"], [a.model_dump() for a in kept])
 
     head = "**Not eligible**" if not calc["eligible"] else f"**Max LTV/CLTV: {calc['final']:g}%**"
     lines = [head, ""] + out + [f"- Matrix cell: **{res['cell']}**"]
-    if adj.adjustments:
+    if kept:
         lines += ["", "**Overlays applied**"]
-        for a in adj.adjustments:
-            check = "✅" if _norm(a.quote) and _norm(a.quote) in doc else "⚠️ quote not found word-for-word, check it"
+        for a in kept:
             lines.append(f"- {a.kind.title()} {'' if a.kind == 'ineligible' else f'{a.value:g}%'}: {a.reason} "
-                         f"({a.file}, p. {a.page}) {check}\n  > {a.quote}")
+                         f"({a.file}, p. {a.page}) ✅\n  > {a.quote}")
+    if rejected:
+        lines += ["", "**Not applied, check if they fit this deal**"]
+        for a, why in rejected:
+            lines.append(f"- ⚠️ {a.reason} ({a.file}, p. {a.page}): left out because {why}\n  > {a.quote}")
     if calc.get("steps"):
         lines += ["", "**Math**"] + [f"- {s}" for s in calc["steps"]]
     warnings = list(res["notes"])
@@ -358,6 +445,7 @@ def scenario_answer(question: str, history: list[dict], mats: list[dict], docs_t
         warnings.append("More than one reduction was stacked. Confirm with underwriting that they stack.")
     if warnings:
         lines += [""] + [f"⚠️ {w}" for w in warnings]
-    if adj.notes:
-        lines += ["", "**Also check**"] + [f"- {n}" for n in adj.notes]
+    notes = [n for n in adj.notes if re.search(r"p\.\s*\d", n)]   # uncited notes are the AI talking, not the doc
+    if notes:
+        lines += ["", "**Also check**"] + [f"- {n}" for n in notes]
     return "\n".join(lines)

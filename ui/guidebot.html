@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guidebot</title>
+<style>
+:root {
+  --ink: #1a1814; --steel: #4a4640; --mist: #a09a90; --rule: #d8d2c6;
+  --navy: #1a2e52; --gold: #b89230; --page: #f4f1eb; --side: #ede9e1;
+  --card: #fbfaf6; --user: #1a2e52; --user-ink: #f4f1eb; --warn: #8a5a00; --warn-bg: #f6ecd4;
+  --bad: #9b2c2c; --ok: #2e6b3a;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #ece7dd; --steel: #c4bdb0; --mist: #8d877c; --rule: #3a3630;
+    --navy: #8fa8d6; --gold: #d4ae4e; --page: #1b1a17; --side: #23211d;
+    --card: #2a2823; --user: #2c3f63; --user-ink: #ece7dd; --warn: #e2b866; --warn-bg: #3a301c;
+    --bad: #e08080; --ok: #7cc48a;
+  }
+}
+:root[data-theme="dark"] {
+  --ink: #ece7dd; --steel: #c4bdb0; --mist: #8d877c; --rule: #3a3630;
+  --navy: #8fa8d6; --gold: #d4ae4e; --page: #1b1a17; --side: #23211d;
+  --card: #2a2823; --user: #2c3f63; --user-ink: #ece7dd; --warn: #e2b866; --warn-bg: #3a301c;
+  --bad: #e08080; --ok: #7cc48a;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--page); color: var(--ink);
+  font: 15px/1.55 "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  display: flex;
+}
+aside {
+  width: 280px; flex: none; background: var(--side); border-right: 1px solid var(--rule);
+  padding: 20px 18px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto;
+}
+.brand { color: var(--gold); font-weight: 600; font-size: 0.7rem; letter-spacing: 0.22em; text-transform: uppercase; }
+.modes { display: flex; flex-direction: column; gap: 6px; }
+.modes label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.modes label.off { color: var(--mist); cursor: default; }
+select, button, textarea { font: inherit; color: inherit; }
+select {
+  width: 100%; padding: 7px 8px; border: 1px solid var(--rule); border-radius: 6px; background: var(--card);
+}
+.tag {
+  padding: 6px 10px; border-left: 3px solid var(--gold); font-size: 0.72rem; font-weight: 600;
+  color: var(--gold); background: color-mix(in srgb, var(--gold) 10%, transparent); letter-spacing: 0.04em;
+}
+.tag.scen { border-color: var(--navy); color: var(--navy); background: color-mix(in srgb, var(--navy) 10%, transparent); }
+.tag small { display: block; font-weight: 400; color: var(--mist); }
+.docs { font-size: 0.78rem; color: var(--steel); display: flex; flex-direction: column; gap: 3px; word-break: break-word; }
+.note { font-size: 0.78rem; padding: 8px 10px; border-radius: 6px; background: var(--warn-bg); color: var(--warn); }
+.row { display: flex; gap: 8px; }
+.btn {
+  flex: 1; padding: 7px 10px; border: 1px solid var(--rule); background: var(--card); border-radius: 6px; cursor: pointer;
+}
+.btn:hover { border-color: var(--gold); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+.foot { margin-top: auto; font-size: 0.7rem; color: var(--mist); }
+hr { border: 0; border-top: 1px solid var(--rule); margin: 0; width: 100%; }
+
+main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; }
+header { padding: 20px 32px 12px; border-bottom: 1px solid var(--rule); }
+h1 { margin: 0; color: var(--navy); font-size: 1.25rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
+#offline { display: none; margin-top: 10px; }
+#offline code { background: var(--card); padding: 1px 5px; border-radius: 4px; }
+#log { flex: 1; overflow-y: auto; padding: 24px 32px; display: flex; flex-direction: column; gap: 18px; }
+.empty { color: var(--mist); max-width: 560px; }
+.msg { max-width: 860px; }
+.msg.user {
+  align-self: flex-end; background: var(--user); color: var(--user-ink); padding: 10px 14px;
+  border-radius: 14px 14px 4px 14px; white-space: pre-wrap; max-width: min(640px, 85%);
+}
+.msg.bot { background: var(--card); border: 1px solid var(--rule); border-radius: 4px 14px 14px 14px; padding: 12px 16px; }
+.status { color: var(--mist); font-size: 0.82rem; font-style: italic; }
+.status::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%;
+  background: var(--gold); animation: pulse 1s infinite alternate; }
+@keyframes pulse { from { opacity: 0.25; } to { opacity: 1; } }
+.err { color: var(--bad); }
+.md > :first-child { margin-top: 0; }
+.md > :last-child { margin-bottom: 0; }
+.md h1, .md h2, .md h3, .md h4 { color: var(--navy); font-size: 1rem; margin: 1em 0 0.4em; text-transform: none; letter-spacing: 0; }
+.md p { margin: 0.5em 0; }
+.md ul, .md ol { margin: 0.4em 0; padding-left: 1.4em; }
+.md blockquote { margin: 4px 0 8px; padding: 4px 12px; border-left: 3px solid var(--gold); color: var(--steel); font-size: 0.9em; }
+.md code { background: var(--side); padding: 1px 5px; border-radius: 4px; font-size: 0.88em; }
+.md a { color: var(--gold); }
+.md a.cite { font-size: 0.82em; font-style: italic; }
+.tbl { overflow-x: auto; margin: 0.6em 0; }
+.md table { border-collapse: collapse; font-size: 0.88rem; }
+.md th, .md td { border: 1px solid var(--rule); padding: 5px 9px; text-align: left; vertical-align: top; }
+.md th { background: var(--side); font-weight: 600; }
+details.src { margin-top: 12px; border-top: 1px solid var(--rule); padding-top: 8px; font-size: 0.85rem; }
+details.src summary { cursor: pointer; color: var(--steel); }
+.srcitem { margin: 10px 0; }
+.srcitem blockquote {
+  margin: 4px 0 0; padding: 8px 12px; border-left: 3px solid var(--gold); background: var(--side);
+  white-space: pre-wrap; font-size: 0.78rem; color: var(--steel); border-radius: 0 4px 4px 0;
+}
+form { display: flex; gap: 10px; padding: 14px 32px 20px; border-top: 1px solid var(--rule); }
+textarea {
+  flex: 1; resize: none; min-height: 46px; max-height: 200px; padding: 12px 14px;
+  border: 1px solid var(--rule); border-radius: 10px; background: var(--card);
+}
+textarea:focus, select:focus { outline: 2px solid color-mix(in srgb, var(--gold) 50%, transparent); outline-offset: 0; }
+.send { flex: none; padding: 0 20px; border: 0; border-radius: 10px; background: var(--navy); color: var(--page); cursor: pointer; font-weight: 600; }
+.send:disabled { opacity: 0.5; cursor: default; }
+
+@media (max-width: 760px) {
+  body { flex-direction: column; }
+  aside { width: 100%; border-right: 0; border-bottom: 1px solid var(--rule); padding: 14px 16px; gap: 10px; max-height: 45vh; }
+  .foot { display: none; }
+  main { height: auto; flex: 1; min-height: 0; }
+  body { height: 100vh; }
+  header, #log, form { padding-left: 16px; padding-right: 16px; }
+}
+</style>
+</head>
+<body>
+<aside>
+  <div class="brand">Guidebot</div>
+  <hr>
+  <div class="modes">
+    <label class="off"><input type="checkbox" checked disabled> Guidelines (always on)</label>
+    <label><input type="checkbox" id="mProgram"> Program</label>
+    <label><input type="checkbox" id="mScenario"> Scenario</label>
+    <label class="off"><input type="checkbox" disabled> Pricing (coming soon)</label>
+  </div>
+  <select id="program" hidden></select>
+  <div id="tag" hidden></div>
+  <div id="docs" class="docs"></div>
+  <div id="docnote" class="note" hidden>Some docs unverified. LTV numbers blocked until approved in Verify Documents.</div>
+  <hr>
+  <div class="row">
+    <button class="btn" id="reindex" type="button">Update index</button>
+    <button class="btn" id="newchat" type="button">New chat</button>
+  </div>
+  <div class="foot"><span id="model"></span><br>by Derrick Garcia</div>
+</aside>
+<main>
+  <header>
+    <h1>Guideline Assistant</h1>
+    <div id="offline" class="note">Can't reach guidebot. Start it in PowerShell from the guidebot folder:
+      <code>.venv\Scripts\activate; python -m guidebot.server</code> then reload this page.</div>
+  </header>
+  <div id="log">
+    <div class="empty" id="empty">Ask a guideline question, or describe a scenario: loan amount, FICO, occupancy, purpose, property type.
+      Turn on Program or Scenario and pick a program for matrix lookups.</div>
+  </div>
+  <form id="ask">
+    <textarea id="q" rows="1" placeholder="Ask about a guideline, or give me a scenario"></textarea>
+    <button class="send" id="send">Send</button>
+  </form>
+</main>
+<script>
+const API = location.protocol === "file:" ? "http://localhost:8600" : "";
+const ICON = { verified: "✅", unverified: "⚠️", changed: "🔄" };
+const $ = id => document.getElementById(id);
+let programs = [], history = [], busy = false;
+
+// ---------- markdown (escapes everything first, so model output can't inject HTML) ----------
+const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+function inline(s) {
+  s = esc(s);
+  s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+  s = s.replace(/\[([^\]]+)\]\(((?:https?:\/\/|\/pdf\/)[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>");
+  // guideline citations like (NonQM-Underwriting-Guidelines.pdf, §5.3, p. 42) open the PDF at that page
+  s = s.replace(/\(([^()]*?([\w .&'-]+\.pdf)[^()]*?p\.\s*(\d+)[^()]*)\)/g,
+    (m, inner, file, pg) => `<a class="cite" href="${API}/pdf/${encodeURIComponent(file.trim())}#page=${pg}" target="_blank">(${inner})</a>`);
+  return s;
+}
+function md(src) {
+  const lines = src.replace(/\r/g, "").split("\n");
+  let out = "", para = [], i = 0;
+  const flush = () => { if (para.length) { out += "<p>" + para.map(inline).join("<br>") + "</p>"; para = []; } };
+  const cells = l => l.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
+  while (i < lines.length) {
+    const l = lines[i];
+    if (!l.trim()) { flush(); i++; continue; }
+    let m;
+    if ((m = l.match(/^(#{1,4})\s+(.*)/))) { flush(); out += `<h${m[1].length + 1}>${inline(m[2])}</h${m[1].length + 1}>`; i++; continue; }
+    if (/^\s*>/.test(l)) {
+      flush();
+      const q = [];
+      while (i < lines.length && /^\s*>/.test(lines[i])) q.push(lines[i++].replace(/^\s*>\s?/, ""));
+      out += "<blockquote>" + md(q.join("\n")) + "</blockquote>"; continue;
+    }
+    if (/^\s*\|.*\|\s*$/.test(l) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1])) {
+      flush();
+      let t = "<div class='tbl'><table><thead><tr>" + cells(l).map(c => `<th>${inline(c)}</th>`).join("") + "</tr></thead><tbody>";
+      i += 2;
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
+        t += "<tr>" + cells(lines[i]).map(c => `<td>${inline(c)}</td>`).join("") + "</tr>"; i++;
+      }
+      out += t + "</tbody></table></div>"; continue;
+    }
+    if (/^\s*([-*•]|\d+[.)])\s+/.test(l)) {
+      flush();
+      const stack = [];
+      while (i < lines.length && /^\s*([-*•]|\d+[.)])\s+/.test(lines[i])) {
+        const mm = lines[i].match(/^(\s*)([-*•]|\d+[.)])\s+(.*)/);
+        const depth = Math.floor(mm[1].replace(/\t/g, "    ").length / 2), tag = /\d/.test(mm[2]) ? "ol" : "ul";
+        while (stack.length && stack[stack.length - 1].depth > depth) out += "</li></" + stack.pop().tag + ">";
+        const top = stack[stack.length - 1];
+        if (!top || top.depth < depth) { out += `<${tag}><li>`; stack.push({ depth, tag }); }
+        else out += "</li><li>";
+        out += inline(mm[3]); i++;
+        while (i < lines.length && lines[i].trim() && !/^\s*([-*•]|\d+[.)])\s+/.test(lines[i]) && /^\s+/.test(lines[i])) {
+          out += "<br>" + inline(lines[i].trim()); i++;
+        }
+      }
+      while (stack.length) out += "</li></" + stack.pop().tag + ">";
+      continue;
+    }
+    para.push(l); i++;
+  }
+  flush();
+  return out;
+}
+
+// ---------- sidebar ----------
+function mode() {
+  return { program: $("mProgram").checked, scenario: $("mScenario").checked, choice: $("program").value };
+}
+function renderSidebar() {
+  const { program, scenario, choice } = mode();
+  const sel = $("program");
+  sel.hidden = !(program || scenario);
+  const first = scenario && !program ? "All programs" : "Select a program...";
+  if (sel.options.length) sel.options[0].textContent = first;
+  const tag = $("tag");
+  const name = choice || (scenario && !program && !sel.hidden ? "All programs" : "");
+  tag.hidden = !name;
+  if (name) {
+    const lbl = program && scenario ? "Program + Scenario" : program ? "Program" : "Scenario";
+    tag.className = "tag" + (program ? "" : " scen");
+    tag.innerHTML = `${esc(name)}<small>${lbl}</small>`;
+  }
+  const p = programs.find(x => x.name === choice);
+  $("docs").innerHTML = p && !sel.hidden ? p.docs.map(d => `<span>${ICON[d.status] || ""} ${esc(d.file)}${d.shared ? " (shared)" : ""}</span>`).join("")
+    + p.duplicates.map(([a]) => `<span>↳ skipping ${esc(a)} (duplicate)</span>`).join("") : "";
+  $("docnote").hidden = !(p && !sel.hidden && p.docs.some(d => d.status !== "verified"));
+}
+async function loadPrograms() {
+  try {
+    const r = await fetch(API + "/api/programs");
+    const data = await r.json();
+    programs = data.programs;
+    $("model").textContent = "Model: " + data.model;
+    const sel = $("program"), keep = sel.value;
+    sel.innerHTML = "<option value=''></option>" + programs.map(p => `<option>${esc(p.name)}</option>`).join("");
+    sel.value = keep;
+    $("offline").style.display = "none";
+  } catch (e) {
+    $("offline").style.display = "block";
+  }
+  renderSidebar();
+}
+["mProgram", "mScenario", "program"].forEach(id => $(id).addEventListener("change", renderSidebar));
+
+// ---------- chat ----------
+function addMsg(role, html) {
+  $("empty")?.remove();
+  const d = document.createElement("div");
+  d.className = "msg " + role;
+  d.innerHTML = html;
+  $("log").appendChild(d);
+  $("log").scrollTop = $("log").scrollHeight;
+  return d;
+}
+function sourcesHtml(src) {
+  return `<details class="src"><summary>Sources (${src.length})</summary>` + src.map(s => {
+    const head = s.section ? `<strong>§${esc(s.section)} ${esc(s.section_title)}</strong> · ${esc(s.file)} (${esc(s.loc)})`
+      : `<strong>${s.program ? esc(s.program) + " | " : ""}${esc(s.file)}</strong> ${esc(s.loc)}`;
+    const pg = (String(s.loc).match(/\d+/) || [])[0];
+    const link = /\.pdf$/i.test(s.file) && pg ? ` <a href="${API}/pdf/${encodeURIComponent(s.file)}#page=${pg}" target="_blank">open PDF</a>` : "";
+    const body = s.text.split("\n").filter(l => !l.startsWith("[")).join("\n").trim();
+    return `<div class="srcitem">${head}${link}${body ? `<blockquote>${esc(body)}${s.text.length >= 600 ? "…" : ""}</blockquote>` : ""}</div>`;
+  }).join("") + "</details>";
+}
+async function stream(url, payload, box) {
+  let text = "", status = "", sources = [], buf = "";
+  const draw = () => {
+    box.innerHTML = `<div class="md">${md(text)}</div>` + (status ? `<div class="status">${esc(status)}</div>` : "")
+      + (sources.length ? sourcesHtml(sources) : "");
+    $("log").scrollTop = $("log").scrollHeight;
+  };
+  const r = await fetch(API + url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.statusText);
+  const reader = r.body.getReader(), dec = new TextDecoder();
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let nl;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const ev = JSON.parse(buf.slice(0, nl)); buf = buf.slice(nl + 1);
+      if (ev.text !== undefined) { text += ev.text; status = ""; }
+      if (ev.replace !== undefined) { text = ev.replace; status = ""; }
+      if (ev.status !== undefined) status = ev.status;
+      if (ev.sources) sources = ev.sources;
+      if (ev.error) throw new Error(ev.error);
+      draw();
+    }
+  }
+  status = ""; draw();
+  return text;
+}
+function setBusy(b) {
+  busy = b;
+  $("send").disabled = $("reindex").disabled = b;
+}
+$("ask").addEventListener("submit", async e => {
+  e.preventDefault();
+  const question = $("q").value.trim();
+  if (!question || busy) return;
+  const { program, scenario, choice } = mode();
+  $("q").value = ""; $("q").style.height = "";
+  addMsg("user", esc(question));
+  const box = addMsg("bot", `<div class="status">Thinking…</div>`);
+  setBusy(true);
+  try {
+    const answer = await stream("/api/chat", { question, history, program: choice, mode_program: program, mode_scenario: scenario }, box);
+    history.push({ role: "user", content: question }, { role: "assistant", content: answer });
+  } catch (err) {
+    box.innerHTML = `<div class="err">Something went wrong: ${esc(err.message)}</div>`;
+    loadPrograms();
+  }
+  setBusy(false);
+  $("q").focus();
+});
+$("q").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("ask").requestSubmit(); }
+});
+$("q").addEventListener("input", e => { e.target.style.height = ""; e.target.style.height = e.target.scrollHeight + "px"; });
+$("newchat").addEventListener("click", () => {
+  history = [];
+  $("log").innerHTML = `<div class="empty" id="empty">New chat. Ask a guideline question, or describe a scenario.</div>`;
+});
+$("reindex").addEventListener("click", async () => {
+  setBusy(true);
+  const box = addMsg("bot", `<div class="status">Indexing…</div>`);
+  try { await stream("/api/index", {}, box); await loadPrograms(); }
+  catch (err) { box.innerHTML = `<div class="err">Indexing failed: ${esc(err.message)}</div>`; }
+  setBusy(false);
+});
+loadPrograms();
+</script>
+</body>
+</html>
