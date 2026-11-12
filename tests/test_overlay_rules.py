@@ -234,7 +234,7 @@ def test_broad_question_reads_every_program_sheet(monkeypatch):
     searched = []
 
     class Stub:
-        def search(self, q, programs=None):
+        def search(self, q, k=None, programs=None):
             searched.extend(programs)
             return []
     monkeypatch.setattr(chat, "retriever", lambda: Stub())
@@ -248,5 +248,15 @@ def test_broad_question_reads_every_program_sheet(monkeypatch):
     events = list(chat.respond("What's the minimum credit score for a first time investor?", [], ""))
     sheets = seen["messages"][0]
     assert sheets.get("cache") and "Minimum 660" in sheets["content"] and "1099 sheet" in sheets["content"]
-    assert "VA guide" not in sheets["content"] and searched == ["VA"]
+    # long guides are searched, and so is the shared guide (a silent sheet means its rule applies)
+    assert "VA guide" not in sheets["content"] and searched == ["VA", chat.SHARED]
     assert events[-1] == {"text": "ok"}
+
+
+def test_missing_sheet_rule_defaults_to_general_guideline():
+    """A program sheet is an overlay. When it says nothing on a topic, answers give the general guideline's rule
+    instead of "not addressed on the sheet" (Derrick, 2026-11-12)."""
+    from guidebot import answer
+    for system in (answer.FULL_DOC_SYSTEM, answer.SEARCH_SYSTEM, answer.BROAD_SYSTEM):
+        assert "No overlay, general" in system and "general guideline's rule applies" in system
+    assert "No overlay, general guideline\" in Conditions" in answer.BROAD_SYSTEM

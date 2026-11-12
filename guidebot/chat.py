@@ -149,12 +149,18 @@ def _broad_answer(question, history, all_programs, model):
                 hits += routed["sections"]
                 break
     found = []
-    if long_progs:
-        try:
+    try:
+        if long_progs:
             found = retriever().search(question, programs=long_progs)
-        except Exception:
-            found = []   # no index yet: the sheets and shared guide still answer
-        extra += [h["text"] for h in found]
+        # A sheet that's silent on a topic means the shared guide's rule applies, so the shared guide has to hold
+        # that rule even when the router picked other sections (cash out for reserves lives under assets, p. 47,
+        # while the router sent only §6.2 Reserves). Its best-matching pages are added unless already routed.
+        routed_text = "\n".join(extra)
+        found += [h for h in retriever().search(question, k=4, programs=[SHARED])
+                  if h["text"].strip()[:200] not in routed_text]
+    except Exception:
+        pass   # no index yet: the sheets and routed shared guide still answer
+    extra += [h["text"] for h in found]
     yield {"status": f"Reading {len(sheets)} program sheets…"}
     answer = yield from _stream(broad_messages(question, "\n\n".join(sheets), "\n\n".join(extra), history, model), model)
     if found:

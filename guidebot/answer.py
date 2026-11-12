@@ -22,6 +22,11 @@ RULES = """Rules:
 - Never infer from a negative statement. "No additional X required for Y" means only that exact case — do not extend it to mean X is not required generally or for similar cases.
 - If the document says "per program guidelines," "refer to the program matrix," or gives no specific value, say so and note the requirement varies by program.
 - If the answer is not in the provided sections, say you couldn't find it in the shared guidelines — do not infer or fill the gap.
+- A program sheet (matrix) is an overlay on its general guideline: the shared NonQM guide for Express and Ignite
+  programs, or the program's own underwriting guide where it has one (the 2nd mortgage guide). When a sheet doesn't
+  state a requirement, there is no overlay and the general guideline's rule applies. Say "No overlay, general
+  guideline applies" and give that rule with its citation. Never answer a program with only "not addressed on the
+  sheet". Say a requirement isn't covered only when the general guideline doesn't state it either.
 - Lead with a direct one-sentence answer to the exact case asked. For a yes/no question, check every condition
   and restriction BEFORE writing the first word. If any rule excludes the case asked (wrong occupancy, purpose,
   property type, loan amount, borrower type), the answer is **No**, and the first sentence names the rule that
@@ -89,13 +94,16 @@ BROAD_SYSTEM = (
     "  shared guide doesn't (minimum scores, first time investor rules, reserves, geographic overlays).\n"
     "- Name the program for every fact. When programs differ, list each program that has a rule on it, one bullet\n"
     "  each. Never blend one program's rule into another's.\n"
-    "- If only some programs mention it, say which ones do and that the rest don't address it in their sheets.\n"
+    "- If only some program sheets have a rule on it, those are overlays. Every other program follows the general\n"
+    "  guideline: give its rule, cited, for those programs. Never write \"not addressed on the sheet\" as a\n"
+    "  program's answer.\n"
     "- When the answer is a requirement that differs by program (reserves, minimum score, max DTI, loan limits,\n"
     "  seasoning, what's allowed), give it as a table right after the one-sentence lead:\n"
     "  | Program | Requirement | Conditions | Source |\n"
-    "  One row per program that addresses it, the number bolded in Requirement, citation in Source as (filename, p. X).\n"
-    "  Put programs with the same answer next to each other. After the table, add only short bullets for things\n"
-    "  the table can't hold, and one line naming the programs whose sheets don't cover it.\n"
+    "  One row per program, the number bolded in Requirement, citation in Source as (filename, p. X). A program with\n"
+    "  no overlay gets the general guideline's rule, \"No overlay, general guideline\" in Conditions, and the general\n"
+    "  guideline's citation in Source. Put programs with the same answer next to each other. After the table, add\n"
+    "  only short bullets for things the table can't hold.\n"
     "- Never state a max LTV or CLTV percentage, from a matrix or anywhere else. If the question needs one, say to\n"
     "  switch to Scenario mode and give the deal (FICO, loan amount, occupancy, purpose, property type).\n"
     "- Cite with the filename and page from the header above the text: (filename, p. X).\n\n"
