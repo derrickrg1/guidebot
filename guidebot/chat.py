@@ -90,12 +90,9 @@ def respond(question: str, history: list[dict], choice: str = "",
     answer, hits = "", []
 
     # A number for a specific deal only ever comes from the matrix lookup. With Scenario off, the guideline
-    # reader used to write its own "Max LTV" (wrong FICO row, 80 - 5 = 76).
+    # reader used to write its own "Max LTV" (wrong FICO row, 80 - 5 = 76). With no program picked, the
+    # deal runs against every program, same as Deal check mode.
     deal = looks_like_deal(question, history)
-    if deal and not mode_scenario and not docs:
-        yield {"replace": "That's a deal question, and LTVs only come from the matrix lookup. "
-                          "Turn on **Scenario** to check every program, or pick a program and ask again."}
-        return
     skipped = ""
 
     if mode_scenario or deal:

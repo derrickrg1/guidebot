@@ -170,5 +170,8 @@ def test_deal_question_never_reaches_the_free_text_reader(monkeypatch):
                                mode_program=True, mode_scenario=False))
     assert events[-1]["replace"] == "**Max LTV/CLTV: 75%**"
 
+    # No program picked: the deal is checked against every program instead of the free-text reader.
+    monkeypatch.setattr(chat, "compare_programs", lambda *a, **k: [])
+    monkeypatch.setattr(chat, "comparison_md", lambda rows: "compared")
     events = list(chat.respond("Max LTV for an investment cash out, sfr, $1.2m loan, 705 FICO?", [], ""))
-    assert "only come from the matrix lookup" in events[-1]["replace"]
+    assert events[-1]["replace"] == "compared"
