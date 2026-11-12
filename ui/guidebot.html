@@ -10,13 +10,13 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500&family=Space+Mono&family=Barlow+Condensed:wght@600&family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
 <style>
-/* One theme: Inked Japan, black with blue violet tones. Silver from the tin rim, violet from the paint. */
+/* One theme: Inked Japan black, silver from the tin rim, burnt orange accents (--navy is the accent slot). */
 :root {
   color-scheme: dark;
   --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
   --ink: #e6e8ea; --steel: #b3b9be; --mist: #7d878c; --rule: rgba(200, 204, 210, 0.1);
-  --navy: #a3a6f0; --gold: #c8ccd2; --page: #131c1e; --side: rgba(0, 0, 0, 0.5);
-  --card: rgba(0, 0, 0, 0.38); --user: rgba(66, 68, 140, 0.45); --user-ink: #ecebfa; --warn: #e2b866;
+  --navy: #d9661f; --gold: #c8ccd2; --page: #131c1e; --side: rgba(0, 0, 0, 0.5);
+  --card: rgba(0, 0, 0, 0.38); --user: rgba(217, 102, 31, 0.18); --user-ink: #f6ece4; --warn: #e2b866;
   --warn-bg: rgba(226, 184, 102, 0.1); --bad: #e08080; --ok: #7cc48a;
 }
 /* Black overlay over the paint: lit in the middle, falling off to black at the edges like the photo. */
@@ -41,7 +41,7 @@ aside {
 .brand { color: var(--gold); display: flex; align-items: center; gap: 14px; }
 .brand .mark { display: block; font: 500 1.6rem/1 "Bodoni Moda", Didot, "Bodoni MT", serif; letter-spacing: 0.04em; }
 /* Bodoni's own + is a hairline that disappears at this size, so the ++ is drawn in Inter. */
-.brand .mark span { color: #fff; font: 400 0.55em Inter, "Segoe UI", sans-serif; vertical-align: 0.7em; margin-left: 3px; letter-spacing: 0.05em; }
+.brand .mark span { color: var(--navy); font: 600 0.55em Inter, "Segoe UI", sans-serif; vertical-align: 0.7em; margin-left: 1px; letter-spacing: 0; }
 .brand .tag-line { display: block; margin-top: 5px; font: 0.56rem "Space Mono", Consolas, monospace;
   letter-spacing: 0.18em; color: var(--mist); }
 /* Round crop, silver ring like the tin rim. The crop also hides the corner watermark. */
@@ -57,8 +57,8 @@ aside {
 .modes input { position: absolute; opacity: 0; pointer-events: none; }
 .modes b { display: block; font-weight: 600; font-size: 0.9rem; }
 .modes small { display: block; color: var(--mist); font-size: 0.74rem; }
-.modes label:hover { border-color: rgba(163, 166, 240, 0.4); }
-.modes label:has(input:checked) { border-color: var(--navy); background: rgba(163, 166, 240, 0.1); }
+.modes label:hover { border-color: rgba(217, 102, 31, 0.4); }
+.modes label:has(input:checked) { border-color: var(--navy); background: rgba(217, 102, 31, 0.1); }
 .modes label:has(input:checked) b { color: var(--navy); }
 .modes label:has(input:focus-visible) { outline: 2px solid var(--navy); outline-offset: 2px; }
 .modes label.off { opacity: 0.45; cursor: default; }
