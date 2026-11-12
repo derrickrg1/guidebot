@@ -215,6 +215,20 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
 .vbtn:hover { color: var(--navy); border-color: rgba(217, 102, 31, 0.5); }
 .vbtn svg { width: 16px; height: 16px; }
 #viewer iframe { flex: 1; width: 100%; min-width: 320px; border: 0; background: #2a2f33; }
+/* Pages drawn by PDF.js: one white sheet per page, stacked, drawn only when scrolled near. */
+#vpages { position: relative; flex: 1; min-width: 320px; overflow: auto; padding: 16px 12px 40px; outline: none;
+  scrollbar-width: thin; scrollbar-color: rgba(200, 204, 210, 0.2) transparent; }
+#vpages[hidden] { display: none; }
+.vpg { position: relative; margin: 0 auto 14px; background: #fff; border-radius: 3px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5); }
+.vpg canvas { display: block; width: 100%; height: 100%; border-radius: 3px; }
+.vpg .num { position: absolute; right: 8px; bottom: -18px; font-size: 0.66rem; color: var(--mist); }
+/* The lines the answer cites: a soft orange marker, pulsing once when it lands. */
+.vhl { position: absolute; border-radius: 3px; background: rgba(217, 102, 31, 0.28);
+  box-shadow: 0 0 0 1.5px rgba(217, 102, 31, 0.85); mix-blend-mode: multiply; pointer-events: none;
+  animation: land 1.2s ease-out 1; }
+@keyframes land { 0% { box-shadow: 0 0 0 10px rgba(217, 102, 31, 0); background: rgba(217, 102, 31, 0.55); } }
+.vmsg { color: var(--mist); font-size: 0.8rem; text-align: center; padding: 30px 10px; }
 .md a.cite.on { color: var(--navy); border-color: var(--navy); background: rgba(217, 102, 31, 0.12); }
 /* Below 1600px there isn't room for sidebar, chat and panel together, so the sidebar steps aside while the
    panel is open (Claude does the same with artifacts). Closing the panel brings it back. */
@@ -288,14 +302,20 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
 <section id="viewer" aria-label="Guideline viewer" aria-hidden="true">
   <div class="vbar">
     <div class="vtitle"><b id="vname"></b><span id="vpage"></span></div>
+    <button class="vbtn" id="vzoomout" type="button" title="Zoom out" aria-label="Zoom out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 12h12"/></svg></button>
+    <button class="vbtn" id="vzoomin" type="button" title="Zoom in" aria-label="Zoom in">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 6v12M6 12h12"/></svg></button>
     <a class="vbtn" id="vopen" target="_blank" rel="noopener" title="Open in a new tab" aria-label="Open in a new tab">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg></a>
     <button class="vbtn" id="vclose" type="button" title="Close (Esc)" aria-label="Close">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
-  <iframe id="vframe" title="Guideline PDF"></iframe>
+  <div id="vpages" tabindex="-1"></div>
+  <iframe id="vframe" title="Guideline PDF" hidden></iframe>
 </section>
 <script src="md.js"></script>
+<script src="viewer.js"></script>
 <script>
 const API = location.protocol === "file:" ? "http://localhost:8600" : "";
 const ICON = { verified: "✅", unverified: "⚠️", changed: "🔄" };
@@ -584,35 +604,15 @@ $("newchat").addEventListener("click", () => {
   loadChats();
   $("q").focus();
 });
-// ---------- guideline panel ----------
-// Citation chips and source links open the PDF at that page in the right-hand panel, so the answer and the
-// guideline sit side by side. Ctrl/Cmd/Shift-click still opens a new tab.
-function openViewer(link) {
-  const u = new URL(link.href, location.href);
-  const file = decodeURIComponent(u.pathname.split("/pdf/")[1] || ""), page = (u.hash.match(/page=(\d+)/) || [])[1] || "1";
-  const base = `${API}/pdf/${encodeURIComponent(file)}`;
-  $("vname").textContent = shortName(file);
-  $("vpage").textContent = `Page ${page} · ${file}`;
-  $("vopen").href = `${base}#page=${page}`;
-  // A new query per page makes the frame reload; changing only the #page hash doesn't move Chrome's PDF viewer.
-  $("vframe").src = `${base}?p=${page}#page=${page}&view=FitH&navpanes=0`;   // navpanes=0: no thumbnail strip
-  document.querySelectorAll("a.cite.on").forEach(a => a.classList.remove("on"));
-  if (link.classList.contains("cite")) link.classList.add("on");
-  document.body.classList.add("viewing");
-  $("viewer").setAttribute("aria-hidden", "false");
-}
-function closeViewer() {
-  document.body.classList.remove("viewing");
-  $("viewer").setAttribute("aria-hidden", "true");
-  document.querySelectorAll("a.cite.on").forEach(a => a.classList.remove("on"));
-}
+// ---------- guideline panel (ui/viewer.js) ----------
+// Citation chips and source links open the PDF at that page in the right-hand panel, with the cited lines
+// marked. Ctrl/Cmd/Shift-click still opens a new tab.
 $("log").addEventListener("click", e => {
   const link = e.target.closest('a[href*="/pdf/"]');
   if (!link || e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0) return;
   e.preventDefault();
-  openViewer(link);
+  openGuideline(link);
 });
-$("vclose").addEventListener("click", closeViewer);
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && document.body.classList.contains("viewing") && picker.menu.hidden) closeViewer();
 });

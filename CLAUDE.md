@@ -36,6 +36,10 @@ task "Guidebot server" runs `scripts/run_server.ps1` at login, which relaunches 
 `-m guidebot.server` process; the loop brings it back in 5 to 30 seconds. The cloudflared
 service tunnels it to asknick.derrickgarcia.dev and guidebot.derrickgarcia.dev, both behind Cloudflare Access
 (policy "Derrick Access": his Gmail and nwilson@revofunding.com).
+* Citation chips open the PDF in a right-side panel (`ui/viewer.js`, PDF.js 3.11.174 from cdnjs, works on
+iPhone). It finds the cited line on the page by word overlap and marks it; if the cited page has no match it
+tries one page either side and says "closest match on p. X". Falls back to the browser's PDF viewer on error.
+`ui/md.js` is the shared markdown/citation renderer for both pages.
 * Admin console: `/admin` (`ui/admin.html`, `guidebot/admin.py`) replaces the Streamlit Verify page: doc
 statuses, PDF page beside editable matrix/text, re-read, approve docs and overlay rules. Only his Gmail via
 Cloudflare Access, or direct from this PC. Claude never clicks Approve. Tabs: Documents, Chats (every user's

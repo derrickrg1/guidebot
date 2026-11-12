@@ -93,8 +93,8 @@ class Handler(BaseHTTPRequestHandler):
             self._admin_get(path, parse_qs(url.query))
         elif path in ("/", "/index.html"):
             self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
-        elif path == "/md.js":
-            self._send(200, (PAGE.parent / "md.js").read_bytes(), "text/javascript; charset=utf-8")
+        elif path in ("/md.js", "/viewer.js"):
+            self._send(200, (PAGE.parent / path[1:]).read_bytes(), "text/javascript; charset=utf-8")
         elif path == "/logo.png":
             self._send(200, (PAGE.parent / "logo.png").read_bytes(), "image/png")
         elif path == "/api/chats":
