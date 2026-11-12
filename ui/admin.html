@@ -122,7 +122,8 @@ label.toggle { display: flex; gap: 8px; align-items: center; font-size: 0.85rem;
 .md li.row > .def, .md li.row > ul, .md li.row > ol { grid-column: 2; }
 .md li.row > ul, .md li.row > ol { margin: 0.3em 0 0; padding-left: 1.1em; border: 0; }
 .md li.row li + li { margin-top: 0.25em; }
-@media (max-width: 760px) { .md li.row { grid-template-columns: 1fr; } .md li.row > * { grid-column: 1 !important; grid-row: auto !important; } }
+.msg.bot { container-type: inline-size; }
+@container (max-width: 520px) { .md li.row { grid-template-columns: 1fr; } .md li.row > * { grid-column: 1 !important; grid-row: auto !important; } }
 .md table { width: auto; font-size: 0.88rem; }
 @media (max-width: 900px) {
   body { flex-direction: column; } aside { width: auto; max-height: 40vh; } .page { grid-template-columns: 1fr; }

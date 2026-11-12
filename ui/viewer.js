@@ -129,6 +129,7 @@ async function layout() {
   const box = vel("vpages");
   const first = await V.doc.getPage(1), base = first.getViewport({ scale: 1 });
   V.fit = Math.max(0.3, (box.clientWidth - 24) / base.width);
+  V.fitWidth = vel("viewer").getBoundingClientRect().width;   // the panel, not the page list: its scrollbar comes and goes
   V.scaleKey = String(scale());
   const vp = first.getViewport({ scale: scale() });
   V.observer?.disconnect();
@@ -189,7 +190,8 @@ async function openGuideline(link) {
   const u = new URL(link.href, location.href);
   const file = decodeURIComponent(u.pathname.split("/pdf/")[1] || ""), page = +((u.hash.match(/page=(\d+)/) || [])[1] || 1);
   const url = `${API}/pdf/${encodeURIComponent(file)}`, token = ++V.token;
-  vel("vname").textContent = shortName(file);
+  const k = progKey(file);
+  vel("vname").innerHTML = (k ? `<i class="pdot" data-prog="${k}"></i>` : "") + esc(shortName(file));
   vel("vpage").textContent = `Page ${page} · ${file}`;
   vel("vopen").href = `${url}#page=${page}`;
   document.querySelectorAll("a.cite.on").forEach(a => a.classList.remove("on"));
@@ -221,11 +223,8 @@ async function openGuideline(link) {
     }
     if (token !== V.token) return;
     V.marks = { page: at, rects };
-    const d = vel("vpages").querySelector(`.vpg[data-n="${at}"]`);
-    delete d.dataset.drawn;   // redraw so the new marks show
-    await drawPage(at);
-    const first = d.querySelector(".vhl");
-    vel("vpages").scrollTop = first ? d.offsetTop + first.offsetTop - vel("vpages").clientHeight / 3 : d.offsetTop - 12;
+    V.pinned = true;   // keep the marked line in view through refits until the reader scrolls
+    await showMark();
     const marked = `${rects.length === 1 ? "line" : rects.length + " lines"} marked`;
     V.note = !rects.length ? `couldn't match the cited line on p. ${target}, check the page`
       : at !== target ? `closest match on p. ${at} (cited as p. ${target})` : marked;
@@ -240,6 +239,14 @@ async function openGuideline(link) {
     vel("vframe").src = `${url}?p=${page}#page=${page}&view=FitH&navpanes=0`;
     vel("vpage").textContent = `Page ${page} · ${file}`;
   }
+}
+async function showMark() {
+  // Looked up fresh each time: a refit rebuilds the pages, so a page element held from before is detached.
+  const d = vel("vpages").querySelector(`.vpg[data-n="${V.marks.page}"]`);
+  delete d.dataset.drawn;   // redraw so the marks show
+  await drawPage(V.marks.page);
+  const first = d.querySelector(".vhl");
+  vel("vpages").scrollTop = first ? d.offsetTop + first.offsetTop - vel("vpages").clientHeight / 3 : d.offsetTop - 12;
 }
 function closeViewer() {
   document.body.classList.remove("viewing");
@@ -258,9 +265,16 @@ async function rezoom(factor) {
 vel("vzoomin").addEventListener("click", () => rezoom(1.25));
 vel("vzoomout").addEventListener("click", () => rezoom(0.8));
 vel("vclose").addEventListener("click", closeViewer);
+for (const ev of ["wheel", "touchmove", "keydown"]) vel("vpages").addEventListener(ev, () => { V.pinned = false; }, { passive: true });
 vel("vpages").addEventListener("scroll", () => { if (V.doc) setHeader(currentPage()); }, { passive: true });
+// Refit whenever the panel's width changes: window resizes, the chat width toggle, or a fit measured while the panel
+// was still sliding open (that left pages drawn at a third of the panel's width).
 let refit;
-addEventListener("resize", () => {
+new ResizeObserver(() => {
   clearTimeout(refit);
-  refit = setTimeout(() => { if (V.doc && document.body.classList.contains("viewing")) rezoom(V.zoom === 1 ? 0 : 1); }, 250);
-});
+  refit = setTimeout(() => {
+    const w = vel("viewer").getBoundingClientRect().width;
+    if (!V.doc || !w || Math.abs(w - (V.fitWidth || 0)) <= 8 || !document.body.classList.contains("viewing")) return;
+    rezoom(V.zoom === 1 ? 0 : 1).then(() => V.marks && V.pinned && showMark()).catch(() => {});
+  }, 200);
+}).observe(vel("viewer"));

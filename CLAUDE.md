@@ -40,6 +40,10 @@ service tunnels it to asknick.derrickgarcia.dev and guidebot.derrickgarcia.dev, 
 iPhone). It finds the cited line on the page by word overlap and marks it; if the cited page has no match it
 tries one page either side and says "closest match on p. X". Falls back to the browser's PDF viewer on error.
 `ui/md.js` is the shared markdown/citation renderer for both pages.
+* Program colors (`PROGRAMS` in `ui/md.js`) come from the Revo site's `scripts/pages/accents.json` (the lifted
+"hero" tones; FHA/VA lightened from their accents). Express and Ignite share a product's color. Dots show on
+citation chips, table program cells, "Term:" rows, the picker and the viewer title. The header button toggles a
+wide chat column (remembered per browser).
 * Admin console: `/admin` (`ui/admin.html`, `guidebot/admin.py`) replaces the Streamlit Verify page: doc
 statuses, PDF page beside editable matrix/text, re-read, approve docs and overlay rules. Only his Gmail via
 Cloudflare Access, or direct from this PC. Claude never clicks Approve. Tabs: Documents, Chats (every user's

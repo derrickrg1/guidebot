@@ -130,7 +130,17 @@ select option { background: #131c1e; }
 hr { border: 0; border-top: 1px solid var(--rule); margin: 0; width: 100%; }
 
 main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; }
-header { padding: 20px max(32px, calc((100% - 780px) / 2)) 12px; border-bottom: 1px solid var(--rule); }
+/* Column width: normal reads like Claude; "wide" (the header toggle) gives tables and long answers the room. */
+:root { --col: 780px; --gut: 32px; }
+body.wide { --col: 1240px; --gut: 20px; }
+header { position: relative; padding: 20px max(var(--gut), calc((100% - var(--col)) / 2)) 12px; border-bottom: 1px solid var(--rule); }
+#widen { position: absolute; top: 18px; right: 16px; width: 32px; height: 32px; display: grid; place-items: center;
+  border: 1px solid var(--rule); border-radius: 8px; background: rgba(255, 255, 255, 0.04); color: var(--mist); cursor: pointer; }
+#widen:hover { color: var(--navy); border-color: rgba(217, 102, 31, 0.5); }
+#widen svg { width: 16px; height: 16px; }
+#widen .in, body.wide #widen .out { display: none; }
+body.wide #widen .in { display: block; }
+@media (max-width: 760px) { #widen { display: none; } }
 /* Main area reads like Claude: one serif at one size. The title only differs by weight and color. */
 h1, .subtitle, .empty, .msg.bot { font: 400 1rem/1.65 var(--serif); letter-spacing: 0; }
 h1 { margin: 0; color: var(--navy); font-weight: 600; }
@@ -138,7 +148,7 @@ h1 { margin: 0; color: var(--navy); font-weight: 600; }
 #offline { display: none; margin-top: 10px; }
 #offline code { background: var(--card); padding: 1px 5px; border-radius: 4px; }
 /* Conversation and input share one centered column, like Claude's chat. */
-#log { flex: 1; overflow-y: auto; padding: 24px max(32px, calc((100% - 780px) / 2)); display: flex; flex-direction: column; gap: 18px; }
+#log { flex: 1; overflow-y: auto; padding: 24px max(var(--gut), calc((100% - var(--col)) / 2)); display: flex; flex-direction: column; gap: 18px; }
 .empty { color: var(--mist); max-width: 560px; }
 .msg.user {
   align-self: flex-end; background: rgba(255, 255, 255, 0.07); color: var(--ink); padding: 10px 16px;
@@ -183,7 +193,9 @@ h1 { margin: 0; color: var(--navy); font-weight: 600; }
 .md li.row > .def, .md li.row > ul, .md li.row > ol { grid-column: 2; }
 .md li.row > ul, .md li.row > ol { margin: 0.3em 0 0; padding-left: 1.1em; border: 0; }
 .md li.row li + li { margin-top: 0.25em; }
-@media (max-width: 760px) { .md li.row { grid-template-columns: 1fr; } .md li.row > * { grid-column: 1 !important; grid-row: auto !important; } }
+/* Rows stack when the answer itself is narrow (a phone, or the guideline panel open), not just on small screens. */
+.msg.bot { container-type: inline-size; }
+@container (max-width: 520px) { .md li.row { grid-template-columns: 1fr; } .md li.row > * { grid-column: 1 !important; grid-row: auto !important; } }
 .tbl { overflow-x: auto; margin: 0.6em 0; }
 .md table { border-collapse: collapse; font-size: 0.88rem; }
 .md th, .md td { border: 1px solid var(--rule); padding: 5px 9px; text-align: left; vertical-align: top; }
@@ -196,7 +208,7 @@ details.src summary { cursor: pointer; color: var(--steel); }
   white-space: pre-wrap; font-size: 0.78rem; color: var(--steel); border-radius: 0 4px 4px 0;
 }
 /* One rounded box holding the question and a round send arrow, like Claude's input. */
-form { padding: 8px max(32px, calc((100% - 780px) / 2)) 20px; }
+form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
 .composer {
   display: flex; align-items: flex-end; gap: 10px; padding: 12px 12px 12px 18px;
   border: 1px solid rgba(200, 204, 210, 0.16); border-radius: 20px; background: rgba(255, 255, 255, 0.04);
@@ -299,6 +311,10 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
 </aside>
 <main>
   <header>
+    <button id="widen" type="button" title="Wider chat" aria-label="Toggle wide chat">
+      <svg class="out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M3 12h18"/></svg>
+      <svg class="in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l5 5-5 5M20 7l-5 5 5 5M9 12H2M15 12h7"/></svg>
+    </button>
     <h1 id="title">Guidelines</h1>
     <div id="subtitle" class="subtitle"></div>
     <div id="offline" class="note">Can't reach AskNick. Start it in PowerShell from the guidebot folder:
@@ -378,7 +394,8 @@ function renderSidebar() {
   $("q").placeholder = VIEWS[m].hint;
   // Plain text on the button (no tag pill), so it truncates cleanly in the narrow sidebar.
   document.querySelector("#picker .picker-val").innerHTML =
-    choice ? esc(choice.replace(/ \(Express \+ Ignite\)$/, " · Express + Ignite")) : "All programs";
+    choice ? (progKey(choice) ? `<i class="pdot" data-prog="${progKey(choice)}"></i>` : "")
+      + esc(choice.replace(/ \(Express \+ Ignite\)$/, " · Express + Ignite")) : "All programs";
   store.set("mode", m); store.set("program", choice);
   const p = programs.find(x => x.name === choice);
   $("docs").innerHTML = p ? p.docs.map(d => `<span>${ICON[d.status] || ""} ${esc(d.file)}${d.shared ? " (shared)" : ""}</span>`).join("")
@@ -422,7 +439,8 @@ document.querySelectorAll("input[name=mode], #program").forEach(el => el.addEven
 const CHECK = `<svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
 function optLabel(name) {
   const m = name.match(/^(.*) \((Express \+ Ignite)\)$/);   // family picks: "1099" plus a tag
-  return m ? `${esc(m[1])} <span class="tag">${m[2]}</span>` : esc(name);
+  const k = progKey(name), dot = k ? `<i class="pdot" data-prog="${k}"></i>` : "";
+  return dot + (m ? `${esc(m[1])} <span class="tag">${m[2]}</span>` : esc(name));
 }
 const picker = { btn: document.querySelector("#picker .picker-btn"), menu: document.querySelector("#picker .picker-menu") };
 // The menu lives on <body>: inside the sidebar, its blur makes "fixed" mean "fixed to the sidebar", so the menu was
@@ -460,6 +478,14 @@ function choose(v) {
   closePicker(); picker.btn.focus();
 }
 picker.btn.addEventListener("click", () => picker.menu.hidden ? openPicker() : closePicker());
+// Wide chat toggle, remembered per browser.
+function setWide(on) {
+  document.body.classList.toggle("wide", on);
+  $("widen").title = on ? "Narrower chat" : "Wider chat";
+  try { localStorage.setItem("asknick.wide", on ? "1" : ""); } catch {}
+}
+try { setWide(localStorage.getItem("asknick.wide") === "1"); } catch {}
+$("widen").addEventListener("click", () => setWide(!document.body.classList.contains("wide")));
 picker.menu.addEventListener("click", e => { const o = e.target.closest(".picker-opt:not(.off)"); if (o) choose(o.dataset.value); });
 picker.menu.addEventListener("mousemove", e => {
   const o = e.target.closest(".picker-opt:not(.off)");
@@ -500,7 +526,8 @@ function sourcesHtml(src) {
   return `<details class="src"><summary>Sources (${src.length})</summary>` + src.map(s => {
     const head = s.section ? `<strong>§${esc(s.section)} ${esc(s.section_title)}</strong> · ${esc(s.file)} (${esc(s.loc)})`
       : `<strong>${s.program ? esc(s.program) + " | " : ""}${esc(s.file)}</strong> ${esc(s.loc)}`;
-    const pg = (String(s.loc).match(/\d+/) || [])[0];
+    // loc can be "§8.1.2 p. 26": take the page number, not the section's first digit.
+    const pg = (String(s.loc).match(/p(?:age|p)?\.?\s*(\d+)/i) || String(s.loc).match(/(\d+)/) || [])[1];
     const link = /\.pdf$/i.test(s.file) && pg ? ` <a href="${API}/pdf/${encodeURIComponent(s.file)}#page=${pg}" target="_blank">open PDF</a>` : "";
     const body = s.text.split("\n").filter(l => !l.startsWith("[")).join("\n").trim();
     return `<div class="srcitem">${head}${link}${body ? `<blockquote>${esc(body)}${s.text.length >= 600 ? "…" : ""}</blockquote>` : ""}</div>`;
