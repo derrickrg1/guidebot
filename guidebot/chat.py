@@ -28,6 +28,15 @@ FAMILIES = {
     "P&L (Express + Ignite)": ["Express P&L", "Ignite P&L"],
 }
 
+# The four tabs across the top of the page. Each one narrows the chat to its own programs: "all programs" under
+# FHA means FHA only, and the shared NonQM guide only ever comes along with NonQM.
+SECTIONS = {
+    "NonQM": lambda name: name == SHARED or name.startswith(("Express", "Ignite")),
+    "Conventional": lambda name: name.startswith("Conventional"),
+    "FHA": lambda name: name.startswith("FHA"),
+    "VA": lambda name: name == "VA" or name.startswith("VA "),
+}
+
 _retriever = None
 
 
@@ -169,9 +178,11 @@ def _broad_answer(question, history, all_programs, model):
 
 
 def respond(question: str, history: list[dict], choice: str = "",
-            mode_program: bool = False, mode_scenario: bool = False):
+            mode_program: bool = False, mode_scenario: bool = False, section: str = ""):
     model = config.CHAT_MODEL
     all_programs = library.programs()
+    if section in SECTIONS:
+        all_programs = {k: v for k, v in all_programs.items() if SECTIONS[section](k)}
     user_programs = [p for p in all_programs if p != SHARED]
     members = family_members(choice, all_programs)
     if choice and choice not in user_programs and not members:
@@ -179,6 +190,9 @@ def respond(question: str, history: list[dict], choice: str = "",
         return
     if mode_program and not choice:
         yield {"replace": "I need a specific program for that. Pick one in the sidebar, then ask again."}
+        return
+    if not user_programs:
+        yield {"replace": f"No {section} programs are loaded yet."}
         return
 
     docs = program_docs(choice, all_programs)[0] if choice and not members else []

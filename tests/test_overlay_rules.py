@@ -260,3 +260,36 @@ def test_missing_sheet_rule_defaults_to_general_guideline():
     for system in (answer.FULL_DOC_SYSTEM, answer.SEARCH_SYSTEM, answer.BROAD_SYSTEM):
         assert "No overlay, general" in system and "general guideline's rule applies" in system
     assert "No overlay, general guideline\" in Conditions" in answer.BROAD_SYSTEM
+
+
+def test_sheet_rule_that_differs_is_flagged_as_overlay():
+    """When a sheet's rule differs from the general guideline, the answer says the sheet supersedes it and shows
+    the general rule too (Derrick, 2026-11-12)."""
+    from guidebot import answer
+    for system in (answer.FULL_DOC_SYSTEM, answer.SEARCH_SYSTEM, answer.BROAD_SYSTEM):
+        assert "Overlay (supersedes general guideline)" in system
+    assert "supersedes general guideline (general: <its rule>)" in answer.BROAD_SYSTEM
+
+
+def test_section_narrows_programs(monkeypatch):
+    """The FHA tab with no program picked answers from FHA only; NonQM keeps the shared guide."""
+    from pathlib import Path
+    from guidebot import chat
+    progs = {"FHA": [Path("a.pdf")], "VA": [Path("b.pdf")], "Express 1099": [Path("c.pdf")],
+             chat.SHARED: [Path("d.pdf")]}
+    monkeypatch.setattr(chat.library, "programs", lambda: progs)
+    seen = {}
+
+    def broad(question, history, all_programs, model):
+        seen["progs"] = sorted(all_programs)
+        yield {"text": "ok"}
+        return "ok", []
+
+    monkeypatch.setattr(chat, "_broad_answer", broad)
+    monkeypatch.setattr(chat, "looks_like_deal", lambda q, h: False)
+    list(chat.respond("reserves?", [], section="FHA"))
+    assert seen["progs"] == ["FHA"]
+    list(chat.respond("reserves?", [], section="NonQM"))
+    assert seen["progs"] == ["Express 1099", chat.SHARED]
+    assert list(chat.respond("reserves?", [], section="Conventional")) == [
+        {"replace": "No Conventional programs are loaded yet."}]

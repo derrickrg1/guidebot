@@ -80,7 +80,9 @@ and longer guides (FHA, VA, 2nds) are searched. Before 2026-11-12 it read only t
 program-sheet rules like Ignite DSCR's 660 first time investor minimum. Never states LTVs.
 * A program sheet is an overlay. If it doesn't state a requirement, there's no overlay and the general guideline
 (shared NonQM guide, or the program's own UW guide like 2nds) applies: answers say "No overlay, general guideline
-applies" with that rule, never "not addressed on the sheet" (rule in `RULES`/`BROAD_SYSTEM`). Broad questions also
+applies" with that rule, never "not addressed on the sheet" (rule in `RULES`/`BROAD_SYSTEM`). When the sheet's
+rule differs from the general guideline, answers flag "Overlay (supersedes general guideline)" and show the general
+rule it replaces, cited. Broad questions also
 search the shared guide's pages, since the TOC router can miss the section holding the default rule.
 * `guidebot/retrieval.py` + `ingest/indexer.py`: search for the long guides above. Page-level chunks.
 * `ui/app.py` chat. `ui/pages/1\_Verify\_Documents.py` PDF page image beside editable extracted content.
@@ -94,12 +96,15 @@ search the shared guide's pages, since the TOC router can miss the section holdi
 
 ## Current status
 
-* 111 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 113 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked
 answers per Ignite program; DSCR is Q\&A only until its matrix is re-read.
-* The page groups programs as Conventional / Government / NonQM (`GROUPS` in `ui/guidebot.html`).
+* Section tabs across the top: NonQM, Conventional, FHA, VA (`SECTIONS` in `ui/guidebot.html` and `chat.py`).
+A tab narrows the picker and the chat server side (no program picked = every program in that tab only; the shared
+NonQM guide only with NonQM). NonQM's picker groups Express + Ignite / Express / Ignite; one-program tabs pick it.
+Switching tabs mid-chat starts a new chat; a section-wide chat is saved under the section name.
 * Revo's own v9 matrices (`../Matrices/Revo Matrices/v9`) extract cleanly; the Ignite 1099 grid matches
 guidebot's 234/234. Possible later use as a reading copy (split Express/Ignite halves first); NDM PDFs stay
 the source for numbers.

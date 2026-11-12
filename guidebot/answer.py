@@ -27,6 +27,10 @@ RULES = """Rules:
   state a requirement, there is no overlay and the general guideline's rule applies. Say "No overlay, general
   guideline applies" and give that rule with its citation. Never answer a program with only "not addressed on the
   sheet". Say a requirement isn't covered only when the general guideline doesn't state it either.
+- The other way round: when the sheet states a requirement that differs from the general guideline (stricter,
+  looser, or a different number), the sheet wins. Flag it as "**Overlay (supersedes general guideline):**" with the
+  sheet's rule and citation, then give the general guideline's rule it replaces with its citation, so the reader
+  sees both. Only call it that when the general guideline you have actually says something different.
 - Lead with a direct one-sentence answer to the exact case asked. For a yes/no question, check every condition
   and restriction BEFORE writing the first word. If any rule excludes the case asked (wrong occupancy, purpose,
   property type, loan amount, borrower type), the answer is **No**, and the first sentence names the rule that
@@ -102,7 +106,8 @@ BROAD_SYSTEM = (
     "  | Program | Requirement | Conditions | Source |\n"
     "  One row per program, the number bolded in Requirement, citation in Source as (filename, p. X). A program with\n"
     "  no overlay gets the general guideline's rule, \"No overlay, general guideline\" in Conditions, and the general\n"
-    "  guideline's citation in Source. Put programs with the same answer next to each other. After the table, add\n"
+    "  guideline's citation in Source. A program whose sheet rule differs from the general guideline gets \"Overlay,\n"
+    "  supersedes general guideline (general: <its rule>)\" in Conditions. Put programs with the same answer next to each other. After the table, add\n"
     "  only short bullets for things the table can't hold.\n"
     "- Never state a max LTV or CLTV percentage, from a matrix or anywhere else. If the question needs one, say to\n"
     "  switch to Scenario mode and give the deal (FICO, loan amount, occupancy, purpose, property type).\n"

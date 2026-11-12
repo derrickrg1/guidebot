@@ -159,9 +159,12 @@ class Handler(BaseHTTPRequestHandler):
             turns = [{"role": m["role"], "content": m["content"]} for m in body.get("history", [])
                      if m.get("role") in ("user", "assistant")]
             program = body.get("program") or ""
-            events = chat.respond(question, turns, program, bool(body.get("mode_program")), bool(body.get("mode_scenario")))
+            section = body.get("section") if body.get("section") in chat.SECTIONS else ""
+            events = chat.respond(question, turns, program, bool(body.get("mode_program")), bool(body.get("mode_scenario")),
+                                  section=section)
+            # a chat across a whole section is saved under the section's name, so reopening it lands on that tab
             self._stream(_saving(events, str(body.get("chat_id") or "")[:64], history.user(self.headers), question,
-                                 program, "scenario" if body.get("mode_scenario") else "guidelines"))
+                                 program or section, "scenario" if body.get("mode_scenario") else "guidelines"))
         elif path == "/api/chats/delete":
             self._json({"ok": history.delete_chat(str(body.get("id") or ""), history.user(self.headers))})
         else:

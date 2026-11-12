@@ -188,6 +188,14 @@ body.wide #widen .in { display: block; }
 h1, .subtitle, .empty, .msg.bot { font: 400 1rem/1.65 var(--serif); letter-spacing: 0; }
 h1 { margin: 0; color: var(--navy); font-weight: 600; }
 .subtitle { color: var(--mist); }
+/* Section tabs across the top: NonQM, Conventional, FHA, VA. Each narrows the picker and the chat to its programs. */
+.sections { display: flex; gap: 6px; margin: 0 0 14px; overflow-x: auto; scrollbar-width: none; }
+.sections::-webkit-scrollbar { display: none; }
+.sections button { display: flex; align-items: center; gap: 7px; flex: none; padding: 6px 14px; border: 1px solid var(--rule);
+  border-radius: 999px; background: none; color: var(--steel); cursor: pointer; letter-spacing: 0.16em;
+  font: 600 0.8rem "Barlow Condensed", "Arial Narrow", sans-serif; text-transform: uppercase; }
+.sections button:hover { color: var(--ink); border-color: rgba(217, 102, 31, 0.4); }
+.sections button[aria-selected=true] { background: rgba(217, 102, 31, 0.16); border-color: rgba(217, 102, 31, 0.6); color: var(--navy); }
 #offline { display: none; margin-top: 10px; }
 #offline code { background: var(--card); padding: 1px 5px; border-radius: 4px; }
 /* Conversation and input share one centered column, like Claude's chat. */
@@ -321,6 +329,8 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
   #hsettings { display: grid; position: absolute; top: 14px; right: 12px; width: 32px; height: 32px; place-items: center;
     border: 1px solid var(--rule); border-radius: 8px; background: rgba(255, 255, 255, 0.04); color: var(--mist); }
   .settings { left: 12px !important; right: 12px; width: auto; }
+  .sections { margin-right: 40px; gap: 4px; }   /* clear of the header gear */
+  .sections button { padding: 6px 9px; letter-spacing: 0.08em; gap: 5px; }
   body.noside #hsettings { right: 12px; top: 14px; }
   body.noside #showside { left: 12px; top: 14px; }
   body.noside header { padding-left: 56px; }
@@ -373,6 +383,12 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
     </button>
     <button id="showside" type="button" title="Show sidebar" aria-label="Show sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/></svg></button>
     <button id="hsettings" type="button" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    <nav class="sections" id="sections" role="tablist" aria-label="Product">
+      <button type="button" role="tab" data-sec="NonQM">NonQM</button>
+      <button type="button" role="tab" data-sec="Conventional"><i class="pdot" data-prog="conv"></i>Conventional</button>
+      <button type="button" role="tab" data-sec="FHA"><i class="pdot" data-prog="fha"></i>FHA</button>
+      <button type="button" role="tab" data-sec="VA"><i class="pdot" data-prog="va"></i>VA</button>
+    </nav>
     <h1 id="title">Guidelines</h1>
     <div id="subtitle" class="subtitle"></div>
     <div id="offline" class="note">Can't reach AskNick. Start it in PowerShell from the guidebot folder:
@@ -419,14 +435,14 @@ let programs = [], history = [], busy = false;
 // Deal questions go to the matrix lookup in either mode; the server decides that, not this page.
 const VIEWS = {
   ask: {
-    all: p => ["Guidelines", "Searching the shared guidelines for every program",
-      "Ask how a rule works. Pick a program on the left to read just that program's guide."],
+    all: p => [`${p} Guidelines`, `Searching every ${p} program's guidelines`,
+      `Ask how a ${p} rule works. Pick a program on the left to read just that one.`],
     one: p => [`${p} Guidelines`, `Reading the full ${p} guide`, `Ask anything about ${p}: reserves, DTI, credit, property, documentation.`],
     hint: "Ask about a guideline",
   },
   deal: {
-    all: p => ["Scenario", "Comparing max LTV across every program",
-      "Give me the deal: FICO, loan amount, occupancy, purpose and property type. I'll check every program's matrix."],
+    all: p => [`${p} Scenario`, `Comparing max LTV across every ${p} program`,
+      `Give me the deal: FICO, loan amount, occupancy, purpose and property type. I'll check every ${p} matrix.`],
     one: p => [`${p} Scenario`, `Max LTV from the ${p} matrix and overlays`,
       `Give me the deal: FICO, loan amount, occupancy, purpose and property type. I'll look it up in the ${p} matrix.`],
     hint: "720 FICO, $650k purchase, primary, SFR",
@@ -443,7 +459,7 @@ function mode() {
 function renderSidebar() {
   const { m, choice } = mode();
   const fam = programs.find(x => x.name === choice)?.family;
-  let [title, sub, empty] = choice ? VIEWS[m].one(choice) : VIEWS[m].all();
+  let [title, sub, empty] = choice ? VIEWS[m].one(choice) : VIEWS[m].all(section);
   if (fam) sub = `${fam.join(" and ")}, side by side`;
   $("title").textContent = title;
   $("subtitle").textContent = sub;
@@ -453,21 +469,48 @@ function renderSidebar() {
   // Plain text on the button (no tag pill), so it truncates cleanly in the narrow sidebar.
   document.querySelector("#picker .picker-val").innerHTML =
     choice ? (progKey(choice) ? `<i class="pdot" data-prog="${progKey(choice)}"></i>` : "")
-      + esc(choice.replace(/ \(Express \+ Ignite\)$/, " · Express + Ignite")) : "All programs";
+      + esc(choice.replace(/ \(Express \+ Ignite\)$/, " · Express + Ignite")) : esc($("program").selectedOptions[0]?.textContent || "All programs");
   store.set("mode", m); store.set("program", choice);
+  document.querySelectorAll("#sections button").forEach(b => b.setAttribute("aria-selected", b.dataset.sec === section));
   const p = programs.find(x => x.name === choice);
   $("docs").innerHTML = p ? p.docs.map(d => `<span>${ICON[d.status] || ""} ${esc(d.file)}${d.shared ? " (shared)" : ""}</span>`).join("")
     + p.duplicates.map(([a]) => `<span>↳ skipping ${esc(a)} (duplicate)</span>`).join("") : "";
   $("docnote").hidden = !(p && p.docs.some(d => d.status !== "verified"));
 }
-// Program list grouped the way the products are sold. NonQM opens with the Express + Ignite picks (p.family),
-// then each program on its own. A new folder that fits none of them shows under "Other".
-const GROUPS = [
-  ["Conventional", p => /^conventional/i.test(p.name)],
-  ["Government", p => /^(fha|va|usda)\b/i.test(p.name)],
-  ["NonQM", p => !!p.family || /^(express|ignite)\b/i.test(p.name)],
-  ["Other", p => !p.family && !/^(conventional|fha|va|usda|express|ignite)\b/i.test(p.name)],
-];
+// The section tabs. Same split as chat.SECTIONS on the server, which narrows the answer to these programs.
+const SECTIONS = {
+  NonQM: p => !!p.family || /^(express|ignite)\b/i.test(p.name),
+  Conventional: p => /^conventional/i.test(p.name),
+  FHA: p => /^fha\b/i.test(p.name),
+  VA: p => /^va\b/i.test(p.name),
+};
+let section = SECTIONS[store.get("asknick.section")] ? store.get("asknick.section") : "NonQM";
+// NonQM opens with the Express + Ignite picks (p.family), then Express and Ignite on their own. A section with
+// one program (FHA, VA, Conventional) just picks it.
+function fillPrograms(keep) {
+  const sel = $("program"), list = programs.filter(SECTIONS[section]);
+  const opts = ps => ps.map(p => `<option>${esc(p.name)}</option>`).join("");
+  if (section === "NonQM") {
+    sel.innerHTML = `<option value="">All NonQM programs</option>` + [
+      ["Express + Ignite", p => !!p.family], ["Express", p => /^express\b/i.test(p.name)], ["Ignite", p => /^ignite\b/i.test(p.name)],
+    ].map(([label, test]) => `<optgroup label="${label}">${opts(list.filter(test))}</optgroup>`).join("");
+  } else if (list.length === 1) {
+    sel.innerHTML = opts(list);
+  } else {
+    sel.innerHTML = `<option value="">${list.length ? `All ${section} programs` : `No ${section} programs yet`}</option>` + opts(list);
+  }
+  sel.value = list.some(p => p.name === keep) ? keep : list.length === 1 ? list[0].name : "";
+}
+function setSection(s, keep = "") {
+  if (!SECTIONS[s]) return;
+  const changed = s !== section;
+  section = s; store.set("asknick.section", s);
+  fillPrograms(keep);
+  try { buildPicker(); } catch (e) { console.error("Program picker failed to draw:", e); }
+  if (changed && history.length && !keep) return $("newchat").click();   // a new tab starts a new chat
+  renderSidebar();
+}
+document.querySelectorAll("#sections button").forEach(b => b.addEventListener("click", () => { if (!busy) setSection(b.dataset.sec); }));
 async function loadPrograms() {
   try {
     const r = await fetch(API + "/api/programs");
@@ -477,14 +520,7 @@ async function loadPrograms() {
     const who = data.user && data.user !== "local" ? data.user : "This PC";
     $("acct-name").textContent = who; $("acct-name").title = who;
     $("acct-av").textContent = who === "This PC" ? "·" : who[0];
-    const sel = $("program"), keep = sel.value || store.get("program");
-    sel.innerHTML = "<option value=''>All programs</option>" + GROUPS.map(([label, test]) => {
-      const opts = programs.filter(test).sort((a, b) => !!b.family - !!a.family)
-        .map(p => `<option>${esc(p.name)}</option>`).join("");
-      if (!opts && label === "Other") return "";
-      return `<optgroup label="${label}">${opts || "<option disabled>Coming soon</option>"}</optgroup>`;
-    }).join("");
-    sel.value = programs.some(p => p.name === keep) ? keep : "";
+    fillPrograms($("program").value || store.get("program"));
     $("offline").style.display = "none";
   } catch (e) {
     $("offline").style.display = "block";
@@ -515,7 +551,7 @@ function reveal(o) {
 }
 function buildPicker() {
   const opt = o => o.disabled ? `<div class="picker-opt off">${esc(o.textContent)}</div>`
-    : `<div class="picker-opt" role="option" data-value="${esc(o.value)}">${o.value ? optLabel(o.value) : "All programs"}${CHECK}</div>`;
+    : `<div class="picker-opt" role="option" data-value="${esc(o.value)}">${o.value ? optLabel(o.value) : esc(o.textContent)}${CHECK}</div>`;
   picker.menu.innerHTML = [...$("program").children].map(el => el.tagName === "OPTGROUP"
     ? `<div class="picker-group">${esc(el.label)}</div>` + [...el.children].map(opt).join("") : opt(el)).join("");
 }
@@ -712,7 +748,9 @@ async function openChat(id) {
   // Follow-ups go to the same mode and program the chat was in.
   const radio = document.querySelector(`input[name=mode][value="${c.mode === "scenario" ? "deal" : "ask"}"]`);
   if (radio) radio.checked = true;
-  if ([...$("program").options].some(o => o.value === c.program)) $("program").value = c.program;
+  const owner = SECTIONS[c.program] ? c.program
+    : Object.keys(SECTIONS).find(k => programs.some(p => p.name === c.program && SECTIONS[k](p)));
+  if (owner) setSection(owner, SECTIONS[c.program] ? "" : c.program);
   $("log").innerHTML = "";
   for (const m of c.messages) {
     if (m.role === "user") addMsg("user", esc(m.content));
@@ -733,7 +771,7 @@ $("ask").addEventListener("submit", async e => {
   chatId = chatId || newId();
   try {
     const answer = await stream("/api/chat", { question, history, program: choice, mode_program: program,
-                                               mode_scenario: scenario, chat_id: chatId }, box);
+                                               mode_scenario: scenario, section, chat_id: chatId }, box);
     history.push({ role: "user", content: question }, { role: "assistant", content: answer });
     loadChats();
   } catch (err) {
