@@ -90,11 +90,18 @@ BROAD_SYSTEM = (
     "- Name the program for every fact. When programs differ, list each program that has a rule on it, one bullet\n"
     "  each. Never blend one program's rule into another's.\n"
     "- If only some programs mention it, say which ones do and that the rest don't address it in their sheets.\n"
+    "- When the answer is a requirement that differs by program (reserves, minimum score, max DTI, loan limits,\n"
+    "  seasoning, what's allowed), give it as a table right after the one-sentence lead:\n"
+    "  | Program | Requirement | Conditions | Source |\n"
+    "  One row per program that addresses it, the number bolded in Requirement, citation in Source as (filename, p. X).\n"
+    "  Put programs with the same answer next to each other. After the table, add only short bullets for things\n"
+    "  the table can't hold, and one line naming the programs whose sheets don't cover it.\n"
     "- Never state a max LTV or CLTV percentage, from a matrix or anywhere else. If the question needs one, say to\n"
     "  switch to Scenario mode and give the deal (FICO, loan amount, occupancy, purpose, property type).\n"
     "- Cite with the filename and page from the header above the text: (filename, p. X).\n\n"
     + RULES.replace("- If the answer is not in the provided sections, say you couldn't find it in the shared guidelines",
                     "- If the answer is not in any program sheet or section below, say you couldn't find it")
+           .replace("- Then use bullet points", "- Unless a table fits (above), use bullet points")
 )
 
 
