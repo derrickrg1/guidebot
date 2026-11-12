@@ -38,7 +38,13 @@ service tunnels it to asknick.derrickgarcia.dev and guidebot.derrickgarcia.dev, 
 (policy "Derrick Access": his Gmail and nwilson@revofunding.com).
 * Admin console: `/admin` (`ui/admin.html`, `guidebot/admin.py`) replaces the Streamlit Verify page: doc
 statuses, PDF page beside editable matrix/text, re-read, approve docs and overlay rules. Only his Gmail via
-Cloudflare Access, or direct from this PC. Claude never clicks Approve.
+Cloudflare Access, or direct from this PC. Claude never clicks Approve. Tabs: Documents, Chats (every user's
+chats, read only), Index (Update index, admin only now).
+* Chat history: `guidebot/history.py`, SQLite at `data/chats.db` (git-ignored), keyed to the Cloudflare Access
+email ("local" on this PC). The server saves each turn after the answer finishes; people see only their own.
+* Search index (ChromaDB in `db/`): update it only through the admin Index tab, never from a second process
+while the server runs. Two processes corrupted it on 2026-11-12 (broken copy in `db.broken-2026-11-12/`, rebuilt).
+* Mode names on the page: Guidelines and Scenario (was "Deal check"; the radio value is still `deal`).
 * Streamlit (old): `streamlit run ui/app.py`. Tests: `.venv\Scripts\python.exe -m pytest` (system Python lacks ollama).
 Model race: `python -m tools.compare_models <model> ...`.
 
@@ -69,7 +75,7 @@ word against the doc) and full-document Q\&A mode (whole program in context, not
 
 ## Current status
 
-* 100 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 106 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked

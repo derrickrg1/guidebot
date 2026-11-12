@@ -79,6 +79,27 @@ textarea { width: 100%; min-height: 280px; resize: vertical; background: rgba(0,
 .muted { color: var(--mist); font-size: 0.78rem; }
 .empty { color: var(--steel); font: 1rem/1.65 var(--serif); margin-top: 18vh; text-align: center; }
 label.toggle { display: flex; gap: 8px; align-items: center; font-size: 0.85rem; color: var(--steel); cursor: pointer; }
+.tabs { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--rule); border-radius: 999px; background: var(--card); }
+.tabs button { flex: 1; padding: 6px 4px; border: 0; border-radius: 999px; background: none; color: var(--steel);
+  font: 600 0.75rem Inter, sans-serif; cursor: pointer; }
+.tabs button:hover { color: var(--ink); }
+.tabs button.on { background: rgba(217, 102, 31, 0.16); color: var(--accent); }
+#side { display: flex; flex-direction: column; gap: 10px; }
+.doc.chat .muted { flex: none; font-size: 0.7rem; }
+/* Chat transcripts read like AskNick: serif, question bubble on the right, answer card on the left. */
+.convo { display: flex; flex-direction: column; gap: 16px; max-width: 820px; }
+.msg { font: 400 1rem/1.65 var(--serif); }
+.msg.user { align-self: flex-end; background: rgba(255, 255, 255, 0.07); padding: 10px 16px; border-radius: 16px;
+  white-space: pre-wrap; max-width: min(620px, 85%); }
+.msg.bot { background: var(--card); border: 1px solid var(--rule); border-radius: 4px 14px 14px 14px; padding: 12px 16px; }
+.md > :first-child { margin-top: 0; } .md > :last-child { margin-bottom: 0; }
+.md h1, .md h2, .md h3, .md h4 { color: var(--accent); font-size: 1rem; margin: 1em 0 0.4em; }
+.md p { margin: 0.5em 0; } .md ul, .md ol { margin: 0.4em 0; padding-left: 1.4em; }
+.md blockquote { margin: 4px 0 8px; padding: 4px 12px; border-left: 3px solid var(--gold); color: var(--steel); font-size: 0.9em; }
+.md code { background: var(--side); padding: 1px 5px; border-radius: 4px; font-size: 0.88em; }
+.md a { color: var(--gold); }
+.tbl { overflow-x: auto; margin: 0.6em 0; }
+.md table { width: auto; font-size: 0.88rem; }
 @media (max-width: 900px) {
   body { flex-direction: column; } aside { width: auto; max-height: 40vh; } .page { grid-template-columns: 1fr; }
   main { padding: 20px 16px; }
@@ -89,16 +110,98 @@ label.toggle { display: flex; gap: 8px; align-items: center; font-size: 0.85rem;
 <aside>
   <a class="brand" href="/"><img src="/logo.png" alt="">
     <div><span class="mark">ASKNICK<span>++</span></span><span class="tag-line">(ADMIN CONSOLE)</span></div></a>
-  <div class="legend">
-    <span><i class="dot ok"></i>Approved</span><span><i class="dot warn"></i>Needs you (not approved, changed)</span>
-    <span><i class="dot bad"></i>Approved but blocked (problems)</span>
-  </div>
-  <div id="list"><div class="muted">Loading…</div></div>
+  <nav class="tabs" role="tablist">
+    <button type="button" data-tab="docs" class="on">Documents</button>
+    <button type="button" data-tab="chats">Chats</button>
+    <button type="button" data-tab="index">Index</button>
+  </nav>
+  <div id="side"><div class="muted">Loading…</div></div>
 </aside>
-<main id="main"><div class="empty">Pick a document on the left to check it against the PDF and approve it.</div></main>
+<main id="main"></main>
+<script src="/md.js"></script>
 <script>
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
+const API = "";   // md.js links PDFs relative to this
 const qs = o => new URLSearchParams(o).toString();
+let tab = "docs", chatOpen = null;
+const EMPTY = {
+  docs: "Pick a document on the left to check it against the PDF and approve it.",
+  chats: "Pick a chat on the left to read it.",
+};
+
+function showTab(t) {
+  tab = t;
+  document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === t));
+  document.getElementById("side").innerHTML = `<div class="muted">Loading…</div>`;
+  if (t === "docs") { current ? render() : setMain(`<div class="empty">${EMPTY.docs}</div>`); loadList(); }
+  if (t === "chats") { chatOpen = null; setMain(`<div class="empty">${EMPTY.chats}</div>`); loadChats(); }
+  if (t === "index") indexTab();
+}
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+const setMain = html => { document.getElementById("main").innerHTML = html; };
+
+// ---------- chats: everyone's, newest first, grouped by person ----------
+async function loadChats() {
+  const r = await fetch("/admin/api/chats");
+  const side = document.getElementById("side");
+  if (!r.ok) { side.innerHTML = `<div class="note bad">Admin only.</div>`; return; }
+  const {chats} = await r.json();
+  if (!chats.length) { side.innerHTML = `<div class="muted">No chats yet.</div>`; return; }
+  const people = {};
+  chats.forEach(c => (people[c.email] ||= []).push(c));
+  side.innerHTML = Object.entries(people).map(([email, list]) =>
+    `<div class="prog"><span class="label">${esc(email === "local" ? "This PC" : email)} · ${list.length}</span>` +
+    list.map(c => `<button class="doc chat${c.id === chatOpen ? " on" : ""}" data-id="${esc(c.id)}" title="${esc(c.title)}">
+      <span class="name">${esc(c.title)}</span><span class="muted">${new Date(c.updated * 1000).toLocaleDateString()}</span></button>`).join("")
+    + `</div>`).join("");
+  side.querySelectorAll(".chat").forEach(b => b.onclick = () => openChat(b.dataset.id));
+}
+async function openChat(id) {
+  chatOpen = id;
+  document.querySelectorAll("#side .chat").forEach(b => b.classList.toggle("on", b.dataset.id === id));
+  const r = await fetch("/admin/api/chat?" + qs({id}));
+  if (!r.ok) return setMain(`<div class="note bad">Couldn't load that chat.</div>`);
+  const c = await r.json();
+  setMain(`<h1>${esc(c.title)}</h1><div class="sub">${esc(c.email === "local" ? "This PC" : c.email)} ·
+      ${c.mode === "scenario" ? "Scenario" : "Guidelines"} · ${esc(c.program || "All programs")} ·
+      ${new Date(c.created * 1000).toLocaleString()}</div>
+    <div class="convo">${c.messages.map(m => m.role === "user"
+      ? `<div class="msg user">${esc(m.content)}</div>` : `<div class="msg bot md">${md(m.content)}</div>`).join("")}</div>`);
+}
+
+// ---------- index ----------
+function indexTab() {
+  document.getElementById("side").innerHTML = `<div class="muted">The search index feeds "All programs" questions and long
+    guides like NonQM Shared. Matrix lookups and single-program answers don't need it.</div>`;
+  setMain(`<h1>Search index</h1><div class="sub">Run this after you approve or fix a document's text. It only re-reads
+      documents that changed.</div>
+    <div class="panel"><div class="row"><button class="act" id="reindex">Update index</button></div>
+      <div id="index-log" class="md" style="margin-top:12px"></div></div>`);
+  document.getElementById("reindex").onclick = runIndex;
+}
+async function runIndex() {
+  const btn = document.getElementById("reindex"), out = document.getElementById("index-log");
+  btn.disabled = true;
+  out.innerHTML = `<div class="muted">Checking documents…</div>`;
+  try {
+    const r = await fetch("/admin/api/index", {method: "POST", headers: {"Content-Type": "application/json", "X-Admin": "1"}, body: "{}"});
+    if (!r.ok) throw new Error(r.status === 403 ? "Admin only." : `Error ${r.status}`);
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream: true});
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const ev = JSON.parse(buf.slice(0, nl)); buf = buf.slice(nl + 1);
+        if (ev.error) throw new Error(ev.error);
+        if (ev.status) out.innerHTML = `<div class="muted">${esc(ev.status)}</div>`;
+        if (ev.replace) out.innerHTML = md(ev.replace);
+      }
+    }
+  } catch (e) { out.innerHTML = `<div class="note bad">${esc(e.message)}</div>`; }
+  btn.disabled = false;
+}
 let current = null;   // {program, file, fresh, data}
 
 function docDot(d) {
@@ -107,12 +210,17 @@ function docDot(d) {
   return "ok";
 }
 
+const LEGEND = `<div class="legend">
+  <span><i class="dot ok"></i>Approved</span><span><i class="dot warn"></i>Needs you (not approved, changed)</span>
+  <span><i class="dot bad"></i>Approved but blocked (problems)</span></div>`;
+
 async function loadList() {
   const r = await fetch("/admin/api/overview");
-  const box = document.getElementById("list");
+  if (tab !== "docs") return;
+  const box = document.getElementById("side");
   if (!r.ok) { box.innerHTML = `<div class="note bad">Admin only.</div>`; return; }
   const {programs} = await r.json();
-  box.innerHTML = programs.map(p => `<div class="prog"><span class="label">${esc(p.program)}</span>` +
+  box.innerHTML = LEGEND + programs.map(p => `<div class="prog"><span class="label">${esc(p.program)}</span>` +
     p.docs.map(d => `<button class="doc${current && current.program === p.program && current.file === d.file ? " on" : ""}"
       data-program="${esc(p.program)}" data-file="${esc(d.file)}" title="${esc(d.file)}">
       <i class="dot ${docDot(d)}"></i><span class="name">${esc(d.file)}</span>
@@ -237,7 +345,7 @@ async function approveRules() {
   openDoc(d.program, d.file, false);
 }
 
-loadList();
+showTab("docs");
 </script>
 </body>
 </html>

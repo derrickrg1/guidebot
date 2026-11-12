@@ -10,3 +10,5 @@ docs/**
 *.xlsx
 *.pdf
 archive/
+data/
+db.broken*/

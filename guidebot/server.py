@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from guidebot import admin, chat, config
+from guidebot import admin, chat, config, history
 
 PORT = 8600
 PAGE = config.ROOT / "ui" / "guidebot.html"
@@ -72,6 +72,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, ADMIN_PAGE.read_bytes(), "text/html; charset=utf-8")
         if path == "/admin/api/overview":
             return self._json({"programs": admin.overview()})
+        if path == "/admin/api/chats":
+            return self._json({"chats": history.list_chats(None, limit=500)})
+        if path == "/admin/api/chat":
+            c = history.get_chat(query.get("id", [""])[0])
+            return self._json(c) if c else self._json({"error": "not found"}, 404)
         prog, file = query.get("program", [""])[0], query.get("file", [""])[0]
         if path == "/admin/api/doc":
             doc = admin.document(prog, file, fresh=query.get("fresh", [""])[0] == "1")
@@ -88,8 +93,15 @@ class Handler(BaseHTTPRequestHandler):
             self._admin_get(path, parse_qs(url.query))
         elif path in ("/", "/index.html"):
             self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
+        elif path == "/md.js":
+            self._send(200, (PAGE.parent / "md.js").read_bytes(), "text/javascript; charset=utf-8")
         elif path == "/logo.png":
             self._send(200, (PAGE.parent / "logo.png").read_bytes(), "image/png")
+        elif path == "/api/chats":
+            self._json({"chats": history.list_chats(history.user(self.headers))})
+        elif path.startswith("/api/chats/"):
+            c = history.get_chat(path.rsplit("/", 1)[1], history.user(self.headers))
+            self._json(c) if c else self._json({"error": "not found"}, 404)
         elif path == "/api/programs":
             self._json({"programs": chat.programs_info(), "model": config.CHAT_MODEL})
         elif path.startswith("/pdf/"):
@@ -103,6 +115,10 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = urlparse(self.path).path
+        # Pages here always send JSON. A plain cross-site form can't, so this stops another site posting
+        # through a signed-in browser.
+        if not (self.headers.get("Content-Type") or "").startswith("application/json"):
+            return self._json({"error": "json only"}, 415)
         try:
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
         except json.JSONDecodeError:
@@ -118,29 +134,65 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(admin.approve_document(prog, file, bool(body.get("fresh")), body.get("edits") or []))
             if path == "/admin/api/approve-rules":
                 return self._json(admin.approve_rules(prog, file))
+            if path == "/admin/api/index":
+                return self._stream(_reindex())
             return self._json({"error": "not found"}, 404)
 
         if path == "/api/chat":
             question = (body.get("question") or "").strip()
             if not question:
                 return self._json({"error": "empty question"}, 400)
-            history = [{"role": m["role"], "content": m["content"]} for m in body.get("history", [])
-                       if m.get("role") in ("user", "assistant")]
-            self._stream(chat.respond(question, history, body.get("program") or "",
-                                      bool(body.get("mode_program")), bool(body.get("mode_scenario"))))
-        elif path == "/api/index":
-            from guidebot.ingest.indexer import sync_index
-
-            def run():
-                log = []
-                sync_index(log=log.append)
-                chat.reset_retriever()
-                for line in log:
-                    yield {"status": str(line)}
-                yield {"replace": "Index up to date."}
-            self._stream(run())
+            turns = [{"role": m["role"], "content": m["content"]} for m in body.get("history", [])
+                     if m.get("role") in ("user", "assistant")]
+            program = body.get("program") or ""
+            events = chat.respond(question, turns, program, bool(body.get("mode_program")), bool(body.get("mode_scenario")))
+            self._stream(_saving(events, str(body.get("chat_id") or "")[:64], history.user(self.headers), question,
+                                 program, "scenario" if body.get("mode_scenario") else "guidelines"))
+        elif path == "/api/chats/delete":
+            self._json({"ok": history.delete_chat(str(body.get("id") or ""), history.user(self.headers))})
         else:
             self._json({"error": "not found"}, 404)
+
+
+def _saving(events, chat_id, email, question, program, mode):
+    """Passes the answer's events through, then saves the finished turn to that person's chat history."""
+    text, sources = "", []
+    for ev in events:
+        if "text" in ev:
+            text += ev["text"]
+        if "replace" in ev:
+            text = ev["replace"]
+        if "sources" in ev:
+            sources = ev["sources"]
+        yield ev
+    history.save_turn(chat_id, email, question, text, program, mode, sources)
+
+
+def _reindex():
+    """Updates the search index, streaming each line of its log as it happens."""
+    import queue
+    import threading
+
+    from guidebot.ingest.indexer import sync_index
+    lines, done = queue.Queue(), object()
+
+    def work():
+        try:
+            sync_index(log=lambda m: lines.put(str(m)))
+            chat.reset_retriever()
+            lines.put(done)
+        except Exception as e:
+            lines.put(e)
+    threading.Thread(target=work, daemon=True).start()
+    log = []
+    while (item := lines.get()) is not done:
+        if isinstance(item, Exception):
+            raise item
+        log.append(item)
+        yield {"status": item}
+    log = [line for line in log if "exact copy of" not in line]   # the Ignite duplicates, skipped every run
+    summary = "\n".join(f"- {line}" for line in log)
+    yield {"replace": f"Index up to date.\n\n{summary}" if log else "Index up to date. Nothing had changed."}
 
 
 def main():

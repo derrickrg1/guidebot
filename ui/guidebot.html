@@ -71,6 +71,53 @@ select {
   width: 100%; padding: 8px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card);
 }
 select option { background: #131c1e; }
+/* Program picker: a glass menu in place of the browser's own dropdown (the hidden <select> still holds the value). */
+.picker-btn {
+  width: 100%; display: flex; align-items: center; gap: 8px; padding: 9px 12px; text-align: left; cursor: pointer;
+  border: 1px solid var(--rule); border-radius: 8px; background: var(--card); font-size: 0.85rem;
+  transition: border-color 0.15s;
+}
+.picker-btn:hover, .picker-btn[aria-expanded=true] { border-color: rgba(217, 102, 31, 0.5); }
+.picker-btn:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
+.picker-val { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.picker-btn svg { width: 16px; height: 16px; color: var(--mist); flex: none; transition: transform 0.15s; }
+.picker-btn[aria-expanded=true] svg { transform: rotate(180deg); }
+.picker-menu {
+  position: fixed; z-index: 50; overflow-y: auto; padding: 6px; border-radius: 12px;
+  background: rgba(10, 14, 16, 0.94); backdrop-filter: blur(22px); border: 1px solid rgba(200, 204, 210, 0.14);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.65); scrollbar-width: thin; scrollbar-color: rgba(200, 204, 210, 0.2) transparent;
+}
+.picker-group { font: 600 0.66rem "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 0.2em; color: var(--mist);
+  text-transform: uppercase; padding: 12px 10px 4px; }
+.picker-group:first-child { padding-top: 4px; }
+.picker-opt { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 7px; font-size: 0.84rem; cursor: pointer;
+  white-space: nowrap; }.picker-opt:hover, .picker-opt.active { background: rgba(255, 255, 255, 0.06); }
+.picker-opt.sel { color: var(--navy); }
+.picker-opt .ck { margin-left: auto; width: 14px; height: 14px; opacity: 0; }
+.picker-opt.sel .ck { opacity: 1; }
+.picker-opt.off { color: var(--mist); font-style: italic; cursor: default; }
+.picker-opt.off:hover { background: none; }
+.tag { font-size: 0.68rem; color: var(--mist); border: 1px solid var(--rule); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
+.picker-opt.sel .tag { color: inherit; border-color: rgba(217, 102, 31, 0.4); }
+/* Chat history */
+.newchat {
+  display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; padding: 8px 12px; cursor: pointer;
+  border: 1px solid rgba(217, 102, 31, 0.45); border-radius: 999px; background: rgba(217, 102, 31, 0.08);
+  color: var(--navy); font-weight: 600; font-size: 0.82rem; transition: background 0.15s;
+}
+.newchat:hover { background: rgba(217, 102, 31, 0.16); }
+.newchat svg { width: 15px; height: 15px; }
+.chats { display: flex; flex-direction: column; gap: 1px; min-height: 0; }
+.chats .when { font: 600 0.62rem "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 0.2em; color: var(--mist);
+  text-transform: uppercase; padding: 10px 8px 4px; }
+.chat-item { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 7px; cursor: pointer;
+  font-size: 0.8rem; color: var(--steel); }
+.chat-item:hover { background: rgba(255, 255, 255, 0.05); color: var(--ink); }
+.chat-item.on { background: rgba(217, 102, 31, 0.1); color: var(--ink); }
+.chat-item .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-item .x { opacity: 0; border: 0; background: none; color: var(--mist); cursor: pointer; padding: 0 2px; font-size: 1rem; line-height: 1; }
+.chat-item:hover .x { opacity: 1; }
+.chat-item .x:hover { color: var(--bad); }
 .docs { font-size: 0.78rem; color: var(--steel); display: flex; flex-direction: column; gap: 3px; word-break: break-word; }
 .note { font-size: 0.78rem; padding: 8px 10px; border-radius: 6px; background: var(--warn-bg); color: var(--warn); }
 .row { display: flex; gap: 8px; }
@@ -160,18 +207,25 @@ select:focus { outline: 2px solid color-mix(in srgb, var(--gold) 50%, transparen
   <div class="label">WHAT DO YOU NEED?</div>
   <div class="modes">
     <label><input type="radio" name="mode" value="ask" checked><b>Guidelines</b><small>How a rule works, what's allowed</small></label>
-    <label><input type="radio" name="mode" value="deal"><b>Deal check</b><small>Max LTV for a borrower's scenario</small></label>
+    <label><input type="radio" name="mode" value="deal"><b>Scenario</b><small>Max LTV for a borrower's scenario</small></label>
     <label class="off"><input type="radio" name="mode" value="pricing" disabled><b>Pricing</b><small>Coming soon</small></label>
   </div>
   <div class="label">PROGRAM</div>
-  <select id="program"></select>
-  <div id="docs" class="docs"></div>
-  <div id="docnote" class="note" hidden>Some docs unverified. LTV numbers blocked until approved in Verify Documents.</div>
-  <hr>
-  <div class="row">
-    <button class="btn" id="reindex" type="button">Update index</button>
-    <button class="btn" id="newchat" type="button">New chat</button>
+  <select id="program" hidden></select>
+  <div class="picker" id="picker">
+    <button type="button" class="picker-btn" aria-haspopup="listbox" aria-expanded="false">
+      <span class="picker-val">All programs</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <div class="picker-menu" role="listbox" hidden></div>
   </div>
+  <div id="docs" class="docs"></div>
+  <div id="docnote" class="note" hidden>Some docs unverified. LTV numbers blocked until they're approved.</div>
+  <hr>
+  <button class="newchat" id="newchat" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    New chat</button>
+  <div id="chats" class="chats"></div>
   <div class="foot"><span id="model"></span><br>by Derrick Garcia</div>
 </aside>
 <main>
@@ -193,77 +247,16 @@ select:focus { outline: 2px solid color-mix(in srgb, var(--gold) 50%, transparen
     </div>
   </form>
 </main>
+<script src="md.js"></script>
 <script>
 const API = location.protocol === "file:" ? "http://localhost:8600" : "";
 const ICON = { verified: "✅", unverified: "⚠️", changed: "🔄" };
 const $ = id => document.getElementById(id);
 let programs = [], history = [], busy = false;
 
-// ---------- markdown (escapes everything first, so model output can't inject HTML) ----------
-const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-function inline(s) {
-  s = esc(s);
-  s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
-  s = s.replace(/\[([^\]]+)\]\(((?:https?:\/\/|\/pdf\/)[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  s = s.replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>");
-  // guideline citations like (NonQM-Underwriting-Guidelines.pdf, §5.3, p. 42) open the PDF at that page
-  s = s.replace(/\(([^()]*?([\w .&'-]+\.pdf)[^()]*?p\.\s*(\d+)[^()]*)\)/g,
-    (m, inner, file, pg) => `<a class="cite" href="${API}/pdf/${encodeURIComponent(file.trim())}#page=${pg}" target="_blank">(${inner})</a>`);
-  return s;
-}
-function md(src) {
-  const lines = src.replace(/\r/g, "").split("\n");
-  let out = "", para = [], i = 0;
-  const flush = () => { if (para.length) { out += "<p>" + para.map(inline).join("<br>") + "</p>"; para = []; } };
-  const cells = l => l.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
-  while (i < lines.length) {
-    const l = lines[i];
-    if (!l.trim()) { flush(); i++; continue; }
-    let m;
-    if ((m = l.match(/^(#{1,4})\s+(.*)/))) { flush(); out += `<h${m[1].length + 1}>${inline(m[2])}</h${m[1].length + 1}>`; i++; continue; }
-    if (/^\s*>/.test(l)) {
-      flush();
-      const q = [];
-      while (i < lines.length && /^\s*>/.test(lines[i])) q.push(lines[i++].replace(/^\s*>\s?/, ""));
-      out += "<blockquote>" + md(q.join("\n")) + "</blockquote>"; continue;
-    }
-    if (/^\s*\|.*\|\s*$/.test(l) && i + 1 < lines.length && /^\s*\|?\s*:?-{2,}/.test(lines[i + 1])) {
-      flush();
-      let t = "<div class='tbl'><table><thead><tr>" + cells(l).map(c => `<th>${inline(c)}</th>`).join("") + "</tr></thead><tbody>";
-      i += 2;
-      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
-        t += "<tr>" + cells(lines[i]).map(c => `<td>${inline(c)}</td>`).join("") + "</tr>"; i++;
-      }
-      out += t + "</tbody></table></div>"; continue;
-    }
-    if (/^\s*([-*•]|\d+[.)])\s+/.test(l)) {
-      flush();
-      const stack = [];
-      while (i < lines.length && /^\s*([-*•]|\d+[.)])\s+/.test(lines[i])) {
-        const mm = lines[i].match(/^(\s*)([-*•]|\d+[.)])\s+(.*)/);
-        const depth = Math.floor(mm[1].replace(/\t/g, "    ").length / 2), tag = /\d/.test(mm[2]) ? "ol" : "ul";
-        while (stack.length && stack[stack.length - 1].depth > depth) out += "</li></" + stack.pop().tag + ">";
-        const top = stack[stack.length - 1];
-        if (!top || top.depth < depth) { out += `<${tag}><li>`; stack.push({ depth, tag }); }
-        else out += "</li><li>";
-        out += inline(mm[3]); i++;
-        while (i < lines.length && lines[i].trim() && !/^\s*([-*•]|\d+[.)])\s+/.test(lines[i]) && /^\s+/.test(lines[i])) {
-          out += "<br>" + inline(lines[i].trim()); i++;
-        }
-      }
-      while (stack.length) out += "</li></" + stack.pop().tag + ">";
-      continue;
-    }
-    para.push(l); i++;
-  }
-  flush();
-  return out;
-}
-
 // ---------- sidebar ----------
-// Two choices: the mode (Guidelines or Deal check) and the program (one, or all).
-// The server's flags follow from those: a picked program means "read that program", Deal check means "matrix lookup".
+// Two choices: the mode (Guidelines or Scenario) and the program (one, or all).
+// The server's flags follow from those: a picked program means "read that program", Scenario means "matrix lookup".
 // Deal questions go to the matrix lookup in either mode; the server decides that, not this page.
 const VIEWS = {
   ask: {
@@ -273,9 +266,9 @@ const VIEWS = {
     hint: "Ask about a guideline",
   },
   deal: {
-    all: p => ["Deal Check", "Comparing max LTV across every program",
+    all: p => ["Scenario", "Comparing max LTV across every program",
       "Give me the deal: FICO, loan amount, occupancy, purpose and property type. I'll check every program's matrix."],
-    one: p => [`${p} Deal Check`, `Max LTV from the ${p} matrix and overlays`,
+    one: p => [`${p} Scenario`, `Max LTV from the ${p} matrix and overlays`,
       `Give me the deal: FICO, loan amount, occupancy, purpose and property type. I'll look it up in the ${p} matrix.`],
     hint: "720 FICO, $650k purchase, primary, SFR",
   },
@@ -298,6 +291,9 @@ function renderSidebar() {
   document.title = `${title} · AskNick`;
   if ($("empty")) $("empty").textContent = empty;
   $("q").placeholder = VIEWS[m].hint;
+  // Plain text on the button (no tag pill), so it truncates cleanly in the narrow sidebar.
+  document.querySelector("#picker .picker-val").innerHTML =
+    choice ? esc(choice.replace(/ \(Express \+ Ignite\)$/, " · Express + Ignite")) : "All programs";
   store.set("mode", m); store.set("program", choice);
   const p = programs.find(x => x.name === choice);
   $("docs").innerHTML = p ? p.docs.map(d => `<span>${ICON[d.status] || ""} ${esc(d.file)}${d.shared ? " (shared)" : ""}</span>`).join("")
@@ -326,6 +322,7 @@ async function loadPrograms() {
       return `<optgroup label="${label}">${opts || "<option disabled>Coming soon</option>"}</optgroup>`;
     }).join("");
     sel.value = programs.some(p => p.name === keep) ? keep : "";
+    buildPicker();
     $("offline").style.display = "none";
   } catch (e) {
     $("offline").style.display = "block";
@@ -333,6 +330,74 @@ async function loadPrograms() {
   renderSidebar();
 }
 document.querySelectorAll("input[name=mode], #program").forEach(el => el.addEventListener("change", renderSidebar));
+
+// ---------- program picker ----------
+// Draws the hidden <select>'s options as a menu. Picking one sets the select and fires its change event,
+// so everything else keeps reading $("program").value.
+const CHECK = `<svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
+function optLabel(name) {
+  const m = name.match(/^(.*) \((Express \+ Ignite)\)$/);   // family picks: "1099" plus a tag
+  return m ? `${esc(m[1])} <span class="tag">${m[2]}</span>` : esc(name);
+}
+const picker = { btn: document.querySelector("#picker .picker-btn"), menu: document.querySelector("#picker .picker-menu") };
+// The menu lives on <body>: inside the sidebar, its blur makes "fixed" mean "fixed to the sidebar", so the menu was
+// clipped and scrolling to the current pick scrolled the sidebar (which closes the menu).
+document.body.appendChild(picker.menu);
+function reveal(o) {
+  const m = picker.menu;
+  if (o.offsetTop < m.scrollTop) m.scrollTop = o.offsetTop - 6;
+  else if (o.offsetTop + o.offsetHeight > m.scrollTop + m.clientHeight) m.scrollTop = o.offsetTop + o.offsetHeight - m.clientHeight + 6;
+}
+function buildPicker() {
+  const opt = o => o.disabled ? `<div class="picker-opt off">${esc(o.textContent)}</div>`
+    : `<div class="picker-opt" role="option" data-value="${esc(o.value)}">${o.value ? optLabel(o.value) : "All programs"}${CHECK}</div>`;
+  picker.menu.innerHTML = [...$("program").children].map(el => el.tagName === "OPTGROUP"
+    ? `<div class="picker-group">${esc(el.label)}</div>` + [...el.children].map(opt).join("") : opt(el)).join("");
+}
+function pickerOpts() { return [...picker.menu.querySelectorAll(".picker-opt:not(.off)")]; }
+function openPicker() {
+  const r = picker.btn.getBoundingClientRect(), below = innerHeight - r.bottom - 16;
+  Object.assign(picker.menu.style, { left: r.left + "px", minWidth: r.width + "px", width: "max-content",
+    top: r.bottom + 6 + "px", maxHeight: Math.max(below, 200) + "px" });
+  pickerOpts().forEach(o => {
+    const on = o.dataset.value === $("program").value;
+    o.classList.toggle("sel", on); o.classList.toggle("active", on); o.setAttribute("aria-selected", on);
+  });
+  picker.menu.hidden = false;
+  picker.btn.setAttribute("aria-expanded", "true");
+  const cur = picker.menu.querySelector(".sel");
+  if (cur) reveal(cur);
+}
+function closePicker() { picker.menu.hidden = true; picker.btn.setAttribute("aria-expanded", "false"); }
+function choose(v) {
+  $("program").value = v;
+  $("program").dispatchEvent(new Event("change"));
+  closePicker(); picker.btn.focus();
+}
+picker.btn.addEventListener("click", () => picker.menu.hidden ? openPicker() : closePicker());
+picker.menu.addEventListener("click", e => { const o = e.target.closest(".picker-opt:not(.off)"); if (o) choose(o.dataset.value); });
+picker.menu.addEventListener("mousemove", e => {
+  const o = e.target.closest(".picker-opt:not(.off)");
+  if (o) pickerOpts().forEach(x => x.classList.toggle("active", x === o));
+});
+document.addEventListener("click", e => { if (!e.target.closest("#picker, .picker-menu")) closePicker(); });
+addEventListener("resize", closePicker);
+document.querySelector("aside").addEventListener("scroll", closePicker);
+picker.btn.addEventListener("keydown", e => {
+  const opts = pickerOpts(), i = opts.findIndex(o => o.classList.contains("active"));
+  if (picker.menu.hidden) {
+    if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) { e.preventDefault(); openPicker(); }
+    return;
+  }
+  if (e.key === "Escape" || e.key === "Tab") return closePicker();
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); if (opts[i]) choose(opts[i].dataset.value); return; }
+  const step = { ArrowDown: 1, ArrowUp: -1 }[e.key];
+  if (!step) return;
+  e.preventDefault();
+  const next = opts[Math.min(Math.max(i + step, 0), opts.length - 1)];
+  opts.forEach(o => o.classList.toggle("active", o === next));
+  reveal(next);
+});
 const saved = document.querySelector(`input[name=mode][value="${store.get("mode")}"]:not(:disabled)`);
 if (saved) saved.checked = true;
 
@@ -386,7 +451,56 @@ async function stream(url, payload, box) {
 }
 function setBusy(b) {
   busy = b;
-  $("send").disabled = $("reindex").disabled = b;
+  $("send").disabled = b;
+}
+
+// ---------- chat history (saved by the server per signed-in person; this only lists and reopens) ----------
+let chatId = null;
+const newId = () => crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+function whenLabel(ts) {
+  const day = d => new Date(d).setHours(0, 0, 0, 0), diff = (day(Date.now()) - day(ts * 1000)) / 864e5;
+  return diff < 1 ? "Today" : diff < 2 ? "Yesterday" : diff < 7 ? "This week" : "Earlier";
+}
+async function loadChats() {
+  let chats = [];
+  try { chats = (await (await fetch(API + "/api/chats")).json()).chats || []; } catch { return; }
+  let last = "";
+  $("chats").innerHTML = chats.map(c => {
+    const w = whenLabel(c.updated), head = w !== last ? `<div class="when">${w}</div>` : "";
+    last = w;
+    return head + `<div class="chat-item${c.id === chatId ? " on" : ""}" data-id="${esc(c.id)}" title="${esc(c.title)}">
+      <span class="t">${esc(c.title)}</span><button class="x" type="button" aria-label="Delete chat" title="Delete">×</button></div>`;
+  }).join("");
+}
+$("chats").addEventListener("click", async e => {
+  const item = e.target.closest(".chat-item");
+  if (!item || busy) return;
+  if (e.target.closest(".x")) {
+    if (!confirm("Delete this chat?")) return;
+    await fetch(API + "/api/chats/delete", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: item.dataset.id }) });
+    if (item.dataset.id === chatId) $("newchat").click(); else loadChats();
+    return;
+  }
+  openChat(item.dataset.id);
+});
+async function openChat(id) {
+  const r = await fetch(API + "/api/chats/" + encodeURIComponent(id));
+  if (!r.ok) return loadChats();
+  const c = await r.json();
+  chatId = c.id;
+  history = c.messages.map(m => ({ role: m.role, content: m.content }));
+  // Follow-ups go to the same mode and program the chat was in.
+  const radio = document.querySelector(`input[name=mode][value="${c.mode === "scenario" ? "deal" : "ask"}"]`);
+  if (radio) radio.checked = true;
+  if ([...$("program").options].some(o => o.value === c.program)) $("program").value = c.program;
+  $("log").innerHTML = "";
+  for (const m of c.messages) {
+    if (m.role === "user") addMsg("user", esc(m.content));
+    else addMsg("bot", `<div class="md">${md(m.content)}</div>` + (m.sources.length ? sourcesHtml(m.sources) : ""));
+  }
+  renderSidebar();
+  loadChats();
 }
 $("ask").addEventListener("submit", async e => {
   e.preventDefault();
@@ -397,9 +511,12 @@ $("ask").addEventListener("submit", async e => {
   addMsg("user", esc(question));
   const box = addMsg("bot", `<div class="status">Thinking…</div>`);
   setBusy(true);
+  chatId = chatId || newId();
   try {
-    const answer = await stream("/api/chat", { question, history, program: choice, mode_program: program, mode_scenario: scenario }, box);
+    const answer = await stream("/api/chat", { question, history, program: choice, mode_program: program,
+                                               mode_scenario: scenario, chat_id: chatId }, box);
     history.push({ role: "user", content: question }, { role: "assistant", content: answer });
+    loadChats();
   } catch (err) {
     box.innerHTML = `<div class="err">Something went wrong: ${esc(err.message)}</div>`;
     loadPrograms();
@@ -412,18 +529,15 @@ $("q").addEventListener("keydown", e => {
 });
 $("q").addEventListener("input", e => { e.target.style.height = ""; e.target.style.height = e.target.scrollHeight + "px"; });
 $("newchat").addEventListener("click", () => {
-  history = [];
+  if (busy) return;
+  history = []; chatId = null;
   $("log").innerHTML = `<div class="empty" id="empty"></div>`;
   renderSidebar();
-});
-$("reindex").addEventListener("click", async () => {
-  setBusy(true);
-  const box = addMsg("bot", `<div class="status">Indexing…</div>`);
-  try { await stream("/api/index", {}, box); await loadPrograms(); }
-  catch (err) { box.innerHTML = `<div class="err">Indexing failed: ${esc(err.message)}</div>`; }
-  setBusy(false);
+  loadChats();
+  $("q").focus();
 });
 loadPrograms();
+loadChats();
 </script>
 </body>
 </html>
