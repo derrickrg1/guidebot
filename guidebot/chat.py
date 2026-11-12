@@ -15,6 +15,16 @@ NONQM = {"Express 1099", "Express Bank Statements", "Express DSCR",
          "Express Full Doc", "Express P&L", "Express 2nd"}
 SHARED = "NonQM Shared"
 
+# One pick per doc type that runs Express and Ignite side by side. Each keeps its own matrix, overlays and
+# guidelines; only the picking is combined.
+FAMILIES = {
+    "1099 (Express + Ignite)": ["Express 1099", "Ignite 1099"],
+    "Bank Statements (Express + Ignite)": ["Express Bank Statements", "Ignite Bank Statements"],
+    "DSCR (Express + Ignite)": ["Express DSCR", "Ignite Express DSCR"],
+    "Full Doc (Express + Ignite)": ["Express Full Doc", "Ignite Full Doc"],
+    "P&L (Express + Ignite)": ["Express P&L", "Ignite P&L"],
+}
+
 _retriever = None
 
 
@@ -39,6 +49,10 @@ def program_docs(choice: str, all_programs: dict) -> tuple[list[dict], list]:
     return [library.load(p) for p in all_paths], dups + shared_dups
 
 
+def family_members(choice: str, all_programs: dict) -> list[str]:
+    return [p for p in FAMILIES.get(choice, []) if p in all_programs]
+
+
 def programs_info() -> list[dict]:
     all_programs = library.programs()
     out = []
@@ -52,6 +66,13 @@ def programs_info() -> list[dict]:
                       "shared": d["path"].parent.name == SHARED} for d in docs],
             "duplicates": [[a.name, b.name] for a, b in dups],
         })
+    by_name = {p["name"]: p for p in out}
+    for fam in FAMILIES:
+        members = family_members(fam, all_programs)
+        if len(members) > 1:
+            out.append({"name": fam, "family": members,
+                        "docs": [d for m in members for d in by_name[m]["docs"]],
+                        "duplicates": [x for m in members for x in by_name[m]["duplicates"]]})
     return out
 
 
@@ -73,41 +94,60 @@ def _stream(messages, model):
     return text
 
 
+def _compare(question, history, progs, all_programs, model) -> str:
+    """The matrix lookup on several programs at once, as one side-by-side table."""
+    data = []
+    for prog in progs:
+        pdocs = program_docs(prog, all_programs)[0]
+        mats = library.matrices(pdocs)
+        if mats:
+            data.append({"program": prog, "mats": mats,
+                         "docs_text": "\n\n".join(library.render(d) for d in pdocs),
+                         "rules": overlay_rules.for_program(prog, pdocs)})
+    return comparison_md(compare_programs(question, history, data, model))
+
+
+def _program_answer(question, history, prog, docs, model):
+    """A guideline answer from one program: the whole program if it fits, else a search of it. Returns (answer, hits)."""
+    ltv_ok = all(d["status"] == "verified" for d in docs)
+    docs_text = "\n\n".join(library.render(d) for d in docs)
+    if len(docs_text) <= config.FULL_DOC_MAX_CHARS:
+        yield {"status": f"Reading {prog}…"}
+        answer = yield from _stream(full_doc_messages(question, docs_text, history, ltv_ok=ltv_ok, model=model), model)
+        return answer, []
+    yield {"status": f"Searching {prog}…"}
+    found = retriever().search(question, programs=[prog] + ([SHARED] if prog in NONQM else []))
+    answer = yield from _stream(search_messages(question, found, history), model)
+    return answer, filter_to_cited(answer, found, model)
+
+
 def respond(question: str, history: list[dict], choice: str = "",
             mode_program: bool = False, mode_scenario: bool = False):
     model = config.CHAT_MODEL
     all_programs = library.programs()
     user_programs = [p for p in all_programs if p != SHARED]
-    if choice and choice not in user_programs:
+    members = family_members(choice, all_programs)
+    if choice and choice not in user_programs and not members:
         yield {"replace": f"Unknown program: {choice}"}
         return
     if mode_program and not choice:
         yield {"replace": "I need a specific program for that. Pick one in the sidebar, then ask again."}
         return
 
-    docs = program_docs(choice, all_programs)[0] if choice else []
-    ltv_ok = all(d["status"] == "verified" for d in docs)
+    docs = program_docs(choice, all_programs)[0] if choice and not members else []
     answer, hits = "", []
 
     # A number for a specific deal only ever comes from the matrix lookup. With Scenario off, the guideline
     # reader used to write its own "Max LTV" (wrong FICO row, 80 - 5 = 76). With no program picked, the
-    # deal runs against every program, same as Deal check mode.
+    # deal runs against every program, same as Deal check mode; a family runs against its members.
     deal = looks_like_deal(question, history)
     skipped = ""
 
     if mode_scenario or deal:
-        if not choice:
-            yield {"status": "Checking all programs…"}
+        if not choice or members:
+            yield {"status": f"Checking {' and '.join(members)}…" if members else "Checking all programs…"}
             try:
-                data = []
-                for prog in user_programs:
-                    pdocs = program_docs(prog, all_programs)[0]
-                    mats = library.matrices(pdocs)
-                    if mats:
-                        data.append({"program": prog, "mats": mats,
-                                     "docs_text": "\n\n".join(library.render(d) for d in pdocs),
-                                     "rules": overlay_rules.for_program(prog, pdocs)})
-                answer = comparison_md(compare_programs(question, history, data, model))
+                answer = _compare(question, history, members or user_programs, all_programs, model)
                 yield {"replace": answer}
             except Exception as e:
                 skipped = str(e)
@@ -132,16 +172,19 @@ def respond(question: str, history: list[dict], choice: str = "",
                             "and ask again."}
         return
 
+    if mode_program and members and not answer:
+        # Each program answers from its own guidelines, one after the other under its own heading.
+        parts = []
+        for i, prog in enumerate(members):
+            head = ("\n\n" if i else "") + f"## {prog}\n\n"
+            yield {"text": head}
+            part, found = yield from _program_answer(question, history, prog, program_docs(prog, all_programs)[0], model)
+            parts.append(head + part)
+            hits += found
+        answer = "".join(parts)
+
     if mode_program and docs and not answer:
-        docs_text = "\n\n".join(library.render(d) for d in docs)
-        if len(docs_text) <= config.FULL_DOC_MAX_CHARS:
-            yield {"status": f"Reading {choice}…"}
-            answer = yield from _stream(full_doc_messages(question, docs_text, history, ltv_ok=ltv_ok, model=model), model)
-        else:
-            yield {"status": "Searching the program…"}
-            found = retriever().search(question, programs=[choice] + ([SHARED] if choice in NONQM else []))
-            answer = yield from _stream(search_messages(question, found, history), model)
-            hits = filter_to_cited(answer, found, model)
+        answer, hits = yield from _program_answer(question, history, choice, docs, model)
 
     if not answer:
         routed = None
@@ -171,6 +214,7 @@ def respond(question: str, history: list[dict], choice: str = "",
 
     if not answer and docs:
         docs_text = "\n\n".join(library.render(d) for d in docs)
+        ltv_ok = all(d["status"] == "verified" for d in docs)
         answer = yield from _stream(full_doc_messages(question, docs_text, history, ltv_ok=ltv_ok, model=model), model)
 
     if hits:

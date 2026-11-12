@@ -34,7 +34,10 @@ override. `nomic-embed-text` (embeddings, Ollama).
 task "Guidebot server" starts it at login (log in `%LOCALAPPDATA%\guidebot\server.log`). The cloudflared
 service tunnels it to asknick.derrickgarcia.dev and guidebot.derrickgarcia.dev, both behind Cloudflare Access
 (policy "Derrick Access": his Gmail and nwilson@revofunding.com).
-* Streamlit: `streamlit run ui/app.py` (Verify Documents lives there). Tests: `pytest`.
+* Admin console: `/admin` (`ui/admin.html`, `guidebot/admin.py`) replaces the Streamlit Verify page: doc
+statuses, PDF page beside editable matrix/text, re-read, approve docs and overlay rules. Only his Gmail via
+Cloudflare Access, or direct from this PC. Claude never clicks Approve.
+* Streamlit (old): `streamlit run ui/app.py`. Tests: `.venv\Scripts\python.exe -m pytest` (system Python lacks ollama).
 Model race: `python -m tools.compare_models <model> ...`.
 
 ## Layout
@@ -64,7 +67,7 @@ word against the doc) and full-document Q\&A mode (whole program in context, not
 
 ## Current status
 
-* 97 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 100 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked

@@ -6,12 +6,13 @@ import json
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
-from guidebot import chat, config
+from guidebot import admin, chat, config
 
 PORT = 8600
 PAGE = config.ROOT / "ui" / "guidebot.html"
+ADMIN_PAGE = config.ROOT / "ui" / "admin.html"
 # The page may also be opened straight from disk (file://), which sends Origin "null".
 ALLOWED_ORIGINS = {"null", f"http://localhost:{PORT}", f"http://127.0.0.1:{PORT}"}
 
@@ -64,9 +65,28 @@ class Handler(BaseHTTPRequestHandler):
         self._cors()
         self.end_headers()
 
+    def _admin_get(self, path: str, query: dict):
+        if not admin.allowed(self.headers):
+            return self._json({"error": "admin only"}, 403)
+        if path == "/admin":
+            return self._send(200, ADMIN_PAGE.read_bytes(), "text/html; charset=utf-8")
+        if path == "/admin/api/overview":
+            return self._json({"programs": admin.overview()})
+        prog, file = query.get("program", [""])[0], query.get("file", [""])[0]
+        if path == "/admin/api/doc":
+            doc = admin.document(prog, file, fresh=query.get("fresh", [""])[0] == "1")
+            return self._json(doc) if doc else self._json({"error": "not found"}, 404)
+        if path == "/admin/page.png":
+            png = admin.page_png(prog, file, int(query.get("page", ["1"])[0]))
+            return self._send(200, png, "image/png") if png else self._json({"error": "not found"}, 404)
+        self._json({"error": "not found"}, 404)
+
     def do_GET(self):
-        path = unquote(urlparse(self.path).path)
-        if path in ("/", "/index.html"):
+        url = urlparse(self.path)
+        path = unquote(url.path)
+        if path == "/admin" or path.startswith("/admin/"):
+            self._admin_get(path, parse_qs(url.query))
+        elif path in ("/", "/index.html"):
             self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
         elif path == "/logo.png":
             self._send(200, (PAGE.parent / "logo.png").read_bytes(), "image/png")
@@ -87,6 +107,18 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
         except json.JSONDecodeError:
             return self._json({"error": "bad json"}, 400)
+
+        if path.startswith("/admin/"):
+            # The custom header can't be sent cross-site without a preflight this server never allows,
+            # so another site can't make a signed-in browser approve something.
+            if not admin.allowed(self.headers) or self.headers.get("X-Admin") != "1":
+                return self._json({"error": "admin only"}, 403)
+            prog, file = body.get("program") or "", body.get("file") or ""
+            if path == "/admin/api/approve-doc":
+                return self._json(admin.approve_document(prog, file, bool(body.get("fresh")), body.get("edits") or []))
+            if path == "/admin/api/approve-rules":
+                return self._json(admin.approve_rules(prog, file))
+            return self._json({"error": "not found"}, 404)
 
         if path == "/api/chat":
             question = (body.get("question") or "").strip()

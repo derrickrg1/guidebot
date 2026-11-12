@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AskNick Admin</title>
+<link rel="icon" href="/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500&family=Space+Mono&family=Barlow+Condensed:wght@600&family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+/* Same theme as guidebot.html. */
+:root {
+  color-scheme: dark;
+  --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --ink: #e6e8ea; --steel: #b3b9be; --mist: #7d878c; --rule: rgba(200, 204, 210, 0.1);
+  --accent: #d9661f; --gold: #c8ccd2; --page: #131c1e; --side: rgba(0, 0, 0, 0.5);
+  --card: rgba(0, 0, 0, 0.38); --warn: #e2b866; --warn-bg: rgba(226, 184, 102, 0.1); --bad: #e08080; --ok: #7cc48a;
+}
+html {
+  background:
+    radial-gradient(ellipse 70% 60% at 55% 35%, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.7) 75%, rgba(0, 0, 0, 0.88)),
+    var(--page);
+  background-attachment: fixed;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: transparent; color: var(--ink); display: flex;
+  font: 14px/1.5 "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
+aside { width: 300px; flex: none; background: var(--side); backdrop-filter: blur(18px); border-right: 1px solid var(--rule);
+  padding: 20px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.brand { color: var(--gold); display: flex; align-items: center; gap: 12px; text-decoration: none; }
+.brand img { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--gold); }
+.brand .mark { display: block; font: 500 1.35rem/1 "Bodoni Moda", Didot, serif; letter-spacing: 0.04em; }
+.brand .mark span { color: var(--accent); font: 600 0.55em Inter, sans-serif; vertical-align: 0.7em; margin-left: 1px; }
+.brand .tag-line { display: block; margin-top: 5px; font: 0.56rem "Space Mono", Consolas, monospace;
+  letter-spacing: 0.18em; color: var(--mist); }
+.label { font: 600 0.68rem "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 0.2em; color: var(--mist);
+  text-transform: uppercase; }
+.prog { margin-top: 4px; }
+.prog > .label { display: block; margin: 8px 0 4px; }
+.doc { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; cursor: pointer;
+  padding: 7px 10px; margin-bottom: 4px; border: 1px solid var(--rule); border-radius: 8px;
+  background: var(--card); color: var(--ink); font: inherit; font-size: 0.8rem; }
+.doc:hover, .doc.on { border-color: var(--accent); }
+.doc .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+.dot.off { background: var(--mist); }
+.legend { font-size: 0.72rem; color: var(--mist); display: grid; gap: 3px; }
+.legend span { display: flex; align-items: center; gap: 6px; }
+main { flex: 1; overflow-y: auto; padding: 28px max(28px, calc((100% - 1200px) / 2)); }
+h1 { font: 600 1.15rem/1.4 var(--serif); color: var(--accent); margin: 0 0 4px; }
+h2 { font: 600 1rem var(--serif); margin: 0 0 8px; }
+.sub { color: var(--steel); font: 1rem/1.6 var(--serif); margin-bottom: 18px; }
+.panel { background: var(--card); border: 1px solid var(--rule); border-radius: 12px; padding: 16px 18px; margin-bottom: 16px;
+  backdrop-filter: blur(12px); }
+.note { padding: 10px 14px; border-radius: 8px; margin: 8px 0; font-size: 0.85rem; border: 1px solid var(--rule); }
+.note.ok { color: var(--ok); background: rgba(124, 196, 138, 0.08); }
+.note.warn { color: var(--warn); background: var(--warn-bg); }
+.note.bad { color: var(--bad); background: rgba(224, 128, 128, 0.08); }
+.note ul { margin: 6px 0 0; padding-left: 18px; }
+button.act { font: 600 0.85rem Inter, sans-serif; padding: 9px 16px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: #fff; }
+button.act.ghost { background: transparent; color: var(--accent); }
+button.act:disabled { opacity: 0.4; cursor: not-allowed; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+table { border-collapse: collapse; width: 100%; font-size: 0.78rem; }
+th, td { border: 1px solid var(--rule); padding: 4px 6px; text-align: left; vertical-align: top; }
+th { color: var(--steel); font-weight: 600; background: rgba(255, 255, 255, 0.03); }
+td[contenteditable] { outline: none; }
+td[contenteditable]:focus { background: rgba(217, 102, 31, 0.12); }
+td.edited { background: rgba(226, 184, 102, 0.16); }
+.scroll { overflow-x: auto; margin-bottom: 10px; }
+.page { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.page img { width: 100%; border-radius: 6px; background: #fff; }
+textarea { width: 100%; min-height: 280px; resize: vertical; background: rgba(0, 0, 0, 0.35); color: var(--ink);
+  border: 1px solid var(--rule); border-radius: 8px; padding: 10px; font: 0.78rem/1.5 Consolas, monospace; }
+.muted { color: var(--mist); font-size: 0.78rem; }
+.empty { color: var(--steel); font: 1rem/1.65 var(--serif); margin-top: 18vh; text-align: center; }
+label.toggle { display: flex; gap: 8px; align-items: center; font-size: 0.85rem; color: var(--steel); cursor: pointer; }
+@media (max-width: 900px) {
+  body { flex-direction: column; } aside { width: auto; max-height: 40vh; } .page { grid-template-columns: 1fr; }
+  main { padding: 20px 16px; }
+}
+</style>
+</head>
+<body>
+<aside>
+  <a class="brand" href="/"><img src="/logo.png" alt="">
+    <div><span class="mark">ASKNICK<span>++</span></span><span class="tag-line">(ADMIN CONSOLE)</span></div></a>
+  <div class="legend">
+    <span><i class="dot ok"></i>Approved</span><span><i class="dot warn"></i>Needs you (not approved, changed)</span>
+    <span><i class="dot bad"></i>Approved but blocked (problems)</span>
+  </div>
+  <div id="list"><div class="muted">Loading…</div></div>
+</aside>
+<main id="main"><div class="empty">Pick a document on the left to check it against the PDF and approve it.</div></main>
+<script>
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"})[c]);
+const qs = o => new URLSearchParams(o).toString();
+let current = null;   // {program, file, fresh, data}
+
+function docDot(d) {
+  if (d.status === "verified" && d.problems) return "bad";
+  if (d.status !== "verified" || (d.rules && d.rules.status !== "approved")) return "warn";
+  return "ok";
+}
+
+async function loadList() {
+  const r = await fetch("/admin/api/overview");
+  const box = document.getElementById("list");
+  if (!r.ok) { box.innerHTML = `<div class="note bad">Admin only.</div>`; return; }
+  const {programs} = await r.json();
+  box.innerHTML = programs.map(p => `<div class="prog"><span class="label">${esc(p.program)}</span>` +
+    p.docs.map(d => `<button class="doc${current && current.program === p.program && current.file === d.file ? " on" : ""}"
+      data-program="${esc(p.program)}" data-file="${esc(d.file)}" title="${esc(d.file)}">
+      <i class="dot ${docDot(d)}"></i><span class="name">${esc(d.file)}</span>
+      ${d.rules ? `<span class="muted">${d.rules.status === "approved" ? "rules ✓" : "rules"}</span>` : ""}</button>`).join("") +
+    `</div>`).join("");
+  box.querySelectorAll(".doc").forEach(b => b.onclick = () => openDoc(b.dataset.program, b.dataset.file, false));
+}
+
+async function openDoc(program, file, fresh) {
+  const main = document.getElementById("main");
+  main.innerHTML = `<div class="empty">${fresh ? "Re-reading the PDF…" : "Loading…"}</div>`;
+  const r = await fetch("/admin/api/doc?" + qs({program, file, fresh: fresh ? 1 : 0}));
+  if (!r.ok) { main.innerHTML = `<div class="note bad">Couldn't load ${esc(file)}.</div>`; return; }
+  current = {program, file, fresh, data: await r.json()};
+  render();
+  loadList();
+}
+
+function rulesPanel(d) {
+  const R = d.rules;
+  if (!R) return "";
+  const label = {approved: "approved", unapproved: "not approved yet", changed: "changed since approval",
+                 bad_quotes: "quotes not found in the PDF"}[R.status];
+  const canApprove = d.status === "verified" && !R.bad_quotes.length && R.status !== "approved";
+  return `<div class="panel"><h2>Overlay rules: ${R.rows.length} rules, ${label}</h2>
+    <div class="muted">Python applies these to deal answers instead of the AI. Check each one against the PDF:
+      when it applies, what it does, and the quote. Facts the user doesn't mention are never assumed.</div>
+    ${R.bad_quotes.length ? `<div class="note bad">These quotes aren't in the document word for word: ${esc(R.bad_quotes.join(", "))}</div>` : ""}
+    ${d.status !== "verified" ? `<div class="note warn">Approve the document itself first. Rule quotes are checked against its approved text.</div>` : ""}
+    <div class="scroll" style="margin-top:10px"><table><tr><th>Overlay</th><th>Applies when</th><th>Effect</th><th>Quote</th><th>Page</th></tr>
+      ${R.rows.map(x => `<tr><td>${esc(x.label)}</td><td>${esc(x.when)}</td><td>${esc(x.effect)}</td><td>${esc(x.quote)}</td><td>${esc(x.page)}</td></tr>`).join("")}
+    </table></div>
+    <div class="muted">${esc(R.built_by)}</div>
+    ${R.status === "approved" ? `<div class="note ok">Approved.</div>` :
+      `<div class="row" style="margin-top:12px"><button class="act" id="approve-rules" ${canApprove ? "" : "disabled"}>Approve these overlay rules</button></div>`}
+  </div>`;
+}
+
+function render() {
+  const d = current.data;
+  const main = document.getElementById("main");
+  const reviewing = d.status !== "verified" || d.fresh || current.reviewing;
+  let head = `<h1>${esc(d.file)}</h1><div class="sub">${esc(d.program)}</div>`;
+  if (d.status === "verified" && d.saved_problems.length)
+    head += `<div class="note bad">Approved, but its matrices have problems. No numbers come from it until you re-verify.<ul>${d.saved_problems.map(p => `<li>${esc(p)}</li>`).join("")}</ul></div>`;
+  else if (d.status === "verified") head += `<div class="note ok">✓ Verified.</div>`;
+  else if (d.status === "changed") head += `<div class="note warn">The file changed since you approved it. Re-check and approve again.</div>`;
+  else head += `<div class="note warn">Not verified yet.</div>`;
+
+  let body = rulesPanel(d);
+  if (!reviewing) {
+    body += `<div class="row"><button class="act ${d.saved_problems.length ? "" : "ghost"}" id="reverify">Re-verify</button></div>`;
+    main.innerHTML = head + body;
+  } else {
+    if (d.status === "verified")
+      body += `<label class="toggle"><input type="checkbox" id="fresh" ${d.fresh ? "checked" : ""}>
+        Re-read the PDF with the current parser (drops edits you made last time)</label><br>`;
+    body += d.pages.map(p => `<div class="panel"><h2>Page ${p.page}</h2><div class="page">
+      <div>${d.is_pdf ? `<img loading="lazy" alt="Page ${p.page}" src="/admin/page.png?${qs({program: d.program, file: d.file, page: p.page})}">` : ""}</div>
+      <div>${p.matrices.map((m, i) => matrixHtml(p.page, i, m)).join("")}
+        <div class="label" style="margin:6px 0">Text the bot reads</div>
+        <textarea data-page="${p.page}">${esc(p.text)}</textarea></div></div></div>`).join("");
+    body += `<div class="panel">${d.blocked.length ? `<div class="note bad">Can't approve yet:<ul>${d.blocked.slice(0, 10).map(b => `<li>${esc(b)}</li>`).join("")}</ul>
+        A wrong cell can be fixed in the table. Wrong headers need a parser fix.</div>` : ""}
+      <div class="row"><button class="act" id="approve-doc">Approve this document</button>
+      <span class="muted">Edited cells are highlighted. Problems are checked again when you approve.</span></div>
+      <div id="doc-msg"></div></div>`;
+    main.innerHTML = head + body;
+    main.querySelectorAll("td[contenteditable]").forEach(td => td.oninput = () =>
+      td.classList.toggle("edited", td.textContent !== td.dataset.orig));
+    const fr = document.getElementById("fresh");
+    if (fr) fr.onchange = () => openDoc(d.program, d.file, fr.checked);
+    document.getElementById("approve-doc").onclick = approveDoc;
+  }
+  const rv = document.getElementById("reverify");
+  if (rv) rv.onclick = () => d.saved_problems.length ? openDoc(d.program, d.file, true) : (current.reviewing = true, render());
+  const ar = document.getElementById("approve-rules");
+  if (ar) ar.onclick = approveRules;
+}
+
+function matrixHtml(page, i, m) {
+  const cc = m.crosscheck;
+  const check = cc.status === "match" ? `<div class="note ok">Matches the Revo site's copy cell for cell (${esc(cc.source)}).</div>`
+    : cc.status === "mismatch" ? `<div class="note bad">Differs from the Revo site's copy (${esc(cc.source)}):<ul>${cc.diffs.slice(0, 8).map(x => `<li>${esc(x)}</li>`).join("")}</ul></div>`
+    : `<div class="muted">No Revo site copy to cross-check. Check every cell by eye.</div>`;
+  return `<div class="label" style="margin-bottom:4px">Matrix: ${esc(m.title)}</div>
+    ${m.problems.map(p => `<div class="note bad">${esc(p)}</div>`).join("")}${check}
+    <div class="scroll"><table data-page="${page}" data-matrix="${i}">
+      <tr>${m.columns.map(c => `<th>${esc(c)}</th>`).join("")}</tr>
+      ${m.rows.map(r => `<tr>${r.map(v => `<td contenteditable="plaintext-only" data-orig="${esc(v)}">${esc(v)}</td>`).join("")}</tr>`).join("")}
+    </table></div>`;
+}
+
+async function post(url, payload) {
+  const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json", "X-Admin": "1"},
+                              body: JSON.stringify(payload)});
+  return r.ok ? r.json() : {error: r.status === 403 ? "Admin only." : `Error ${r.status}`};
+}
+
+async function approveDoc() {
+  const d = current.data, main = document.getElementById("main");
+  const edits = d.pages.map(p => ({
+    page: p.page,
+    text: main.querySelector(`textarea[data-page="${p.page}"]`).value,
+    matrices: p.matrices.map((_, i) => [...main.querySelectorAll(`table[data-page="${p.page}"][data-matrix="${i}"] tr`)]
+      .slice(1).map(tr => [...tr.children].map(td => td.textContent))),
+  }));
+  const btn = document.getElementById("approve-doc");
+  btn.disabled = true;
+  const res = await post("/admin/api/approve-doc", {program: d.program, file: d.file, fresh: d.fresh, edits});
+  if (res.ok) return openDoc(d.program, d.file, false);
+  btn.disabled = false;
+  document.getElementById("doc-msg").innerHTML = `<div class="note bad">${esc(res.error)}${res.blocked ?
+    `<ul>${res.blocked.slice(0, 10).map(b => `<li>${esc(b)}</li>`).join("")}</ul>` : ""}</div>`;
+}
+
+async function approveRules() {
+  const d = current.data;
+  document.getElementById("approve-rules").disabled = true;
+  const res = await post("/admin/api/approve-rules", {program: d.program, file: d.file});
+  if (!res.ok) alert(res.error);
+  openDoc(d.program, d.file, false);
+}
+
+loadList();
+</script>
+</body>
+</html>
