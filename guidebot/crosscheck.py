@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from guidebot import config
+from guidebot import config, site_grids
 
 # site original -> [(builder file, grid variable)], one per matrix, in page order
 REFERENCES = {
@@ -96,9 +96,19 @@ def compare(df: pd.DataFrame, grid) -> list[str]:
     return diffs
 
 
-def check(doc: dict, site_dir: Path | None = None) -> list[dict]:
+def check(doc: dict, site_dir: Path | None = None, repo: Path | None = None) -> list[dict]:
     """One result per matrix in the doc, in page order:
-    {"status": "match" | "mismatch" | "none", "source": "build_x.py NAME", "diffs": [...]}"""
+    {"status": "match" | "mismatch" | "none", "source": "build_x.py NAME", "diffs": [...]}
+    The site's built HTML matrices (site_grids) are checked first: they cover every Express and Ignite grid. The old
+    hand-typed grids answer only where the HTML has nothing."""
+    old = _check_builders(doc, site_dir)
+    new = site_grids.check(doc, repo)
+    if not new:
+        return old
+    return [n if n["status"] != "none" or o["status"] == "none" else o for n, o in zip(new, old)]
+
+
+def _check_builders(doc: dict, site_dir: Path | None = None) -> list[dict]:
     site_dir = site_dir or config.SITE_MATRICES
     mats = [m for p in doc["pages"] for m in p["matrices"]]
     none = [{"status": "none", "source": "", "diffs": []} for _ in mats]

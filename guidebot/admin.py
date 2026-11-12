@@ -29,9 +29,9 @@ def _doc_path(program: str, file: str):
     return next((p for p in library.programs().get(program, []) if p.name == file), None)
 
 
-def _problems(pages, file_hash: str) -> list[str]:
+def _problems(pages, file_hash: str, path=None) -> list[str]:
     out = []
-    refs = iter(crosscheck.check({"hash": file_hash, "pages": pages}))
+    refs = iter(crosscheck.check({"hash": file_hash, "pages": pages, "path": path}))
     for page in pages:
         for m in page["matrices"]:
             name = f"p. {page['page']} {m.attrs.get('title') or 'LTV matrix'}"
@@ -59,7 +59,7 @@ def overview() -> list[dict]:
         for path in keep:
             doc = library.load(path)
             rules = _rules_info(prog, doc)
-            problems = _problems(doc["pages"], doc["hash"]) if doc["status"] == "verified" else []
+            problems = _problems(doc["pages"], doc["hash"], path) if doc["status"] == "verified" else []
             docs.append({"file": path.name, "status": doc["status"], "problems": len(problems),
                          "matrices": sum(len(p["matrices"]) for p in doc["pages"]),
                          "rules": rules and {"status": rules["status"], "count": len(rules["rows"])}})
@@ -72,7 +72,7 @@ def document(program: str, file: str, fresh: bool = False) -> dict | None:
     if not path:
         return None
     doc = library.load(path)
-    saved_problems = _problems(doc["pages"], doc["hash"]) if doc["status"] == "verified" else []
+    saved_problems = _problems(doc["pages"], doc["hash"], path) if doc["status"] == "verified" else []
     view = library.load(path, fresh=True) if fresh else doc
     refs = iter(crosscheck.check(view))
     pages = []
@@ -86,7 +86,7 @@ def document(program: str, file: str, fresh: bool = False) -> dict | None:
         pages.append({"page": page["page"], "text": page["text"], "matrices": mats})
     return {"program": program, "file": file, "status": doc["status"], "fresh": fresh,
             "is_pdf": path.suffix.lower() == ".pdf", "saved_problems": saved_problems,
-            "blocked": _problems(view["pages"], view["hash"]), "pages": pages, "rules": _rules_info(program, doc)}
+            "blocked": _problems(view["pages"], view["hash"], path), "pages": pages, "rules": _rules_info(program, doc)}
 
 
 def page_png(program: str, file: str, page: int) -> bytes | None:
@@ -123,7 +123,7 @@ def approve_document(program: str, file: str, fresh: bool, edits: list[dict]) ->
                 m = new
             mats.append(m)
         pages.append({"page": page["page"], "text": e.get("text", page["text"]), "matrices": mats})
-    blocked = _problems(pages, base["hash"])
+    blocked = _problems(pages, base["hash"], path)
     if blocked:
         return {"error": "Can't approve yet.", "blocked": blocked}
     library.save_verified(path, pages)

@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pandas as pd
 import pytest
 
-from guidebot import answer, config, crosscheck, extract_pdf, library
+from guidebot import answer, config, crosscheck, extract_pdf, library, site_grids
 from guidebot.extract_pdf import extract_document, parse_matrices, parse_matrix
 from guidebot.matrix_lookup import apply_adjustments, header_problems, lookup
 
@@ -517,9 +517,15 @@ def test_unverified_docs_forbid_ltv_in_full_doc_answers():
     assert answer.NO_LTV_RULE not in answer.full_doc_messages("q", "text", [], ltv_ok=True)[0]["content"]
 
 
+# Known differences between NDM's PDF and the site's built matrix, waiting on Derrick. They stay blocked in the app.
+# Express 1099 row 10 ($2,000,001 - $3,000,000, 700) Primary Cash Out: NDM's PDF (printed 7/31/2026, "Adding AR")
+# says 65%, the site's copy of the same 3.2.2026 sheet says 60%.
+KNOWN_SITE_DIFFS = {"NonQM-1099-Matrix.pdf": ["Row 10 ($2,000,001 - $3,000,000* 700): parsed 70% | 70% | 65%"]}
+
+
 def test_real_pdfs_match_revo_site():
-    if not config.SITE_MATRICES.exists():
-        pytest.skip("Revo site repo not next to guidebot")
+    if not config.SITE_MATRICES.exists() and not config.SITE_REPO.exists():
+        pytest.skip("Revo site repo not found")
     checked = 0
     for prog, paths in library.programs().items():
         keep, _ = library.unique_docs(paths)
@@ -527,8 +533,75 @@ def test_real_pdfs_match_revo_site():
             if p.suffix != ".pdf" or "Guidelines" in p.name:
                 continue
             for r in crosscheck.check(library.load(p, fresh=True)):
+                known = KNOWN_SITE_DIFFS.get(p.name, [])
+                if r["status"] == "mismatch" and known:
+                    assert len(r["diffs"]) == len(known), (p.name, r["diffs"])
+                    assert all(d.startswith(k) for d, k in zip(r["diffs"], known)), (p.name, r["diffs"])
+                    continue
                 assert r["status"] != "mismatch", (p.name, r["diffs"][:3])
                 checked += r["status"] == "match"
     if checked == 0:
         pytest.skip("no docs/ PDFs with a site reference")
-    assert checked >= 7
+    assert checked >= 11   # every Express and Ignite grid (Expanded twins skipped) but the known one
+
+
+SITE_HTML = """<div class="rh ex">Express Effective Date: 3.2.2026</div>
+<table class="grid pg-ex"><thead>
+<tr><th colspan="2" class="corner">Program Max LTVs/CLTVs</th><th colspan="2">Primary Residence</th></tr>
+<tr><th>Loan Amount</th><th>FICO</th><th>Purchase</th><th>Cash Out</th></tr></thead>
+<tbody><tr><td rowspan="2">&le; $1,000,000</td><td>720</td><td>90%</td><td>80%</td></tr>
+<tr><td>680</td><td>85%</td><td class="na">N/A</td></tr></tbody></table>
+<table class="grid pg-ex"><thead><tr><th colspan="2" class="corner">Program Max LTVs/CLTVs</th>
+<th colspan="2">DSCR .75 to .99**</th></tr></thead>
+<tbody><tr><td>$150,000 to $1,000,000</td><td>700</td><td>75%</td><td>70%*</td></tr></tbody></table>
+<table class="grid pg-ig"><tbody><tr><td>x</td></tr></tbody></table>"""
+
+
+def _site_repo(tmp_path):
+    d = tmp_path / "assets" / "matrices" / "dscr"
+    d.mkdir(parents=True)
+    (d / "dscr-program-matrix.html").write_text(SITE_HTML, encoding="utf-8")
+    site_grids._page.cache_clear()
+    return tmp_path
+
+
+def test_site_grid_reader_expands_merged_cells(tmp_path):
+    tabs = site_grids.site_tables("Express DSCR", "NonQM-Express-DSCR-Matrix.pdf", _site_repo(tmp_path))
+    assert len(tabs) == 2 and tabs[0]["effective"] == "3.2.2026"
+    df = tabs[0]["df"]
+    assert list(df.columns) == ["Loan Amount", "FICO", "Primary Residence / Purchase", "Primary Residence / Cash Out"]
+    assert df.values.tolist() == [["≤ $1,000,000", "720", "90%", "80%"], ["≤ $1,000,000", "680", "85%", "N/A"]]
+    # one header over all value columns: compared by position, not by (repeated) name
+    mine = pd.DataFrame([["$150,000 to $1,000,000", "700", "75%", "70%"]],
+                        columns=["Loan Amount", "FICO", "Purchase", "Cash Out"])
+    assert site_grids.compare(mine, tabs[1]["df"]) == []
+    mine.iloc[0, 3] = "65%"
+    assert site_grids.compare(mine, tabs[1]["df"]) == [
+        "Row 1 ($150,000 to $1,000,000 700): parsed 75% | 65%  vs site  75% | 70%"]
+
+
+def test_site_check_date_guard_and_count(tmp_path):
+    repo = _site_repo(tmp_path)
+    grid = pd.DataFrame([["$150,000 to $1,000,000", "700", "75%", "70%"]],
+                        columns=["Loan Amount", "FICO", "Purchase", "Cash Out"])
+    path = tmp_path / "Express DSCR" / "NonQM-Express-DSCR-Matrix.pdf"
+    doc = {"path": path, "pages": [{"text": "Effective Date: 10.1.2026", "matrices": [grid, grid]}]}
+    assert [r["status"] for r in site_grids.check(doc, repo)] == ["none", "none"]   # other release
+    doc["pages"][0]["text"] = "Effective Date: 3.2.2026"
+    assert [r["status"] for r in site_grids.check(doc, repo)] == ["mismatch", "match"]
+    doc["pages"][0]["matrices"] = [grid]
+    assert site_grids.check(doc, repo)[0]["diffs"] == ["Parsed 1 matrices, the site page has 2"]
+    assert site_grids.check({**doc, "path": tmp_path / "VA" / "x.pdf"}, repo) is None
+
+
+def test_units_plus_merged_fico_fills_the_right_column():
+    # Express DSCR Units+: FICO is the merged cell, loan amounts change every row
+    raw = [["Loan Amount", "FICO", "Purchase", "Rate and Term Refi", None, "Cash Out Refi"],
+           ["<= $1,500,000", "720", "75%", "70%", None, "65%"],
+           ["$1,500,001 - $2,000,000", None, "70%", "65%", None, "65%"],
+           ["$2,000,001 - $3,000,000", None, "60%", "55%", None, "N/A"],
+           ["<= $1,500,000", "700", "75%", "70%", None, "65%"]]
+    df = parse_matrix(raw)
+    assert df[["Loan Amount", "FICO"]].values.tolist() == [
+        ["<= $1,500,000", "720"], ["$1,500,001 - $2,000,000", "720"],
+        ["$2,000,001 - $3,000,000", "720"], ["<= $1,500,000", "700"]]

@@ -1,5 +1,6 @@
 """Turn a guideline PDF into clean pages: text outside tables, regular tables as cell rows,
 and matrices rebuilt as real grids (headers combined, merged cells filled down)."""
+import itertools
 import re
 
 import pandas as pd
@@ -103,6 +104,21 @@ def _cells(row) -> tuple[list[str], bool]:
 DATE_LIKE = re.compile(r"Effective\s+Date|\d{1,2}\.\d{1,2}\.\d{4}", re.I)
 
 
+def _fill_lead(lead: list[str], prev: list[str], dims: int) -> list[str]:
+    """A data row missing some dim cells (merged in the PDF) takes them from the row above. Usually the merged
+    cell is the leading loan amount, but Express DSCR Units+ merges FICO across loan amounts, so the cells are
+    placed where their kind (dollar amount or not) matches the row above."""
+    kinds = ["$" in c for c in prev]
+    # trailing positions first: when kinds can't tell, the leading cell is the merged one, as before
+    for keep in reversed(list(itertools.combinations(range(dims), len(lead)))):
+        if all(("$" in c) == kinds[k] for c, k in zip(lead, keep)):
+            out = list(prev)
+            for c, k in zip(lead, keep):
+                out[k] = c
+            return out
+    return prev[: dims - len(lead)] + lead
+
+
 def _parse_block(compact: list[list[str]], squashed: set[int], min_rows: int = 3,
                  label: list[str] | None = None) -> tuple[pd.DataFrame | None, set[int]]:
     """One matrix from pre-compacted rows. Returns (df, indices of rows it used).
@@ -199,7 +215,7 @@ def _parse_block(compact: list[list[str]], squashed: set[int], min_rows: int = 3
         if len(lead) < dims:
             if prev is None:
                 continue
-            lead = prev[: dims - len(lead)] + lead
+            lead = _fill_lead(lead, prev, dims)
         prev = lead
         records.append(lead + vals)
         used.add(i)

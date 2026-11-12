@@ -5,6 +5,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCS_DIR = ROOT / "docs"
 DB_DIR = ROOT / "db"
 SITE_MATRICES = ROOT.parent / "site" / "tools" / "matrices"   # Revo site repo: hand-checked LTV grids
+# The current Revo site checkout: its built matrices (assets/matrices) are real HTML tables. GUIDEBOT_SITE_REPO overrides.
+SITE_REPO = Path(os.environ.get("GUIDEBOT_SITE_REPO")
+                 or Path.home() / "OneDrive" / "Documents" / "GitHub" / "revo-funding-site")
 
 
 def _load_env(path: Path):

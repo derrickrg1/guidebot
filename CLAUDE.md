@@ -94,7 +94,7 @@ search the shared guide's pages, since the TOC router can miss the section holdi
 
 ## Current status
 
-* 108 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 111 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked
@@ -104,9 +104,16 @@ answers per Ignite program; DSCR is Q\&A only until its matrix is re-read.
 guidebot's 234/234. Possible later use as a reading copy (split Express/Ignite halves first); NDM PDFs stay
 the source for numbers.
 * The Ignite pairs (`X.pdf` and `X Expanded.pdf`) are byte-identical. App skips exact duplicates automatically.
-* `guidebot/crosscheck.py` compares parsed grids to the hand-typed grids in the Revo site repo
-(`../site/tools/matrices/build_*.py`, checked there by `verify.py`), matched by PDF hash. 7 grids match cell
-for cell. A mismatch blocks numbers and approval. 1099, P\&L and Units+ have no site grid yet.
+* `guidebot/crosscheck.py` checks every parsed grid against a second source. First `guidebot/site_grids.py`: the
+built HTML matrices in the GitHub site repo (`config.SITE_REPO`, `revo-funding-site/assets/matrices`, tables
+classed `grid pg-ex|pg-ig`), compared by position only when both effective dates match. The old hand-typed
+grids (`../site/tools/matrices/build_*.py`, matched by PDF hash) answer only where the HTML has nothing.
+A mismatch blocks numbers and approval. Every Express/Ignite grid matches except (2026-11-12):
+  * Express 1099 row $2,000,001-$3,000,000 / 700, Primary Cash Out: NDM PDF (printed 7/31/2026, "Adding AR") says
+    65%, the site's copy of the 3.2.2026 sheet says 60%. Waiting on Derrick (`KNOWN_SITE_DIFFS` in tests).
+  * Express DSCR Units+: the approved JSON was mangled (FICO is the merged cell there, the parser used to fill loan
+    amount instead). Parser fixed (`_fill_lead`); Derrick needs to "Re-read the PDF" and re-approve.
+  The site's Express "originals" are Revo-branded copies, not NDM's files, so the site is a check, never the source.
 * `header_problems` blocks numbers from matrices with shifted/numbered headers. Approved JSONs saved by the old
 parser (Ignite Express DSCR, Express P\&L) need re-verifying with "Re-read the PDF".
 * Unverified programs: full-doc answers are told not to state any LTV (`NO\_LTV\_RULE`).
