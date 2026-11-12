@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -5,7 +6,24 @@ DOCS_DIR = ROOT / "docs"
 DB_DIR = ROOT / "db"
 SITE_MATRICES = ROOT.parent / "site" / "tools" / "matrices"   # Revo site repo: hand-checked LTV grids
 
-CHAT_MODEL = "qwen3:14b"
+
+def _load_env(path: Path):
+    """KEY=value lines from .env (git-ignored) into the environment. Real env vars win."""
+    if path.exists():
+        for line in path.read_text(encoding="utf-8").splitlines():
+            key, sep, value = line.strip().partition("=")
+            if sep and not key.startswith("#"):
+                os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_env(ROOT / ".env")
+
+# Chat runs on Claude when an API key is set, else on the local model. GUIDEBOT_MODEL in .env overrides both.
+# Either way Python does every lookup and all the math; the model only reads questions and guidelines.
+LOCAL_MODEL = "qwen3:14b"
+CLAUDE_MODEL = "claude-sonnet-5-5"   # 22/22 in the race, same as Opus, faster and cheaper
+CLAUDE_EFFORT = os.environ.get("GUIDEBOT_EFFORT", "medium")
+CHAT_MODEL = os.environ.get("GUIDEBOT_MODEL") or (CLAUDE_MODEL if os.environ.get("ANTHROPIC_API_KEY") else LOCAL_MODEL)
 EMBED_MODEL = "nomic-embed-text"
 EMBED_DOC_PREFIX = "search_document: "    # nomic needs these, set both to "" for other embed models
 EMBED_QUERY_PREFIX = "search_query: "

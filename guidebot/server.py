@@ -68,6 +68,8 @@ class Handler(BaseHTTPRequestHandler):
         path = unquote(urlparse(self.path).path)
         if path in ("/", "/index.html"):
             self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
+        elif path == "/logo.png":
+            self._send(200, (PAGE.parent / "logo.png").read_bytes(), "image/png")
         elif path == "/api/programs":
             self._json({"programs": chat.programs_info(), "model": config.CHAT_MODEL})
         elif path.startswith("/pdf/"):

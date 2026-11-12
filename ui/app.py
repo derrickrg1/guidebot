@@ -19,7 +19,7 @@ _NONQM = {"NonQM 1099", "NonQM Bank Statements", "NonQM Express DSCR",
            "NonQM Full Doc", "NonQM P&L", "NonQM 2nd"}
 _SHARED = "NonQM Shared"
 
-st.set_page_config(page_title="Guidebot", layout="wide")
+st.set_page_config(page_title="AskNick", layout="wide")
 inject()
 
 
@@ -129,7 +129,7 @@ def _render_sources(sources: list[dict], answer: str = ""):
 
 # ---------- sidebar ----------
 with st.sidebar:
-    st.markdown("## Guidebot")
+    st.markdown("## AskNick")
     st.divider()
 
     all_programs = library.programs()

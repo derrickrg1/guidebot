@@ -1,6 +1,6 @@
-# Guideline Assistant (guidebot)
+# AskNick (guidebot)
 
-Local AI chat bot for mortgage guidelines and LTV matrices. Built for Derrick, Loan Set-Up and Bank
+AI chat bot for mortgage guidelines and LTV matrices, shown to users as AskNick (code and folder stay `guidebot`). Built for Derrick, Loan Set-Up and Bank
 Statement Analyst at Revolution Funding (Nations Direct Mortgage). Started in a claude.ai chat, continued here.
 
 ## How to work with Derrick
@@ -17,14 +17,25 @@ Statement Analyst at Revolution Funding (Nations Direct Mortgage). Started in a 
 * The AI never produces LTV numbers. It maps a scenario to a matrix row/column and identifies overlays.
 Python does the lookup and math (`matrix\_lookup.py`).
 * LTV numbers are blocked for any document not approved on the Verify Documents page.
-* 100% local: Ollama only, no cloud APIs. Free/open tools only (he moved off Microsoft for cost).
-* Sandbox phase on his personal machine. Real borrower data never goes in here.
+* A number for a specific deal only comes from the matrix lookup (`looks_like_deal` routes it there whatever
+the toggles say). A program whose overlay rules aren't approved stops at the matrix cell, no final number.
+* Chat runs on the Claude API (Derrick chose this 2026-11-12, replacing "Ollama only"). Questions and guideline
+text go to Anthropic; embeddings and the qwen3 fallback stay local. Otherwise free/open tools only.
+* Sandbox phase on his personal machine and personal Anthropic account. Real borrower data never goes in here.
 
 ## Stack
 
-* Models: `qwen3:14b` (chat, structured JSON via Ollama `format=`), `nomic-embed-text` (embeddings).
+* Models (`guidebot/llm.py`, picked in `config.py`): `claude-sonnet-5-5` (Sonnet, Haiku and Opus all scored 22/22 in the race; Sonnet was fastest) when `ANTHROPIC_API_KEY` is in `.env`
+(git-ignored; key lives in the AskNick workspace of his Claude Console, 90-day expiry), else `qwen3:14b`.
+If Claude is down or the key is bad, answers fall back to qwen3. `GUIDEBOT_MODEL` / `GUIDEBOT_EFFORT` in `.env`
+override. `nomic-embed-text` (embeddings, Ollama).
 * pdfplumber, pandas, ChromaDB + BM25 (hybrid search), Streamlit UI.
-* Run: `.venv\\Scripts\\activate` then `streamlit run ui/app.py`. Tests: `pytest`.
+* Main UI: `ui/guidebot.html` served by `python -m guidebot.server` on 127.0.0.1:8600. A Windows scheduled
+task "Guidebot server" starts it at login (log in `%LOCALAPPDATA%\guidebot\server.log`). The cloudflared
+service tunnels it to asknick.derrickgarcia.dev and guidebot.derrickgarcia.dev, both behind Cloudflare Access
+(policy "Derrick Access": his Gmail and nwilson@revofunding.com).
+* Streamlit: `streamlit run ui/app.py` (Verify Documents lives there). Tests: `pytest`.
+Model race: `python -m tools.compare_models <model> ...`.
 
 ## Layout
 
@@ -52,7 +63,12 @@ word against the doc) and full-document Q\&A mode (whole program in context, not
 
 ## Current status
 
-* 36 tests passing. Every NonQM/Ignite matrix parses with clean headers; one test per layout shape.
+* 82 tests passing. Every NonQM/Ignite matrix parses with clean headers; one test per layout shape.
+* Overlay rules live in `overlays/<Program>.json` (only Ignite 1099 so far) and must be approved on the Verify
+page before Python applies them. Ignite 1099's are not approved yet, so its deal answers stop at the matrix cell.
+* Revo's own v9 matrices (`../Matrices/Revo Matrices/v9`) extract cleanly; the Ignite 1099 grid matches
+guidebot's 234/234. Possible later use as a reading copy (split Express/Ignite halves first); NDM PDFs stay
+the source for numbers.
 * The Ignite pairs (`X.pdf` and `X Expanded.pdf`) are byte-identical. App skips exact duplicates automatically.
 * `guidebot/crosscheck.py` compares parsed grids to the hand-typed grids in the Revo site repo
 (`../site/tools/matrices/build_*.py`, checked there by `verify.py`), matched by PDF hash. 7 grids match cell
