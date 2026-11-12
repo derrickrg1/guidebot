@@ -8,7 +8,7 @@
 <!-- Closest free match to Claude's type: serif for answers, clean sans for the interface. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400&family=Barlow+Condensed:wght@500;600&family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500&family=Space+Mono&family=Barlow+Condensed:wght@600&family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
 <style>
 /* One theme: Inked Japan, black with blue violet tones. Silver from the tin rim, violet from the paint. */
 :root {
@@ -37,13 +37,13 @@ aside {
   width: 280px; flex: none; background: var(--side); backdrop-filter: blur(18px); border-right: 1px solid var(--rule);
   padding: 20px 18px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto;
 }
-/* Wordmark after the Inked Japan paint label: white high-contrast serif caps, small raised ++,
-   condensed spaced caps underneath. Playfair and Barlow Condensed are the closest free matches. */
-.brand { color: #f2f3f5; display: flex; align-items: center; gap: 14px; }
-.brand .mark { display: block; font: 400 1.65rem/1 "Playfair Display", Didot, Georgia, serif; }
-.brand .mark span { font-size: 0.55em; vertical-align: 0.6em; margin-left: 2px; letter-spacing: 0.06em; }
-.brand .tag-line { display: block; margin-top: 6px; font: 600 0.66rem "Barlow Condensed", "Arial Narrow", sans-serif;
-  letter-spacing: 0.2em; color: var(--steel); }
+/* Wordmark styled after the Inked Japan paint label: Bodoni caps, a raised white ++, mono tagline in parentheses. */
+.brand { color: var(--gold); display: flex; align-items: center; gap: 14px; }
+.brand .mark { display: block; font: 500 1.6rem/1 "Bodoni Moda", Didot, "Bodoni MT", serif; letter-spacing: 0.04em; }
+/* Bodoni's own + is a hairline that disappears at this size, so the ++ is drawn in Inter. */
+.brand .mark span { color: #fff; font: 400 0.55em Inter, "Segoe UI", sans-serif; vertical-align: 0.7em; margin-left: 3px; letter-spacing: 0.05em; }
+.brand .tag-line { display: block; margin-top: 5px; font: 0.56rem "Space Mono", Consolas, monospace;
+  letter-spacing: 0.18em; color: var(--mist); }
 /* Round crop, silver ring like the tin rim. The crop also hides the corner watermark. */
 .brand img { width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--gold);
   box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.6), 0 6px 18px rgba(0, 0, 0, 0.5); }
