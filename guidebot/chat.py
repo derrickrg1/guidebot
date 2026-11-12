@@ -6,14 +6,17 @@ All LTV guards live in answer.py, so both UIs get the same rules.
 import re
 
 from guidebot import config, library, overlay_rules
-from guidebot.answer import (compare_programs, comparison_md, filter_to_cited, full_doc_messages, full_section_messages,
-                             looks_like_deal, scenario_answer, search_messages)
+from guidebot.answer import (broad_messages, compare_programs, comparison_md, filter_to_cited, full_doc_messages,
+                             full_section_messages, looks_like_deal, scenario_answer, search_messages)
 from guidebot.llm import stream_chat
 from guidebot.section_reader import route_and_load
 
 NONQM = {"Express 1099", "Express Bank Statements", "Express DSCR",
          "Express Full Doc", "Express P&L", "Express 2nd"}
 SHARED = "NonQM Shared"
+# Programs at or under this are read whole for an all-programs question (the Express and Ignite sheets, ~10k
+# each). Longer ones (FHA, VA, the 2nd-lien guides) are searched instead.
+BROAD_SHEET_MAX = 20000
 
 # One pick per doc type that runs Express and Ignite side by side. Each keeps its own matrix, overlays and
 # guidelines; only the picking is combined.
@@ -121,6 +124,44 @@ def _program_answer(question, history, prog, docs, model):
     return answer, filter_to_cited(answer, found, model)
 
 
+def _broad_answer(question, history, all_programs, model):
+    """A guideline question with no program picked. It used to read only the shared NonQM guide, so anything that
+    lives on a program sheet (Ignite DSCR's 660 minimum for first time investors) came back "couldn't find it".
+    Now every program sheet is read whole; guides too long for that (FHA, VA, 2nds) are searched, and the shared
+    guide is routed to its relevant sections as before. Returns (answer, hits)."""
+    sheets, long_progs = [], []
+    for prog in sorted(all_programs):
+        if prog == SHARED:
+            continue
+        paths, _ = library.unique_docs(all_programs[prog])   # the shared guide is added once below, not per program
+        text = "\n\n".join(library.render(library.load(p)) for p in paths)
+        if len(text) <= BROAD_SHEET_MAX:
+            sheets.append(f"##### PROGRAM: {prog} #####\n\n{text}")
+        else:
+            long_progs.append(prog)
+    yield {"status": "Finding the right guideline sections…"}
+    extra, hits = [], []
+    for gpath in all_programs.get(SHARED, []):
+        if gpath.suffix.lower() == ".pdf":
+            routed = route_and_load(question, gpath, gpath.name, model)
+            if routed:
+                extra.append(f"##### SHARED NONQM GUIDE ({gpath.name}) #####\n\n{routed['text']}")
+                hits += routed["sections"]
+                break
+    found = []
+    if long_progs:
+        try:
+            found = retriever().search(question, programs=long_progs)
+        except Exception:
+            found = []   # no index yet: the sheets and shared guide still answer
+        extra += [h["text"] for h in found]
+    yield {"status": f"Reading {len(sheets)} program sheets…"}
+    answer = yield from _stream(broad_messages(question, "\n\n".join(sheets), "\n\n".join(extra), history, model), model)
+    if found:
+        hits += filter_to_cited(answer, found, model)
+    return answer, hits
+
+
 def respond(question: str, history: list[dict], choice: str = "",
             mode_program: bool = False, mode_scenario: bool = False):
     model = config.CHAT_MODEL
@@ -185,6 +226,9 @@ def respond(question: str, history: list[dict], choice: str = "",
 
     if mode_program and docs and not answer:
         answer, hits = yield from _program_answer(question, history, choice, docs, model)
+
+    if not answer and not choice:
+        answer, hits = yield from _broad_answer(question, history, all_programs, model)
 
     if not answer:
         routed = None

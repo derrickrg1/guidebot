@@ -80,6 +80,37 @@ SEARCH_SYSTEM = (
 )
 
 
+BROAD_SYSTEM = (
+    "You are a mortgage guideline assistant for loan set-up and underwriting staff.\n"
+    "No program is selected, so you have every program's own sheet below (complete, not excerpts), and after it\n"
+    "the relevant sections of the shared NonQM guide plus the most relevant pages of the longer program guides.\n\n"
+    "How to answer a question asked across all programs:\n"
+    "- Check EVERY program sheet, not just the first one that mentions the topic. Program sheets hold overlays the\n"
+    "  shared guide doesn't (minimum scores, first time investor rules, reserves, geographic overlays).\n"
+    "- Name the program for every fact. When programs differ, list each program that has a rule on it, one bullet\n"
+    "  each. Never blend one program's rule into another's.\n"
+    "- If only some programs mention it, say which ones do and that the rest don't address it in their sheets.\n"
+    "- Never state a max LTV or CLTV percentage, from a matrix or anywhere else. If the question needs one, say to\n"
+    "  switch to Scenario mode and give the deal (FICO, loan amount, occupancy, purpose, property type).\n"
+    "- Cite with the filename and page from the header above the text: (filename, p. X).\n\n"
+    + RULES.replace("- If the answer is not in the provided sections, say you couldn't find it in the shared guidelines",
+                    "- If the answer is not in any program sheet or section below, say you couldn't find it")
+)
+
+
+def broad_messages(question: str, sheets_text: str, extra_text: str, history: list[dict],
+                   model: str | None = None) -> list[dict]:
+    """All-programs guideline question. The instructions and every program sheet come first as one fixed block
+    with its own cache point, so later questions reuse it; the question-specific sections follow."""
+    lead = yes_no_lead(question, sheets_text + "\n\n" + extra_text, model) if model else ""
+    return (
+        [{"role": "system", "content": BROAD_SYSTEM + "\n\nPROGRAM SHEETS:\n\n" + sheets_text, "cache": True},
+         {"role": "system", "content": "SHARED GUIDE SECTIONS AND LONGER GUIDES:\n\n" + (extra_text or "(none found)") + lead}]
+        + history[-6:]
+        + [{"role": "user", "content": question}]
+    )
+
+
 NO_LTV_RULE = (
     "\n\nIMPORTANT: These documents haven't been verified yet. Do NOT state any LTV, CLTV, or max loan-to-value"
     " percentage, even if it appears in the text. If asked, say the program's documents need to be approved on"

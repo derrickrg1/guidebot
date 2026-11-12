@@ -42,9 +42,15 @@ def _down(e: Exception) -> bool:
                           anthropic.InternalServerError))
 
 
-def _split(messages: list[dict]) -> tuple[str, list[dict]]:
-    """Claude takes the system prompt separately and rejects empty turns."""
-    system = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
+def _split(messages: list[dict]) -> tuple[str | list[dict], list[dict]]:
+    """Claude takes the system prompt separately and rejects empty turns. A system message marked "cache": True
+    gets its own cache point, so a big fixed block (every program sheet) is reused across different questions."""
+    sys_msgs = [m for m in messages if m["role"] == "system"]
+    if any(m.get("cache") for m in sys_msgs):
+        system = [{"type": "text", "text": m["content"], **({"cache_control": {"type": "ephemeral"}} if m.get("cache") else {})}
+                  for m in sys_msgs]
+    else:
+        system = "\n\n".join(m["content"] for m in sys_msgs)
     rest = [{"role": m["role"], "content": m["content"]} for m in messages
             if m["role"] in ("user", "assistant") and (m["content"] or "").strip()]
     return system, rest
@@ -94,6 +100,7 @@ def _open_stream(kwargs):
 
 
 def _ollama_stream(messages: list[dict], model: str):
+    messages = [{"role": m["role"], "content": m["content"]} for m in messages]   # drop Claude-only keys ("cache")
     kwargs = dict(model=model, messages=messages, stream=True, options=config.CHAT_OPTIONS)
     first, stream = _open_stream(kwargs)
     yield first["message"]["content"] or ""

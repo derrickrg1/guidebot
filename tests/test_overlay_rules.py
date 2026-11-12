@@ -220,3 +220,33 @@ def test_every_rule_quote_is_in_its_pdf(program):
         pytest.skip("docs/ not present")
     data = o.for_program(program, docs)
     assert data["bad_quotes"] == []
+
+
+def test_broad_question_reads_every_program_sheet(monkeypatch):
+    """No program picked: the answer sees each short program sheet whole (not just the shared guide), with the
+    sheets in one cached block; long guides are searched instead."""
+    progs = {"Ignite DSCR": ["a"], "Express 1099": ["b"], "VA": ["c"], chat.SHARED: []}
+    monkeypatch.setattr(chat.library, "programs", lambda: progs)
+    monkeypatch.setattr(chat.library, "unique_docs", lambda paths: (paths, []))
+    texts = {"a": "First Time Investor | Minimum 660 credit score.", "b": "1099 sheet", "c": "VA guide " * 5000}
+    monkeypatch.setattr(chat.library, "load", lambda p: p)
+    monkeypatch.setattr(chat.library, "render", lambda d: texts[d])
+    searched = []
+
+    class Stub:
+        def search(self, q, programs=None):
+            searched.extend(programs)
+            return []
+    monkeypatch.setattr(chat, "retriever", lambda: Stub())
+    seen = {}
+
+    def fake_stream(messages, model):
+        seen["messages"] = messages
+        yield {"text": "ok"}
+        return "ok"
+    monkeypatch.setattr(chat, "_stream", fake_stream)
+    events = list(chat.respond("What's the minimum credit score for a first time investor?", [], ""))
+    sheets = seen["messages"][0]
+    assert sheets.get("cache") and "Minimum 660" in sheets["content"] and "1099 sheet" in sheets["content"]
+    assert "VA guide" not in sheets["content"] and searched == ["VA"]
+    assert events[-1] == {"text": "ok"}

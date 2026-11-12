@@ -63,7 +63,11 @@ keyed to the source file hash (file changes flip status to "changed").
 `apply\_adjustments`: caps take the lower value, reductions subtract, ineligible wins.
 * `guidebot/answer.py` scenario mode (criteria JSON, Python lookup, overlay JSON with quotes checked word for
 word against the doc) and full-document Q\&A mode (whole program in context, not chunks).
-* `guidebot/retrieval.py` + `ingest/indexer.py` only for "All programs (search)" mode. Page-level chunks.
+* All-programs guideline questions (`chat._broad_answer`): every program sheet up to `BROAD_SHEET_MAX` (20k chars,
+the Express/Ignite sheets) is read whole in one cached system block, the shared guide is routed to its sections,
+and longer guides (FHA, VA, 2nds) are searched. Before 2026-11-12 it read only the shared guide and missed
+program-sheet rules like Ignite DSCR's 660 first time investor minimum. Never states LTVs.
+* `guidebot/retrieval.py` + `ingest/indexer.py`: search for the long guides above. Page-level chunks.
 * `ui/app.py` chat. `ui/pages/1\_Verify\_Documents.py` PDF page image beside editable extracted content.
 
 ## Why it's built this way (his past problems)
@@ -75,7 +79,7 @@ word against the doc) and full-document Q\&A mode (whole program in context, not
 
 ## Current status
 
-* 106 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 107 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked
