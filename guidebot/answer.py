@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from guidebot import overlay_rules
+from guidebot import gov_matrix, overlay_rules
 from guidebot.llm import ask_json
 from guidebot.matrix_lookup import apply_adjustments, dimension_columns, header_problems, lookup, value_columns
 
@@ -310,6 +310,9 @@ def compare_programs(
     results = []
     for pd in program_data:
         prog = pd["program"]
+        if gov_matrix.is_gov(pd["mats"]):   # FHA/VA: Python reads the eligibility rows, no AI mapping
+            results.append({"program": prog, **gov_matrix.result(raw, question, pd["mats"])})
+            continue
         mats = [m for m in pd["mats"] if m["status"] == "verified"]
         if not mats:
             if pd["mats"]:

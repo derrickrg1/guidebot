@@ -32,14 +32,22 @@ SOURCES = {
                      ("", "dscr/dscr-program-matrix.html", "pg-ex")],
     "Ignite Express DSCR": [("", "dscr/dscr-program-matrix.html", "pg-ig")],
 }
+# FHA and VA: one eligibility table per sheet (class "g", the first on the page), checked column by column.
+GOV_SOURCES = {
+    "VA": [("cash", "va/va-cashout-matrix.html"), ("irrrl", "va/va-irrrl-matrix.html"),
+           ("standard", "va/va-standard-matrix.html")],
+    "FHA": [("streamline", "fha/fha-streamline-matrix.html"), ("standard", "fha/fha-standard-matrix.html")],
+}
+GOV_COMPARED = ("Loan Purpose", "Minimum FICO", "Maximum Loan Amount", "Max LTV", "Max DTI", "AUS")
 
 
 class _Tables(HTMLParser):
     """Every <table> as {"cls", "head": [[cell...]], "body": [[cell...]]}, cells as {"text", "rs", "cs"}."""
 
-    def __init__(self):
+    def __init__(self, sup: bool = False):
         super().__init__()
         self.tables, self.stack, self.cell, self.section = [], [], None, "body"
+        self.sup, self.in_sup = sup, False   # sup=True: <sup>1</sup> footnote markers come out as ¹
 
     def handle_starttag(self, tag, attrs):
         a = dict(attrs)
@@ -57,8 +65,12 @@ class _Tables(HTMLParser):
             self.cell = {"text": "", "rs": int(a.get("rowspan") or 1), "cs": int(a.get("colspan") or 1)}
         elif tag == "br" and self.cell is not None:
             self.cell["text"] += " "
+        elif tag == "sup":
+            self.in_sup = self.sup
 
     def handle_endtag(self, tag):
+        if tag == "sup":
+            self.in_sup = False
         if not self.stack:
             return
         if tag in ("td", "th") and self.cell is not None:
@@ -76,7 +88,10 @@ class _Tables(HTMLParser):
 
     def handle_data(self, data):
         if self.cell is not None:
-            self.cell["text"] += data
+            self.cell["text"] += data.translate(_SUP) if self.in_sup else data
+
+
+_SUP = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
 
 
 def _expand(rows: list[list[dict]]) -> list[list[str]]:
@@ -164,6 +179,8 @@ def check(doc: dict, repo: Path | None = None) -> list[dict] | None:
     path = doc.get("path")
     if not path:
         return None
+    if path.parent.name in GOV_SOURCES:
+        return gov_check(doc, repo)
     site = site_tables(path.parent.name, path.name, repo)
     if site is None:
         return None
@@ -178,6 +195,57 @@ def check(doc: dict, repo: Path | None = None) -> list[dict] | None:
                  "diffs": [f"Parsed {len(mats)} matrices, the site page has {len(site)}"]} for _ in mats]
     return [{"status": "mismatch" if (d := compare(m, s["df"])) else "match", "source": s["source"], "diffs": d}
             for m, s in zip(mats, site)]
+
+
+# ---------- FHA / VA ----------
+def gov_table(program: str, filename: str, repo: Path | None = None) -> list[dict[str, str]] | None:
+    """The site's eligibility table for one FHA/VA PDF as rows of {column name: cell}, named like gov_matrix's."""
+    from guidebot.gov_matrix import _name
+    base = (repo or config.SITE_REPO) / "assets" / "matrices"
+    entry = next((e for e in GOV_SOURCES.get(program, []) if e[0] in filename.lower()), None)
+    if not entry or not (base / entry[1]).exists():
+        return None
+    p = _Tables(sup=True)
+    p.feed((base / entry[1]).read_text(encoding="utf-8"))
+    t = next((t for t in p.tables if t["cls"].split() == ["g"]), None)
+    if t is None:
+        return None
+    rows = _expand(t["head"]) + _expand(t["body"])
+    at = next((i for i, r in enumerate(rows) if any(re.search(r"purpose", c, re.I) for c in r)), None)
+    if at is None:
+        return None
+    names = [_name(c) for c in rows[at]]
+    return [dict(zip(names, r)) for r in rows[at + 1:] if len(set(r)) > 1]   # the footnote row spans every column
+
+
+def _gov_cell(s: str) -> str:
+    s = s.translate(str.maketrans("⁰¹²³⁴⁵⁶⁷⁸⁹", "0123456789")).lower()
+    return re.sub(r"[^a-z0-9%.]", "", s).rstrip(".")
+
+
+def gov_compare(mine: pd.DataFrame, site: list[dict[str, str]]) -> list[str]:
+    cols = [c for c in GOV_COMPARED if c in mine.columns]
+    diffs = [f"Site table has no {c} column" for c in cols if site and c not in site[0]]
+    if len(mine) != len(site):
+        diffs.append(f"{len(mine)} rows parsed, site has {len(site)}")
+    for i, (a, b) in enumerate(zip(mine.to_dict("records"), site), start=1):
+        bad = [c for c in cols if c in b and _gov_cell(a[c]) != _gov_cell(b[c])]
+        if bad:
+            diffs.append(f"Row {i}: " + "; ".join(f"{c} parsed {a[c]} vs site {b[c]}" for c in bad))
+    return diffs
+
+
+def gov_check(doc: dict, repo: Path | None = None) -> list[dict] | None:
+    mats = [m for p in doc["pages"] for m in p["matrices"]]
+    site = gov_table(doc["path"].parent.name, doc["path"].name, repo)
+    if site is None:
+        return None
+    src = next(e[1] for e in GOV_SOURCES[doc["path"].parent.name] if e[0] in doc["path"].name.lower())
+    if len(mats) != 1:
+        return [{"status": "mismatch", "source": src, "diffs": [f"Parsed {len(mats)} tables, expected 1"]}
+                for _ in mats]
+    d = gov_compare(mats[0], site)
+    return [{"status": "mismatch" if d else "match", "source": src, "diffs": d}]
 
 
 # ---------- comparing with guidebot's parsed grids ----------

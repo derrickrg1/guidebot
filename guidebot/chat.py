@@ -5,9 +5,9 @@ All LTV guards live in answer.py, so both UIs get the same rules.
 """
 import re
 
-from guidebot import config, library, overlay_rules
+from guidebot import config, gov_matrix, library, overlay_rules
 from guidebot.answer import (broad_messages, compare_programs, comparison_md, filter_to_cited, full_doc_messages,
-                             full_section_messages, looks_like_deal, scenario_answer, search_messages)
+                             full_section_messages, looks_like_deal, said_scenario, scenario_answer, search_messages)
 from guidebot.llm import stream_chat
 from guidebot.section_reader import route_and_load
 
@@ -213,6 +213,13 @@ def respond(question: str, history: list[dict], choice: str = "",
             except Exception as e:
                 skipped = str(e)
                 yield {"status": f"Comparison skipped: {e}"}
+        elif docs and (SECTIONS["FHA"](choice) or SECTIONS["VA"](choice)):
+            # FHA/VA eligibility rows: Python only, start to finish
+            mats = library.matrices(docs)
+            answer = (gov_matrix.answer(said_scenario(question, history), question, mats) if mats else
+                      f"The approved copies of the {choice} matrices have no LTV table in them yet. On the admin page, "
+                      "open each one, hit **Re-read the PDF**, check the table against the page, and approve it.")
+            yield {"replace": answer}
         elif docs:
             yield {"status": "Checking the matrix…"}
             try:

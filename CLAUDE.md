@@ -41,7 +41,7 @@ iPhone). It finds the cited line on the page by word overlap and marks it; if th
 tries one page either side and says "closest match on p. X". Falls back to the browser's PDF viewer on error.
 `ui/md.js` is the shared markdown/citation renderer for both pages.
 * Program colors (`PROGRAMS` in `ui/md.js`) come from the Revo site's `scripts/pages/accents.json` (the lifted
-"hero" tones; FHA Teal lightened; VA in flag red, white and blue stripes). Express and Ignite share a product's color. Dots show on
+"hero" tones; FHA Teal lightened; VA's dot is a tiny US flag, an SVG in `md.js`). Express and Ignite share a product's color. Dots show on
 citation chips, table program cells, "Term:" rows, the picker and the viewer title. The header button toggles a
 wide chat column (remembered per browser).
 * Settings (account row, bottom left; header gear on a phone or with the sidebar hidden): text size (scales chat
@@ -96,7 +96,7 @@ search the shared guide's pages, since the TOC router can miss the section holdi
 
 ## Current status
 
-* 113 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 123 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked
@@ -123,8 +123,14 @@ A mismatch blocks numbers and approval. Every Express/Ignite grid matches except
 parser (Ignite Express DSCR, Express P\&L) need re-verifying with "Re-read the PDF".
 * Unverified programs: full-doc answers are told not to state any LTV (`NO\_LTV\_RULE`).
 * Express Full Doc was the 2023 Premier matrix; replaced with Express Full Doc 3.2.2026 (old one in `archive/`).
-* FHA, VA (from site originals) and Express 2nd (Express 8.15.2026, Premier 3.2.2026) added. They parse as text
-only, no LTV grid yet. Conventional still empty (only "Old" PDFs exist, currency unconfirmed).
+* FHA (Standard, Streamline) and VA (Standard, Cash-Out > 90%, IRRRL) LTV tables: `guidebot/gov_matrix.py`. These
+sheets are rows (purpose, min FICO, max loan amount, max LTV, sometimes DTI/AUS), not grids, so cells are placed by
+position on the page. Lookup is Python only: every row the deal fits, best LTV first, all the sheet's footnotes
+shown (funding fee, 203(h), AZ/UT). "96.5%, 100%³" headlines 96.5 (100% is the footnoted case). IRRRL/Streamline
+rows say NA (no LTV limit). Stops at the matrix: the sheets' credit/property pages aren't applied. All five match
+the site's HTML tables (`site_grids.gov_check`). The approved JSONs were saved before this, with no table, so
+Derrick needs to Re-read and approve each; until then the VA/FHA tabs say so instead of giving a number.
+* Express 2nd (Express 8.15.2026, Premier 3.2.2026) parses as text only, no LTV grid yet. Conventional still empty (only "Old" PDFs exist, currency unconfirmed).
 * NonQM Shared guidelines PDF changed since it was approved: needs a re-check.
 
 ## Open questions to confirm with underwriting (flagged in answers, not guessed)
@@ -140,7 +146,7 @@ separate 5% reduction. Confirm interpretation.
 2. Port the site's calculators (`../site/assets/dscr.js`, `va-irrrl.js`, `fha-streamline.js`, `buydown.js`) to
 Python so DSCR picks the right DSCR tier/matrix and IRRRL/streamline answers are computed, not generated.
 3. Use the site's `pdf\_rows.py` to keep green NDM-overlay and yellow recent-update highlights from FHA/VA sheets.
-4. LTV grids for FHA, VA and 2nds (2nds have doc-type columns), each with a test, or a vision fallback.
+4. LTV grid for 2nds (doc-type columns), with a test, or a vision fallback.
 5. Optional: Express vs Ignite comparison sheets and the Loan Setup SOP as programs; a scenario form.
 
 ## Related, parked

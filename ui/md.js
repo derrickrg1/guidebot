@@ -24,10 +24,16 @@ function progKey(text) {
   if (hits.has("second")) return "second";   // "2nd Mortgage ... DSCR" is a 2nd
   return hits.size === 1 ? [...hits][0] : "";
 }
+// VA's dot is a tiny US flag: 13 stripes and a blue canton with a few stars (most blur out at 7px, that's fine).
+const FLAG = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 19 13'>`
+  + `<path fill='#fff' d='M0 0h19v13H0z'/><path stroke='#c8323f' d='M0 .5h19M0 2.5h19M0 4.5h19M0 6.5h19M0 8.5h19M0 10.5h19M0 12.5h19'/>`
+  + `<path fill='#3c5bb0' d='M0 0h8v7H0z'/><g fill='#fff'>${[[1.6, 1.4], [4, 1.4], [6.4, 1.4], [2.8, 3.5], [5.2, 3.5], [1.6, 5.6], [4, 5.6], [6.4, 5.6]]
+    .map(([x, y]) => `<circle cx='${x}' cy='${y}' r='.5'/>`).join("")}</g></svg>`)}")`;
 const progAttr = text => { const k = progKey(text); return k ? ` data-prog="${k}"` : ""; };
 document.head.insertAdjacentHTML("beforeend", `<style>${PROGRAMS.map(([k, , c]) => `[data-prog="${k}"]{--pc:${c}}`).join("")}
-[data-prog="va"]{--pdot:linear-gradient(90deg,#c8323f 0 34%,#fff 34% 66%,#4f79d8 66%);
-  --pbar:linear-gradient(180deg,#c8323f 0 34%,#fff 34% 66%,#4f79d8 66%)}
+[data-prog="va"]{--pdot:${FLAG} 0 0/100% 100% no-repeat;
+  --pbar:linear-gradient(180deg,#4f79d8 0 30%,#c8323f 30% 40%,#fff 40% 50%,#c8323f 50% 60%,#fff 60% 70%,#c8323f 70% 80%,#fff 80% 90%,#c8323f 90%)}
+.pdot[data-prog="va"],.md a.cite[data-prog="va"]::before,.md td[data-prog="va"]::before{width:10px;border-radius:1px}
 .pdot{display:inline-block;flex:none;width:7px;height:7px;border-radius:2px;background:var(--pdot,var(--pc));margin-right:7px;vertical-align:0.08em}
 .md a.cite[data-prog]::before,.md td[data-prog]::before{content:"";display:inline-block;width:6px;height:6px;border-radius:2px;
   background:var(--pdot,var(--pc));margin-right:5px;vertical-align:0.08em}
