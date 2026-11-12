@@ -401,12 +401,12 @@ def test_bad_headers_block_numbers(monkeypatch):
 
 REAL = {
     "Ignite Express DSCR/Ignite Express DSCR Expanded.pdf": (1, "DSCR .75 to .99 / Purchase", "80%"),
-    "NonQM P&L/NonQM-Profit-Loss-Only-Matrix.pdf": (1, "Investment Property* / Cash Out", "70%"),
-    "NonQM Full Doc/NonQM-Express-Full-Doc-Matrix.pdf": (1, "Primary / Purchase", "*90%"),
-    "NonQM Express DSCR/NonQM-Express-DSCR-Matrix.pdf": (2, "Purchase", "80%"),
+    "Express P&L/NonQM-Profit-Loss-Only-Matrix.pdf": (1, "Investment Property* / Cash Out", "70%"),
+    "Express Full Doc/NonQM-Express-Full-Doc-Matrix.pdf": (1, "Primary / Purchase", "*90%"),
+    "Express DSCR/NonQM-Express-DSCR-Matrix.pdf": (2, "Purchase", "80%"),
     "Ignite 1099/Ignite 1099 Expanded.pdf": (1, "Investment Property / Cash Out", None),
-    "NonQM 1099/NonQM-1099-Matrix.pdf": (1, "Primary / Purchase", None),
-    "NonQM Bank Statements/NonQM-Bank-Statements-Matrix.pdf": (1, "Primary / Purchase", None),
+    "Express 1099/NonQM-1099-Matrix.pdf": (1, "Primary / Purchase", None),
+    "Express Bank Statements/NonQM-Bank-Statements-Matrix.pdf": (1, "Primary / Purchase", None),
 }
 
 

@@ -1,0 +1,114 @@
+{
+  "program": "Ignite Express DSCR",
+  "source": "Ignite Express DSCR Expanded.pdf",
+  "effective": "6.15.2026",
+  "built_by": "Claude, from the PDF text. Investment only. The DSCR tier itself (1.00 and up vs .75 to .99) is picked in the matrix lookup; these rules are the overlays on top.",
+  "rules": [
+    {"id": "occupancy", "label": "Primary or second home", "page": 4, "quote": "Occupancy | Investment Property",
+     "when": {"occupancy": {"not": ["investment"]}},
+     "kind": "ineligible"},
+
+    {"id": "rural", "label": "Rural", "page": 2, "quote": "Maximum LTV: Purchase/Rate and Term 80%; Cash Out 75%. Minimum DSCR 1.00.",
+     "when": {"rural": true},
+     "kind": "cap", "value": {"purchase": 80, "rate_term": 80, "cash_out": 75}},
+
+    {"id": "rural_low_dscr", "label": "Rural with DSCR under 1.00", "page": 2, "quote": "Maximum LTV: Purchase/Rate and Term 80%; Cash Out 75%. Minimum DSCR 1.00.",
+     "when": {"rural": true, "dscr": {"lt": 1.0}},
+     "kind": "ineligible"},
+
+    {"id": "two_to_four_units", "label": "2 - 4 Units", "page": 2,
+     "quote": "2- 4 Units, Warrantable and Non-Warrantable Condos- Purchase/Rate & Term Maximum LTV 80%; Cash Out Maximum LTV 75%.",
+     "when": {"property": "2-4 unit"},
+     "kind": "cap", "value": {"purchase": 80, "rate_term": 80, "cash_out": 75}},
+
+    {"id": "warrantable_condo", "label": "Warrantable Condo", "page": 2,
+     "quote": "2- 4 Units, Warrantable and Non-Warrantable Condos- Purchase/Rate & Term Maximum LTV 80%; Cash Out Maximum LTV 75%.",
+     "when": {"property": "warrantable_condo"},
+     "kind": "cap", "value": {"purchase": 80, "rate_term": 80, "cash_out": 75}},
+
+    {"id": "non_warrantable_condo", "label": "Non-Warrantable Condo", "page": 2,
+     "quote": "2- 4 Units, Warrantable and Non-Warrantable Condos- Purchase/Rate & Term Maximum LTV 80%; Cash Out Maximum LTV 75%.",
+     "when": {"property": "non_warrantable_condo"},
+     "kind": "cap", "value": {"purchase": 80, "rate_term": 80, "cash_out": 75}},
+
+    {"id": "condotel", "label": "Condotel", "page": 2, "quote": "Condotels- Purchase/Rate & Term Maximum 75%; Cash Out Maximum 70%",
+     "when": {"property": "condotel"},
+     "kind": "cap", "value": {"purchase": 75, "rate_term": 75, "cash_out": 70}},
+
+    {"id": "low_dscr_cash_out", "label": "Cash out with DSCR .75 to .99", "page": 2,
+     "quote": "Unlimited Cash Out no LTV restrictions with DSCR 1.00 and above. Maximum LTV DSCR .75 to .99 = 70%",
+     "when": {"purpose": "cash_out", "dscr": {"lt": 1.0}},
+     "kind": "cap", "value": 70},
+
+    {"id": "vacant_refi", "label": "Vacant property on a refinance", "page": 2,
+     "quote": "Vacant Property on Refinances: Reduce LTV by 5% from maximum qualifying.",
+     "when": {"vacant": true, "purpose": ["rate_term", "cash_out"]},
+     "kind": "reduction", "value": 5},
+
+    {"id": "interest_only", "label": "Interest Only", "page": 2, "quote": "Interest Only: Calculate DSCR using ITIA payment. Max LTV 80%",
+     "when": {"interest_only": true},
+     "kind": "cap", "value": 80},
+
+    {"id": "reduced_reserves", "label": "Reduced reserves", "page": 2,
+     "quote": "Reserve Requirement reduced by 3 months with 5% reduction from max qualifying LTV",
+     "when": {"reduced_reserves": true},
+     "kind": "reduction", "value": 5},
+
+    {"id": "non_permanent_resident", "label": "Non-permanent resident alien", "page": 2,
+     "quote": "Non-Permanent Resident Alien (with US Credit) with a maximum LTV of 75%.",
+     "when": {"non_permanent_resident": true},
+     "kind": "cap", "value": 75},
+
+    {"id": "declining_market", "label": "Declining Markets", "page": 2,
+     "quote": "If the appraisal reflects that the subject property is located in a declining market, reduce the LTV by 5%.",
+     "when": {"declining_market": true},
+     "kind": "reduction", "value": 5},
+
+    {"id": "first_time_investor_fico", "label": "First time investor under 660 FICO", "page": 2, "quote": "First Time Investor | Minimum 660 credit score.",
+     "when": {"first_time_investor": true, "fico": {"lt": 660}},
+     "kind": "ineligible"},
+
+    {"id": "first_time_investor_loan", "label": "First time investor over $1.5MM", "page": 2, "quote": "No Gift Funds allowed. Maximum loan amount is $1,500,000.",
+     "when": {"first_time_investor": true, "loan_amount": {"gt": 1500000}},
+     "kind": "ineligible"},
+
+    {"id": "fthb", "label": "First time home buyer", "page": 3, "quote": "No First Time Homebuyers allowed.",
+     "when": {"fthb": true},
+     "kind": "ineligible"},
+
+    {"id": "geo", "label": "Baltimore / Philadelphia", "page": 2, "quote": "Geographic Overlays | Baltimore, MD and Philadelphia, PA are ineligible.",
+     "when": {"city": ["baltimore", "philadelphia"]},
+     "kind": "ineligible"},
+
+    {"id": "derog_24", "label": "Credit event 24 to 35 months ago", "page": 3,
+     "quote": "36 months OR 24 months with a 5% reduction from maximum qualifying LTV.",
+     "when": {"credit_event_months": {"gte": 24, "lt": 36}},
+     "kind": "reduction", "value": 5},
+
+    {"id": "derog_under_24", "label": "Credit event under 24 months ago", "page": 3,
+     "quote": "36 months OR 24 months with a 5% reduction from maximum qualifying LTV.",
+     "when": {"credit_event_months": {"lt": 24}},
+     "kind": "ineligible"},
+
+    {"id": "mortgage_lates", "label": "More than one 30-day mortgage late (no 60s)", "page": 3,
+     "quote": "Unlimited 30 days 0X60X12 allowed with a 5% reduction from maximum qualifying LTV.",
+     "when": {"mortgage_30_lates": {"gt": 1}},
+     "kind": "reduction", "value": 5},
+
+    {"id": "mortgage_60", "label": "60-day mortgage late in 12 months", "page": 3,
+     "quote": "1x30x12; OR Unlimited 30 days 0X60X12 allowed",
+     "when": {"mortgage_60_lates": {"gt": 0}},
+     "kind": "ineligible",
+     "confirm": "Read as: any 60-day late in 12 months doesn't meet 1x30x12 or 0x60x12. Confirm with underwriting."},
+
+    {"id": "cash_out_seasoning", "label": "Cash out, owned under 6 months", "page": 4,
+     "quote": "Less than 6 months ownership 5% reduction from maximum qualifying LTV",
+     "when": {"purpose": "cash_out", "owned_months": {"lt": 6}},
+     "kind": "reduction", "value": 5},
+
+    {"id": "short_term_rental", "label": "Short-term rental", "page": 4,
+     "quote": "If the subject is a Short-Term Rental the LTV must be reduced by 5% from maximum qualifying.",
+     "when": {"short_term_rental": true},
+     "kind": "reduction", "value": 5}
+  ]
+}

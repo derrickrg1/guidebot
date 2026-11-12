@@ -11,8 +11,8 @@ from guidebot.answer import (compare_programs, comparison_md, filter_to_cited, f
 from guidebot.llm import stream_chat
 from guidebot.section_reader import route_and_load
 
-NONQM = {"NonQM 1099", "NonQM Bank Statements", "NonQM Express DSCR",
-         "NonQM Full Doc", "NonQM P&L", "NonQM 2nd"}
+NONQM = {"Express 1099", "Express Bank Statements", "Express DSCR",
+         "Express Full Doc", "Express P&L", "Express 2nd"}
 SHARED = "NonQM Shared"
 
 _retriever = None

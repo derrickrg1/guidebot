@@ -112,6 +112,10 @@
     {"id": "texas_a4", "label": "Texas 50(a)(4) refinance", "page": 5,
      "quote": "Texas Non-Home Equity 50(a)(4) | 80% LTV/CLTV Max.",
      "when": {"texas_a4": true},
-     "kind": "cap", "value": 80}
+     "kind": "cap", "value": 80},
+
+    {"id": "dti_over_50", "label": "DTI over 50%", "page": 2, "quote": "50% - Expanded DTI not available",
+     "when": {"dti": {"gt": 50}},
+     "kind": "ineligible"}
   ]
 }

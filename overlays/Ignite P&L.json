@@ -1,0 +1,37 @@
+{
+  "program": "Ignite P&L",
+  "source": "Ignite Profit & Loss Only Expanded.pdf",
+  "effective": "6.15.2026",
+  "built_by": "Claude, from the PDF text, starting from the Ignite 1099 rules. Every quote was matched word for word to this PDF, and rules whose wording isn't in it were left out.",
+  "rules": [
+    {"id": "geo_investment", "label": "Baltimore / Philadelphia investment", "page": 2, "quote": "Investment Properties in Baltimore, MD and Philadelphia, PA are ineligible.", "when": {"occupancy": "investment", "city": ["baltimore", "philadelphia"]}, "kind": "ineligible"},
+
+    {"id": "fthb_investment", "label": "First time home buyer on an investment", "page": 2, "quote": "Borrower with Rental History: 0x30x12, Primary or Second Home Only", "when": {"fthb": true, "occupancy": "investment"}, "kind": "ineligible"},
+
+    {"id": "fthb_rent_free", "label": "First time home buyer, no rental history / rent free", "page": 2, "quote": "Borrower without Rental History/Living Rent Free: Must meet trade line requirement, max 80% LTV/CLTV, min 680 FICO", "when": {"rent_free": true}, "kind": "cap", "value": 80},
+
+    {"id": "fthb_rent_free_fico", "label": "Rent free borrower under 680 FICO", "page": 2, "quote": "Borrower without Rental History/Living Rent Free: Must meet trade line requirement, max 80% LTV/CLTV, min 680 FICO", "when": {"rent_free": true, "fico": {"lt": 680}}, "kind": "ineligible"},
+
+    {"id": "fthb_rent_free_loan", "label": "Rent free borrower over $1.5MM", "page": 2, "quote": "No Gift, No Non-Occupant Co-Borrower. Maximum Loan Amount $1.5MM.", "when": {"rent_free": true, "loan_amount": {"gt": 1500000}}, "kind": "ineligible"},
+
+    {"id": "derog_24", "label": "Credit event 24 to 35 months ago", "page": 2, "quote": "36 months OR 24 months with a 5% reduction from maximum qualifying LTV.", "when": {"credit_event_months": {"gte": 24, "lt": 36}}, "kind": "reduction", "value": 5},
+
+    {"id": "derog_under_24", "label": "Credit event under 24 months ago", "page": 2, "quote": "36 months OR 24 months with a 5% reduction from maximum qualifying LTV.", "when": {"credit_event_months": {"lt": 24}}, "kind": "ineligible"},
+
+    {"id": "mortgage_lates", "label": "More than one 30-day mortgage late (no 60s)", "page": 2, "quote": "Unlimited 30 days 0X60X12 allowed with a 5% reduction from maximum qualifying LTV.", "when": {"mortgage_30_lates": {"gt": 1}}, "kind": "reduction", "value": 5},
+
+    {"id": "mortgage_60", "label": "60-day mortgage late in 12 months", "page": 2, "quote": "1x30x12; OR Unlimited 30 days 0X60X12 allowed", "when": {"mortgage_60_lates": {"gt": 0}}, "kind": "ineligible", "confirm": "Read as: any 60-day late in 12 months doesn't meet 1x30x12 or 0x60x12. Confirm with underwriting."},
+
+    {"id": "non_occupant", "label": "Non-occupant co-borrower", "page": 2, "quote": "Purchase or Rate and Term on Primary Only. Reduce LTV/CLTV from maximum qualifying by 5%.", "when": {"non_occupant_coborrower": true}, "kind": "reduction", "value": 5},
+
+    {"id": "non_occupant_not_allowed", "label": "Non-occupant co-borrower on cash out or non-primary", "page": 2, "quote": "Purchase or Rate and Term on Primary Only.", "when": {"non_occupant_coborrower": true, "any": {"occupancy": {"not": ["primary"]}, "purpose": "cash_out"}}, "kind": "ineligible"},
+
+    {"id": "cash_out_seasoning", "label": "Cash out, owned under 6 months", "page": 3, "quote": "If purchased less than 6 months prior to application date a 5% reduction from maximum qualifying LTV is required", "when": {"purpose": "cash_out", "owned_months": {"lt": 6}}, "kind": "reduction", "value": 5},
+
+    {"id": "texas_a6", "label": "Texas 50(a)(6) cash out", "page": 4, "quote": "Texas Home Equity 50(a)(6) Cash Out | 80% LTV/CLTV Max.", "when": {"texas_a6": true}, "kind": "cap", "value": 80},
+
+    {"id": "texas_a6_not_allowed", "label": "Texas 50(a)(6) on non-primary or 2+ units", "page": 4, "quote": "One Unit Principal residences and claimed as Borrower's homestead.", "when": {"texas_a6": true, "any": {"occupancy": {"not": ["primary"]}, "property": "2-4 unit"}}, "kind": "ineligible"},
+
+    {"id": "texas_a4", "label": "Texas 50(a)(4) refinance", "page": 4, "quote": "Texas Non-Home Equity 50(a)(4) | 80% LTV/CLTV Max.", "when": {"texas_a4": true}, "kind": "cap", "value": 80}
+  ]
+}

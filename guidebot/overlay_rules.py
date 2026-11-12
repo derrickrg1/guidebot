@@ -33,6 +33,10 @@ _FLAGS = {
     "non_occupant_coborrower": r"non[\s-]*occupant",
     "texas_a6": r"50\s*\(?a\)?\s*\(?6\)?|\ba6\b|texas (?:home equity|cash[\s-]*out)",
     "texas_a4": r"50\s*\(?a\)?\s*\(?4\)?|\ba4\b",
+    "short_term_rental": r"short[\s-]*term[\s-]*rental|\bstr\b|airbnb|vrbo",
+    "vacant": r"vacant",
+    "first_time_investor": r"first[\s-]*time[\s-]*investor",
+    "non_permanent_resident": r"non[\s-]*permanent[\s-]*resident|\bnpra\b",
 }
 # Order matters: the specific condo kinds before plain "condo".
 _PROPERTY = [
@@ -87,6 +91,15 @@ def extract_facts(text: str, occupancy: str | None = None, purpose: str | None =
         facts["mortgage_30_lates"] = int(m.group(1))
     if m := re.search(r"(\d+)\s*x\s*60", t):
         facts["mortgage_60_lates"] = int(m.group(1))
+    # "52% DTI", "DTI of 52", "dti 52.5%"
+    # Out-of-range numbers are some other figure ("DSCR, 720 FICO"), so they're dropped, never guessed.
+    if m := re.search(r"(\d+(?:\.\d+)?)\s*%?\s*dti\b|\bdti\D{0,8}?(\d+(?:\.\d+)?)", t):
+        if 0 < (v := float(m.group(1) or m.group(2))) <= 100:
+            facts["dti"] = v
+    # "DSCR 1.15", "dscr of .85", "0.9 DSCR"
+    if m := re.search(r"(\d*\.\d+|\d+(?:\.\d+)?)\s*dscr\b|\bdscr\D{0,8}?(\d*\.\d+|\d+(?:\.\d+)?)", t):
+        if 0 < (v := float(m.group(1) or m.group(2))) < 5:
+            facts["dscr"] = v
     return facts
 
 

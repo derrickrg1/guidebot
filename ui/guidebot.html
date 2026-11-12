@@ -55,8 +55,11 @@ aside {
   background: var(--card); transition: border-color 0.15s, background 0.15s;
 }
 .modes input { position: absolute; opacity: 0; pointer-events: none; }
-.modes b { display: block; font-weight: 600; font-size: 0.9rem; }
-.modes small { display: block; color: var(--mist); font-size: 0.74rem; }
+.modes b { display: block; font-weight: 600; font-size: 0.8rem; }
+/* The one-line description only opens on hover (or keyboard focus). */
+.modes small { display: block; color: var(--mist); font-size: 0.7rem; max-height: 0; opacity: 0; overflow: hidden;
+  transition: max-height 0.2s, opacity 0.2s; }
+.modes label:hover small, .modes label:has(input:focus-visible) small { max-height: 2em; opacity: 1; }
 .modes label:hover { border-color: rgba(217, 102, 31, 0.4); }
 .modes label:has(input:checked) { border-color: var(--navy); background: rgba(217, 102, 31, 0.1); }
 .modes label:has(input:checked) b { color: var(--navy); }
@@ -284,6 +287,13 @@ function renderSidebar() {
     + p.duplicates.map(([a]) => `<span>↳ skipping ${esc(a)} (duplicate)</span>`).join("") : "";
   $("docnote").hidden = !(p && p.docs.some(d => d.status !== "verified"));
 }
+// Program list grouped the way the products are sold. A new folder that fits none of them shows under "Other".
+const GROUPS = [
+  ["Conventional", n => /^conventional/i.test(n)],
+  ["Government", n => /^(fha|va|usda)\b/i.test(n)],
+  ["NonQM", n => /^(express|ignite)\b/i.test(n)],
+  ["Other", n => !/^(conventional|fha|va|usda|express|ignite)\b/i.test(n)],
+];
 async function loadPrograms() {
   try {
     const r = await fetch(API + "/api/programs");
@@ -291,7 +301,11 @@ async function loadPrograms() {
     programs = data.programs;
     $("model").textContent = "Model: " + data.model;
     const sel = $("program"), keep = sel.value || store.get("program");
-    sel.innerHTML = "<option value=''>All programs</option>" + programs.map(p => `<option>${esc(p.name)}</option>`).join("");
+    sel.innerHTML = "<option value=''>All programs</option>" + GROUPS.map(([label, test]) => {
+      const opts = programs.filter(p => test(p.name)).map(p => `<option>${esc(p.name)}</option>`).join("");
+      if (!opts && label === "Other") return "";
+      return `<optgroup label="${label}">${opts || "<option disabled>Coming soon</option>"}</optgroup>`;
+    }).join("");
     sel.value = programs.some(p => p.name === keep) ? keep : "";
     $("offline").style.display = "none";
   } catch (e) {

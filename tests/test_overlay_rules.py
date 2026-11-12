@@ -175,3 +175,48 @@ def test_deal_question_never_reaches_the_free_text_reader(monkeypatch):
     monkeypatch.setattr(chat, "comparison_md", lambda rows: "compared")
     events = list(chat.respond("Max LTV for an investment cash out, sfr, $1.2m loan, 705 FICO?", [], ""))
     assert events[-1]["replace"] == "compared"
+
+
+@pytest.mark.parametrize("text, facts", [
+    ("Purchase, primary, SFR, $650k, 720 FICO, 53% DTI", {"dti": 53.0}),
+    ("DTI of 54.5, purchase", {"dti": 54.5}),
+    ("cash out, DSCR 1.15", {"dscr": 1.15}),
+    ("purchase, 0.9 DSCR", {"dscr": 0.9}),
+    ("dscr of .85", {"dscr": 0.85}),
+    ("airbnb, vacant", {"short_term_rental": True, "vacant": True}),
+    ("first time investor", {"first_time_investor": True}),
+    ("non-permanent resident alien", {"non_permanent_resident": True}),
+])
+def test_dti_dscr_and_investor_facts(text, facts):
+    got = o.extract_facts(text)
+    assert {k: got.get(k) for k in facts} == facts
+
+
+def test_numbers_that_cant_be_dti_or_dscr_are_dropped():
+    """"DSCR, 720 FICO" must not read as a DSCR of 720."""
+    assert "dscr" not in o.extract_facts("dscr, 720 fico")
+    assert "dti" not in o.extract_facts("dti, 720 fico")
+
+
+def _expanded_dti(text):
+    rules = json.loads((config.ROOT / "overlays" / "Ignite Bank Statements.json").read_text(encoding="utf-8"))["rules"]
+    raw = fill_scenario(RawScenario(), text)
+    facts = o.extract_facts(text, raw.occupancy, raw.purpose, raw.fico, raw.loan_amount)
+    return {a["id"]: a["value"] for a in o.apply_rules(rules, facts, "x.pdf")["applied"]}
+
+
+def test_expanded_dti_caps_at_80_and_has_limits():
+    assert _expanded_dti("Purchase, primary, SFR, $650k, 720 FICO, 53% DTI") == {"dti_expanded": 80}
+    assert "dti_expanded_not_allowed" in _expanded_dti("Cash out, primary, SFR, $650k, 720 FICO, 53% DTI")
+    assert "dti_expanded_not_allowed" in _expanded_dti("Purchase, primary, SFR, $650k, 690 FICO, 53% DTI")
+    assert "dti_over_55" in _expanded_dti("Purchase, primary, SFR, $650k, 720 FICO, 58% DTI")
+
+
+@pytest.mark.parametrize("program", sorted(p.stem for p in (config.ROOT / "overlays").glob("*.json")))
+def test_every_rule_quote_is_in_its_pdf(program):
+    """A rules file whose quotes don't match its PDF word for word is blocked, so catch it here first."""
+    docs, _ = chat.program_docs(program, library.programs())
+    if not docs:
+        pytest.skip("docs/ not present")
+    data = o.for_program(program, docs)
+    assert data["bad_quotes"] == []

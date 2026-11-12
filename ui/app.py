@@ -15,8 +15,8 @@ from guidebot.retrieval import Retriever
 
 ICON = {"verified": "✅", "unverified": "⚠️", "changed": "🔄"}
 
-_NONQM = {"NonQM 1099", "NonQM Bank Statements", "NonQM Express DSCR",
-           "NonQM Full Doc", "NonQM P&L", "NonQM 2nd"}
+_NONQM = {"Express 1099", "Express Bank Statements", "Express DSCR",
+           "Express Full Doc", "Express P&L", "Express 2nd"}
 _SHARED = "NonQM Shared"
 
 st.set_page_config(page_title="AskNick", layout="wide")

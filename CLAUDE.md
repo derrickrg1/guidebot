@@ -40,7 +40,8 @@ Model race: `python -m tools.compare_models <model> ...`.
 ## Layout
 
 * `docs/<Program>/` source PDFs. Folder name = program. Folders mirror how NDM lists products:
-FHA, Conventional, VA, NonQM 2nd / Express DSCR / Bank Statements / 1099 / Full Doc / P\&L,
+Conventional; FHA, VA (Government); Express 1099 / 2nd / Bank Statements / DSCR / Full Doc / P\&L (renamed from
+"NonQM ..." 2026-11-12, approvals moved with them; `NonQM Shared` keeps its name),
 Ignite 1099 / Bank Statements / Express DSCR / Full Doc / P\&L.
 * `guidebot/extract\_pdf.py` PDF to clean pages. `parse\_matrix` rebuilds NDM matrices: compacts pdfplumber's
 None/empty cells, fills merged loan amount cells down, combines header rows ("Investment Property / Cash Out").
@@ -63,9 +64,12 @@ word against the doc) and full-document Q\&A mode (whole program in context, not
 
 ## Current status
 
-* 82 tests passing. Every NonQM/Ignite matrix parses with clean headers; one test per layout shape.
-* Overlay rules live in `overlays/<Program>.json` (only Ignite 1099 so far) and must be approved on the Verify
-page before Python applies them. Ignite 1099's are not approved yet, so its deal answers stop at the matrix cell.
+* 97 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
+test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
+at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked
+answers per Ignite program; DSCR is Q\&A only until its matrix is re-read.
+* The page groups programs as Conventional / Government / NonQM (`GROUPS` in `ui/guidebot.html`).
 * Revo's own v9 matrices (`../Matrices/Revo Matrices/v9`) extract cleanly; the Ignite 1099 grid matches
 guidebot's 234/234. Possible later use as a reading copy (split Express/Ignite halves first); NDM PDFs stay
 the source for numbers.
@@ -74,10 +78,10 @@ the source for numbers.
 (`../site/tools/matrices/build_*.py`, checked there by `verify.py`), matched by PDF hash. 7 grids match cell
 for cell. A mismatch blocks numbers and approval. 1099, P\&L and Units+ have no site grid yet.
 * `header_problems` blocks numbers from matrices with shifted/numbered headers. Approved JSONs saved by the old
-parser (Ignite Express DSCR, NonQM P\&L) need re-verifying with "Re-read the PDF".
+parser (Ignite Express DSCR, Express P\&L) need re-verifying with "Re-read the PDF".
 * Unverified programs: full-doc answers are told not to state any LTV (`NO\_LTV\_RULE`).
-* NonQM Full Doc was the 2023 Premier matrix; replaced with Express Full Doc 3.2.2026 (old one in `archive/`).
-* FHA, VA (from site originals) and NonQM 2nd (Express 8.15.2026, Premier 3.2.2026) added. They parse as text
+* Express Full Doc was the 2023 Premier matrix; replaced with Express Full Doc 3.2.2026 (old one in `archive/`).
+* FHA, VA (from site originals) and Express 2nd (Express 8.15.2026, Premier 3.2.2026) added. They parse as text
 only, no LTV grid yet. Conventional still empty (only "Old" PDFs exist, currency unconfirmed).
 * NonQM Shared guidelines PDF changed since it was approved: needs a re-check.
 
