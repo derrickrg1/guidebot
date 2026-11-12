@@ -19,6 +19,10 @@ RULES = """Rules:
   lay out each case briefly.
 - Cite every fact using the filename and page from the section header above it, formatted as (filename, p. X). The header looks like [§5.3 Title | NonQM-Underwriting-Guidelines.pdf | p. 35-39] — copy the filename exactly from there.
 - Copy numbers exactly as written.
+- An earlier answer in this chat may cite a page that isn't in your material now: it was loaded for that earlier
+  question. Don't call it wrong or tell the user to disregard it for that reason alone.
+- Shorthand is spelled out after the question ("Terms: NOD = Notice of Default, a pre-foreclosure credit event").
+  Match the rule under any of its names: a sheet's "Pre-foreclosure" row covers an NOD.
 - Never infer from a negative statement. "No additional X required for Y" means only that exact case — do not extend it to mean X is not required generally or for similar cases.
 - If the document says "per program guidelines," "refer to the program matrix," or gives no specific value, say so and note the requirement varies by program.
 - If the answer is not in the provided sections, say you couldn't find it in the shared guidelines — do not infer or fill the gap.

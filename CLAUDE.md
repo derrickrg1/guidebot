@@ -85,6 +85,10 @@ rule differs from the general guideline, answers flag "Overlay (supersedes gener
 rule it replaces, cited. Broad questions also
 search the shared guide's pages, since the TOC router can miss the section holding the default rule.
 * `guidebot/retrieval.py` + `ingest/indexer.py`: search for the long guides above. Page-level chunks.
+* Shorthand (`TERMS` in `section_reader.py`: NOD, DIL, BK, FTHB...) is spelled out after the question for routing,
+search and the answer prompt; deal lookups still get the original words. "NOD" used to route to condo HOA pages and
+miss §7.5 (2026-11-12). A follow-up also reloads the shared guide sections earlier answers cited (`cited_pages`),
+so the bot no longer calls its own earlier citation wrong.
 * `ui/app.py` chat. `ui/pages/1\_Verify\_Documents.py` PDF page image beside editable extracted content.
 
 ## Why it's built this way (his past problems)
@@ -96,7 +100,7 @@ search the shared guide's pages, since the TOC router can miss the section holdi
 
 ## Current status
 
-* 123 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 127 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked

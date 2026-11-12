@@ -9,7 +9,7 @@ from guidebot import config, gov_matrix, library, overlay_rules
 from guidebot.answer import (broad_messages, compare_programs, comparison_md, filter_to_cited, full_doc_messages,
                              full_section_messages, looks_like_deal, said_scenario, scenario_answer, search_messages)
 from guidebot.llm import stream_chat
-from guidebot.section_reader import route_and_load
+from guidebot.section_reader import cited_pages, expand_terms, route_and_load
 
 NONQM = {"Express 1099", "Express Bank Statements", "Express DSCR",
          "Express Full Doc", "Express P&L", "Express 2nd"}
@@ -133,6 +133,11 @@ def _program_answer(question, history, prog, docs, model):
     return answer, filter_to_cited(answer, found, model)
 
 
+def _route(question, history, gpath, model):
+    """Shared guide sections for this question, plus the ones earlier answers in this chat cited."""
+    return route_and_load(question, gpath, gpath.name, model, keep_pages=cited_pages(history, gpath.name))
+
+
 def _broad_answer(question, history, all_programs, model):
     """A guideline question with no program picked. It used to read only the shared NonQM guide, so anything that
     lives on a program sheet (Ignite DSCR's 660 minimum for first time investors) came back "couldn't find it".
@@ -152,7 +157,7 @@ def _broad_answer(question, history, all_programs, model):
     extra, hits = [], []
     for gpath in all_programs.get(SHARED, []):
         if gpath.suffix.lower() == ".pdf":
-            routed = route_and_load(question, gpath, gpath.name, model)
+            routed = _route(question, history, gpath, model)
             if routed:
                 extra.append(f"##### SHARED NONQM GUIDE ({gpath.name}) #####\n\n{routed['text']}")
                 hits += routed["sections"]
@@ -181,6 +186,8 @@ def respond(question: str, history: list[dict], choice: str = "",
             mode_program: bool = False, mode_scenario: bool = False, section: str = ""):
     model = config.CHAT_MODEL
     all_programs = library.programs()
+    asked = question
+    question = expand_terms(question)   # "NOD" -> also "Notice of Default", for routing, search and the answer
     if section in SECTIONS:
         all_programs = {k: v for k, v in all_programs.items() if SECTIONS[section](k)}
     user_programs = [p for p in all_programs if p != SHARED]
@@ -201,14 +208,14 @@ def respond(question: str, history: list[dict], choice: str = "",
     # A number for a specific deal only ever comes from the matrix lookup. With Scenario off, the guideline
     # reader used to write its own "Max LTV" (wrong FICO row, 80 - 5 = 76). With no program picked, the
     # deal runs against every program, same as Deal check mode; a family runs against its members.
-    deal = looks_like_deal(question, history)
+    deal = looks_like_deal(asked, history)
     skipped = ""
 
     if mode_scenario or deal:
         if not choice or members:
             yield {"status": f"Checking {' and '.join(members)}…" if members else "Checking all programs…"}
             try:
-                answer = _compare(question, history, members or user_programs, all_programs, model)
+                answer = _compare(asked, history, members or user_programs, all_programs, model)
                 yield {"replace": answer}
             except Exception as e:
                 skipped = str(e)
@@ -216,14 +223,14 @@ def respond(question: str, history: list[dict], choice: str = "",
         elif docs and (SECTIONS["FHA"](choice) or SECTIONS["VA"](choice)):
             # FHA/VA eligibility rows: Python only, start to finish
             mats = library.matrices(docs)
-            answer = (gov_matrix.answer(said_scenario(question, history), question, mats) if mats else
+            answer = (gov_matrix.answer(said_scenario(asked, history), asked, mats) if mats else
                       f"The approved copies of the {choice} matrices have no LTV table in them yet. On the admin page, "
                       "open each one, hit **Re-read the PDF**, check the table against the page, and approve it.")
             yield {"replace": answer}
         elif docs:
             yield {"status": "Checking the matrix…"}
             try:
-                scen = scenario_answer(question, history, library.matrices(docs),
+                scen = scenario_answer(asked, history, library.matrices(docs),
                                        "\n\n".join(library.render(d) for d in docs), model,
                                        overlay_rules.for_program(choice, docs))
                 if scen:
@@ -262,7 +269,7 @@ def respond(question: str, history: list[dict], choice: str = "",
         yield {"status": "Finding the right guideline sections…"}
         for gpath in all_programs.get(SHARED, []):
             if gpath.suffix.lower() == ".pdf":
-                routed = route_and_load(question, gpath, gpath.name, model)
+                routed = _route(question, history, gpath, model)
                 if routed:
                     break
         if routed:

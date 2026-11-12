@@ -11,6 +11,7 @@ Why this beats RAG for guidelines:
 - No retrieval noise from unrelated sections
 - Sibling sections (§5.3.1, §5.3.2, §5.3.3) stay together — the full context a human would read
 """
+import re
 from pathlib import Path
 
 import pdfplumber
@@ -27,6 +28,54 @@ Rules:
 - Return 1-3 sections. Fewer is better if one section covers the question.
 - If the question touches multiple topics (NSFs AND reserves), include a section for each.
 - Return an empty list only if the question clearly has nothing to do with guidelines."""
+
+
+# Shorthand people type that the guides spell out. "NOD" never matched "Notice of Default" (a significant derogatory
+# credit event, §7.5), so an NOD question got routed to condo HOA pages instead. Only terms with one meaning here.
+TERMS = {
+    "NOD": "Notice of Default, a pre-foreclosure credit event",
+    "DIL": "Deed-in-Lieu",
+    "BK": "bankruptcy",
+    "FC": "foreclosure",
+    "SS": None,   # short sale or social security: too ambiguous to expand
+    "NSF": "non-sufficient funds",
+    "NSFs": "non-sufficient funds",
+    "DTI": "debt-to-income ratio",
+    "DSCR": "debt service coverage ratio",
+    "VOE": "verification of employment",
+    "WVOE": "written verification of employment",
+    "VOR": "verification of rent",
+    "VOM": "verification of mortgage",
+    "LOE": "letter of explanation",
+    "FTHB": "first time homebuyer",
+    "FTI": "first time investor",
+    "STR": "short-term rental",
+    "ADU": "accessory dwelling unit",
+    "HOA": "homeowners association",
+    "NOO": "non-owner occupied, investment property",
+    "PITIA": "principal, interest, taxes, insurance and association dues",
+    "ITIN": "Individual Taxpayer Identification Number",
+}
+
+
+def expand_terms(question: str) -> str:
+    """The question with its shorthand spelled out after it, for routing, search and the answer prompt."""
+    found = [f"{k} = {v}" for k, v in TERMS.items() if v and re.search(rf"\b{k}\b", question)]
+    return f"{question}\n(Terms: {'; '.join(found)})" if found else question
+
+
+def cited_pages(history: list[dict], filename: str) -> list[int]:
+    """Pages of `filename` cited in earlier answers ("(NonQM-Underwriting-Guidelines.pdf, section 7.5, p. 54)").
+    A follow-up keeps those sections loaded, so the bot can't call its own earlier citation wrong."""
+    pages = []
+    for m in history:
+        if m["role"] != "assistant":
+            continue
+        for part in re.findall(r"\(([^()]*)\)", m["content"]):
+            for cite in part.split(";"):
+                if filename in cite:
+                    pages += [int(n) for n in re.findall(r"\bp{1,2}\.\s*(\d+)", cite)]
+    return list(dict.fromkeys(pages))
 
 
 class SectionRoute(BaseModel):
@@ -63,9 +112,22 @@ def _section_span(section_num: str, toc: list[dict], n_pages: int, offset: int) 
     return start_idx, end_idx
 
 
-def route_and_load(question: str, pdf_path: Path, doc_name: str, model: str) -> dict | None:
+def _section_of_page(page: int, toc: list[dict], n_pages: int, offset: int) -> str | None:
+    """The mid-level section (e.g. "7.5") whose pages hold this 1-based physical page."""
+    best = None
+    for e in toc:
+        if len(e["num"].split(".")) <= 2:
+            start, end = _section_span(e["num"], toc, n_pages, offset)
+            if start <= page - 1 <= end:
+                best = e["num"]   # later (deeper or next) entries win over a chapter heading that spans it
+    return best
+
+
+def route_and_load(question: str, pdf_path: Path, doc_name: str, model: str,
+                   keep_pages: list[int] = ()) -> dict | None:
     """
     Route question to relevant TOC sections, load their complete text.
+    keep_pages: pages cited earlier in the chat; their sections load too (up to 3 more).
     Returns None if the PDF has no TOC or no relevant sections found.
     """
     with pdfplumber.open(pdf_path) as pdf:
@@ -85,11 +147,16 @@ def route_and_load(question: str, pdf_path: Path, doc_name: str, model: str) -> 
         except Exception:
             return None
 
-        if not route.sections:
+        wanted = list(route.sections[:3])
+        for p in keep_pages:
+            sec = _section_of_page(p, toc, n_pages, offset)
+            if sec and sec not in wanted and len(wanted) < len(route.sections[:3]) + 3:
+                wanted.append(sec)
+        if not wanted:
             return None
 
         sections_loaded = []
-        for sec_num in route.sections[:3]:
+        for sec_num in wanted:
             start, end = _section_span(sec_num, toc, n_pages, offset)
             if start > end:
                 continue
