@@ -116,7 +116,8 @@ class Handler(BaseHTTPRequestHandler):
             c = history.get_chat(path.rsplit("/", 1)[1], history.user(self.headers))
             self._json(c) if c else self._json({"error": "not found"}, 404)
         elif path == "/api/programs":
-            self._json({"programs": chat.programs_info(), "model": config.CHAT_MODEL})
+            self._json({"programs": chat.programs_info(), "model": config.CHAT_MODEL,
+                        "user": history.user(self.headers)})   # shown on the settings button
         elif path.startswith("/pdf/"):
             pdf = chat.find_pdf(Path(path[5:]).name)
             if pdf:

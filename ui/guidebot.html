@@ -126,7 +126,50 @@ select option { background: #131c1e; }
 }
 .btn:hover { border-color: var(--gold); }
 .btn:disabled { opacity: 0.5; cursor: default; }
-.foot { margin-top: auto; font-size: 0.7rem; color: var(--mist); }
+.foot { margin-top: auto; font-size: 0.7rem; color: var(--mist); display: flex; flex-direction: column; gap: 8px; }
+/* Account row, bottom left like Claude's: who you are plus the settings menu (text size, width, colors). */
+.acct { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 1px solid var(--rule);
+  border-radius: 10px; background: rgba(255, 255, 255, 0.03); color: var(--ink); cursor: pointer; text-align: left;
+  font: 500 0.8rem Inter, "Segoe UI", sans-serif; }
+.acct:hover, .acct[aria-expanded=true] { border-color: rgba(217, 102, 31, 0.5); }
+.acct-av { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border-radius: 50%;
+  background: rgba(217, 102, 31, 0.2); color: var(--navy); font-weight: 700; font-size: 0.72rem; text-transform: uppercase; }
+.acct-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct svg, #hsettings svg { width: 16px; height: 16px; flex: none; color: var(--mist); }
+.settings { position: fixed; z-index: 80; width: 280px; padding: 14px; border: 1px solid rgba(200, 204, 210, 0.16);
+  border-radius: 14px; background: #101718; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55); color: var(--ink);
+  font: 400 0.82rem Inter, "Segoe UI", sans-serif; }
+.settings .set-h { font: 600 0.72rem "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 0.18em;
+  text-transform: uppercase; color: var(--mist); margin-bottom: 10px; }
+.set-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.seg { display: flex; padding: 3px; gap: 3px; border: 1px solid var(--rule); border-radius: 9px; background: rgba(0, 0, 0, 0.3); }
+.seg button { flex: 1; padding: 5px 0; border: 0; border-radius: 6px; background: none; color: var(--steel); cursor: pointer;
+  font: 500 0.78rem Inter, "Segoe UI", sans-serif; }
+.seg button:hover { color: var(--ink); }
+.seg button.on { background: rgba(217, 102, 31, 0.18); color: var(--navy); }
+.seg button[data-v="0.9"] { font-size: 0.7rem; } .seg button[data-v="1.12"] { font-size: 0.86rem; }
+.seg button[data-v="1.25"] { font-size: 0.95rem; }
+.set-note { color: var(--mist); font-size: 0.72rem; }
+#hsettings, #showside { display: none; }
+/* Collapsible sidebar: the panel button in the brand hides it, the same icon in the header brings it back. With the
+   sidebar hidden the header carries the settings gear, since the account row went with it. */
+#hideside { margin-left: auto; align-self: flex-start; width: 30px; height: 30px; display: grid; place-items: center;
+  border: 1px solid transparent; border-radius: 8px; background: none; color: var(--mist); cursor: pointer; flex: none; }
+#hideside:hover, #showside:hover, #hsettings:hover { color: var(--navy); border-color: rgba(217, 102, 31, 0.5); }
+#hideside svg, #showside svg { width: 17px; height: 17px; }
+body.noside aside { display: none; }
+body.noside { --gut: 64px; }
+body.noside #showside, body.noside #hsettings { display: grid; position: absolute; top: 18px; width: 32px; height: 32px;
+  place-items: center; border: 1px solid var(--rule); border-radius: 8px; background: rgba(255, 255, 255, 0.04);
+  color: var(--mist); cursor: pointer; }
+body.noside #showside { left: 16px; }
+body.noside #hsettings { right: 56px; }
+/* Text size scales the conversation and the question box, not the sidebar. Message sizes inside are in em, so
+   they all follow this one font size (CSS zoom didn't take in every browser). */
+body .msg.bot, body .msg.user { font-size: calc(1rem * var(--ts, 1)); }   /* "body" beats the font shorthands below */
+textarea#q { font-size: calc(1rem * var(--ts, 1)); }
+body.nocolors .pdot, body.nocolors .md a.cite[data-prog]::before, body.nocolors .md td[data-prog]::before { display: none; }
+body.nocolors .md li.row[data-prog] { background: none; padding-left: 0; }
 hr { border: 0; border-top: 1px solid var(--rule); margin: 0; width: 100%; }
 
 main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; }
@@ -155,14 +198,14 @@ h1 { margin: 0; color: var(--navy); font-weight: 600; }
   border-radius: 16px; white-space: pre-wrap; max-width: min(620px, 85%); font: 400 1rem/1.65 var(--serif);
 }
 .msg.bot { background: var(--card); backdrop-filter: blur(12px); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35); border: 1px solid var(--rule); border-radius: 4px 14px 14px 14px; padding: 12px 16px; }
-.status { color: var(--mist); font-size: 0.82rem; font-style: italic; }
+.status { color: var(--mist); font-size: 0.82em; font-style: italic; }
 .status::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%;
   background: var(--gold); animation: pulse 1s infinite alternate; }
 @keyframes pulse { from { opacity: 0.25; } to { opacity: 1; } }
 .err { color: var(--bad); }
 .md > :first-child { margin-top: 0; }
 .md > :last-child { margin-bottom: 0; }
-.md h1, .md h2, .md h3, .md h4 { color: var(--navy); font-size: 1rem; margin: 1em 0 0.4em; text-transform: none; letter-spacing: 0; }
+.md h1, .md h2, .md h3, .md h4 { color: var(--navy); font-size: 1em; margin: 1em 0 0.4em; text-transform: none; letter-spacing: 0; }
 .md p { margin: 0.5em 0; }
 .md ul, .md ol { margin: 0.4em 0; padding-left: 1.4em; }
 .md blockquote { margin: 4px 0 8px; padding: 4px 12px; border-left: 3px solid var(--gold); color: var(--steel); font-size: 0.9em; }
@@ -171,7 +214,7 @@ h1 { margin: 0; color: var(--navy); font-weight: 600; }
 /* Citations are small page chips so the sentence reads straight through (full filename on hover). */
 .md a.cite {
   display: inline-block; margin: 0 2px; padding: 0 7px; border: 1px solid var(--rule); border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05); color: var(--mist); font: 500 0.66rem/1.6 Inter, "Segoe UI", sans-serif;
+  background: rgba(255, 255, 255, 0.05); color: var(--mist); font: 500 0.66em/1.6 Inter, "Segoe UI", sans-serif;
   text-decoration: none; white-space: nowrap; vertical-align: 0.12em; transition: color 0.15s, border-color 0.15s;
 }
 .md a.cite:hover { color: var(--navy); border-color: rgba(217, 102, 31, 0.5); }
@@ -181,7 +224,7 @@ h1 { margin: 0; color: var(--navy); font-weight: 600; }
    sheet like the NDM matrices, the opening line reads as the summary. Tables are left as they were. */
 .md > p:first-child:not(:only-child) { color: var(--ink); padding-bottom: 0.7em; border-bottom: 1px solid var(--rule); }
 .md .sec { display: flex; align-items: center; gap: 10px; margin: 1.3em 0 0.5em; color: var(--navy);
-  font: 600 0.78rem/1.3 "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 0.16em; text-transform: uppercase; }
+  font: 600 0.78em/1.3 "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 0.16em; text-transform: uppercase; }
 .md .sec::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
 .md ul { list-style: square; }
 .md li::marker { color: var(--navy); }
@@ -197,15 +240,16 @@ h1 { margin: 0; color: var(--navy); font-weight: 600; }
 .msg.bot { container-type: inline-size; }
 @container (max-width: 520px) { .md li.row { grid-template-columns: 1fr; } .md li.row > * { grid-column: 1 !important; grid-row: auto !important; } }
 .tbl { overflow-x: auto; margin: 0.6em 0; }
-.md table { border-collapse: collapse; font-size: 0.88rem; }
+.md table { border-collapse: collapse; font-size: 0.88em; }
+.md table a.cite { font-size: 0.75em; }
 .md th, .md td { border: 1px solid var(--rule); padding: 5px 9px; text-align: left; vertical-align: top; }
 .md th { background: var(--side); font-weight: 600; }
-details.src { margin-top: 12px; border-top: 1px solid var(--rule); padding-top: 8px; font-size: 0.85rem; }
+details.src { margin-top: 12px; border-top: 1px solid var(--rule); padding-top: 8px; font-size: 0.85em; }
 details.src summary { cursor: pointer; color: var(--steel); }
 .srcitem { margin: 10px 0; }
 .srcitem blockquote {
   margin: 4px 0 0; padding: 8px 12px; border-left: 3px solid var(--gold); background: var(--side);
-  white-space: pre-wrap; font-size: 0.78rem; color: var(--steel); border-radius: 0 4px 4px 0;
+  white-space: pre-wrap; font-size: 0.92em; color: var(--steel); border-radius: 0 4px 4px 0;
 }
 /* One rounded box holding the question and a round send arrow, like Claude's input. */
 form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
@@ -274,6 +318,12 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
   body { flex-direction: column; }
   aside { width: 100%; border-right: 0; border-bottom: 1px solid var(--rule); padding: 14px 16px; gap: 10px; max-height: 45vh; }
   .foot { display: none; }
+  #hsettings { display: grid; position: absolute; top: 14px; right: 12px; width: 32px; height: 32px; place-items: center;
+    border: 1px solid var(--rule); border-radius: 8px; background: rgba(255, 255, 255, 0.04); color: var(--mist); }
+  .settings { left: 12px !important; right: 12px; width: auto; }
+  body.noside #hsettings { right: 12px; top: 14px; }
+  body.noside #showside { left: 12px; top: 14px; }
+  body.noside header { padding-left: 56px; }
   main { height: auto; flex: 1; min-height: 0; }
   body { height: 100vh; }
   header, #log, form { padding-left: 16px; padding-right: 16px; }
@@ -283,7 +333,8 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
 <body>
 <aside>
   <div class="brand"><img src="logo.png" alt="">
-    <div><span class="mark">ASKNICK<span>++</span></span><span class="tag-line">(GUIDELINE ASSISTANT)</span></div></div>
+    <div><span class="mark">ASKNICK<span>++</span></span><span class="tag-line">(GUIDELINE ASSISTANT)</span></div>
+    <button id="hideside" type="button" title="Hide sidebar" aria-label="Hide sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/></svg></button></div>
   <hr>
   <div class="label">WHAT DO YOU NEED?</div>
   <div class="modes">
@@ -307,7 +358,12 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
     New chat</button>
   <div id="chats" class="chats"></div>
-  <div class="foot"><span id="model"></span><br>by Derrick Garcia</div>
+  <div class="foot">
+    <div><span id="model"></span><br>by Derrick Garcia</div>
+    <button id="settings-btn" class="acct" type="button" aria-haspopup="dialog" aria-expanded="false" title="Settings">
+      <span class="acct-av" id="acct-av">·</span><span class="acct-name" id="acct-name">Settings</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
 </aside>
 <main>
   <header>
@@ -315,6 +371,8 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
       <svg class="out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M3 12h18"/></svg>
       <svg class="in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l5 5-5 5M20 7l-5 5 5 5M9 12H2M15 12h7"/></svg>
     </button>
+    <button id="showside" type="button" title="Show sidebar" aria-label="Show sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/></svg></button>
+    <button id="hsettings" type="button" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
     <h1 id="title">Guidelines</h1>
     <div id="subtitle" class="subtitle"></div>
     <div id="offline" class="note">Can't reach AskNick. Start it in PowerShell from the guidebot folder:
@@ -416,6 +474,9 @@ async function loadPrograms() {
     const data = await r.json();
     programs = data.programs;
     $("model").textContent = "Model: " + data.model;
+    const who = data.user && data.user !== "local" ? data.user : "This PC";
+    $("acct-name").textContent = who; $("acct-name").title = who;
+    $("acct-av").textContent = who === "This PC" ? "·" : who[0];
     const sel = $("program"), keep = sel.value || store.get("program");
     sel.innerHTML = "<option value=''>All programs</option>" + GROUPS.map(([label, test]) => {
       const opts = programs.filter(test).sort((a, b) => !!b.family - !!a.family)
@@ -479,14 +540,59 @@ function choose(v) {
   closePicker(); picker.btn.focus();
 }
 picker.btn.addEventListener("click", () => picker.menu.hidden ? openPicker() : closePicker());
-// Wide chat toggle, remembered per browser.
-function setWide(on) {
-  document.body.classList.toggle("wide", on);
-  $("widen").title = on ? "Narrower chat" : "Wider chat";
-  try { localStorage.setItem("asknick.wide", on ? "1" : ""); } catch {}
+// ---------- settings (bottom left; the gear in the header on a phone) ----------
+// Each is kept per browser: text size, chat width, program color dots.
+const SETTINGS = { ts: "1", wide: "", colors: "", side: "" };
+const settingsBox = document.createElement("div");
+settingsBox.id = "settings"; settingsBox.className = "settings"; settingsBox.hidden = true;
+settingsBox.setAttribute("role", "dialog"); settingsBox.setAttribute("aria-label", "Settings");
+settingsBox.innerHTML = `<div class="set-h">Settings</div>
+  <div class="set-row"><span>Text size</span><div class="seg" data-key="ts">
+    <button data-v="0.9">S</button><button data-v="1">M</button><button data-v="1.12">L</button><button data-v="1.25">XL</button></div></div>
+  <div class="set-row"><span>Chat width</span><div class="seg" data-key="wide">
+    <button data-v="">Normal</button><button data-v="1">Wide</button></div></div>
+  <div class="set-row"><span>Program colors</span><div class="seg" data-key="colors">
+    <button data-v="">On</button><button data-v="off">Off</button></div></div>
+  <div class="set-note">Saved on this device.</div>`;
+document.body.appendChild(settingsBox);   // on <body>: the sidebar's blur would trap a fixed menu, like the picker's
+function setting(k) { return store.get("asknick." + k) || SETTINGS[k]; }
+function applySettings() {
+  document.documentElement.style.setProperty("--ts", setting("ts"));
+  document.body.classList.toggle("wide", setting("wide") === "1");
+  document.body.classList.toggle("nocolors", setting("colors") === "off");
+  document.body.classList.toggle("noside", setting("side") === "hidden");
+  $("widen").title = setting("wide") === "1" ? "Narrower chat" : "Wider chat";
+  settingsBox.querySelectorAll(".seg").forEach(seg => seg.querySelectorAll("button")
+    .forEach(b => b.classList.toggle("on", b.dataset.v === setting(seg.dataset.key))));
 }
-try { setWide(localStorage.getItem("asknick.wide") === "1"); } catch {}
-$("widen").addEventListener("click", () => setWide(!document.body.classList.contains("wide")));
+function setSetting(k, v) { store.set("asknick." + k, v); applySettings(); }
+settingsBox.addEventListener("click", e => {
+  const b = e.target.closest(".seg button");
+  if (b) setSetting(b.closest(".seg").dataset.key, b.dataset.v);
+});
+function closeSettings() {
+  settingsBox.hidden = true;
+  $("settings-btn").setAttribute("aria-expanded", "false");
+}
+function toggleSettings(anchor) {
+  if (!settingsBox.hidden) return closeSettings();
+  settingsBox.hidden = false;
+  const r = anchor.getBoundingClientRect(), up = r.top > innerHeight / 2;
+  Object.assign(settingsBox.style, up
+    ? { left: r.left + "px", top: "", bottom: innerHeight - r.top + 8 + "px" }
+    : { left: Math.max(12, r.right - settingsBox.offsetWidth) + "px", bottom: "", top: r.bottom + 8 + "px" });
+  anchor.setAttribute("aria-expanded", "true");
+}
+$("settings-btn").addEventListener("click", e => { e.stopPropagation(); toggleSettings($("settings-btn")); });
+$("hsettings").addEventListener("click", e => { e.stopPropagation(); toggleSettings($("hsettings")); });
+document.addEventListener("click", e => { if (!settingsBox.hidden && !e.target.closest("#settings")) closeSettings(); });
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && !settingsBox.hidden) { e.stopImmediatePropagation(); closeSettings(); }   // not the viewer too
+});
+$("widen").addEventListener("click", () => setSetting("wide", setting("wide") === "1" ? "" : "1"));
+$("hideside").addEventListener("click", () => { closePicker(); closeSettings(); setSetting("side", "hidden"); });
+$("showside").addEventListener("click", () => setSetting("side", ""));
+applySettings();
 picker.menu.addEventListener("click", e => { const o = e.target.closest(".picker-opt:not(.off)"); if (o) choose(o.dataset.value); });
 picker.menu.addEventListener("mousemove", e => {
   const o = e.target.closest(".picker-opt:not(.off)");

@@ -44,6 +44,9 @@ tries one page either side and says "closest match on p. X". Falls back to the b
 "hero" tones; FHA Teal lightened; VA in flag red, white and blue stripes). Express and Ignite share a product's color. Dots show on
 citation chips, table program cells, "Term:" rows, the picker and the viewer title. The header button toggles a
 wide chat column (remembered per browser).
+* Settings (account row, bottom left; header gear on a phone or with the sidebar hidden): text size (scales chat
+messages via `--ts`; sizes inside messages are in em), chat width, program colors on/off. The sidebar collapses
+(panel icon by the logo). All kept per browser in localStorage (`asknick.*`).
 * Admin console: `/admin` (`ui/admin.html`, `guidebot/admin.py`) replaces the Streamlit Verify page: doc
 statuses, PDF page beside editable matrix/text, re-read, approve docs and overlay rules. Only his Gmail via
 Cloudflare Access, or direct from this PC. Claude never clicks Approve. Tabs: Documents, Chats (every user's
@@ -75,6 +78,10 @@ word against the doc) and full-document Q\&A mode (whole program in context, not
 the Express/Ignite sheets) is read whole in one cached system block, the shared guide is routed to its sections,
 and longer guides (FHA, VA, 2nds) are searched. Before 2026-11-12 it read only the shared guide and missed
 program-sheet rules like Ignite DSCR's 660 first time investor minimum. Never states LTVs.
+* A program sheet is an overlay. If it doesn't state a requirement, there's no overlay and the general guideline
+(shared NonQM guide, or the program's own UW guide like 2nds) applies: answers say "No overlay, general guideline
+applies" with that rule, never "not addressed on the sheet" (rule in `RULES`/`BROAD_SYSTEM`). Broad questions also
+search the shared guide's pages, since the TOC router can miss the section holding the default rule.
 * `guidebot/retrieval.py` + `ingest/indexer.py`: search for the long guides above. Page-level chunks.
 * `ui/app.py` chat. `ui/pages/1\_Verify\_Documents.py` PDF page image beside editable extracted content.
 
@@ -87,7 +94,7 @@ program-sheet rules like Ignite DSCR's 660 first time investor minimum. Never st
 
 ## Current status
 
-* 107 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 108 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked
