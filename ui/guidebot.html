@@ -84,8 +84,10 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 0; width: 100%; }
 
 main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; }
 header { padding: 20px 32px 12px; border-bottom: 1px solid var(--rule); }
-h1 { margin: 0; color: var(--navy); font: 600 1.45rem/1.2 var(--serif); letter-spacing: 0; }
-.subtitle { color: var(--mist); font-size: 0.82rem; margin-top: 2px; }
+/* Main area reads like Claude: one serif at one size. The title only differs by weight and color. */
+h1, .subtitle, .empty, .msg.bot { font: 400 1rem/1.65 var(--serif); letter-spacing: 0; }
+h1 { margin: 0; color: var(--navy); font-weight: 600; }
+.subtitle { color: var(--mist); }
 #offline { display: none; margin-top: 10px; }
 #offline code { background: var(--card); padding: 1px 5px; border-radius: 4px; }
 #log { flex: 1; overflow-y: auto; padding: 24px 32px; display: flex; flex-direction: column; gap: 18px; }
@@ -96,7 +98,6 @@ h1 { margin: 0; color: var(--navy); font: 600 1.45rem/1.2 var(--serif); letter-s
   border-radius: 14px 14px 4px 14px; white-space: pre-wrap; max-width: min(640px, 85%);
 }
 .msg.bot { background: var(--card); backdrop-filter: blur(12px); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35); border: 1px solid var(--rule); border-radius: 4px 14px 14px 14px; padding: 12px 16px; }
-.msg.bot, .empty { font-family: var(--serif); font-size: 1.04rem; line-height: 1.65; }
 .status { color: var(--mist); font-size: 0.82rem; font-style: italic; }
 .status::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%;
   background: var(--gold); animation: pulse 1s infinite alternate; }
