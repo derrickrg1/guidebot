@@ -31,7 +31,9 @@ If Claude is down or the key is bad, answers fall back to qwen3. `GUIDEBOT_MODEL
 override. `nomic-embed-text` (embeddings, Ollama).
 * pdfplumber, pandas, ChromaDB + BM25 (hybrid search), Streamlit UI.
 * Main UI: `ui/guidebot.html` served by `python -m guidebot.server` on 127.0.0.1:8600. A Windows scheduled
-task "Guidebot server" starts it at login (log in `%LOCALAPPDATA%\guidebot\server.log`). The cloudflared
+task "Guidebot server" runs `scripts/run_server.ps1` at login, which relaunches the server if it ever exits
+(log in `%LOCALAPPDATA%\guidebot\server.log`, with restart markers). To restart by hand, kill the python
+`-m guidebot.server` process; the loop brings it back in 5 to 30 seconds. The cloudflared
 service tunnels it to asknick.derrickgarcia.dev and guidebot.derrickgarcia.dev, both behind Cloudflare Access
 (policy "Derrick Access": his Gmail and nwilson@revofunding.com).
 * Admin console: `/admin` (`ui/admin.html`, `guidebot/admin.py`) replaces the Streamlit Verify page: doc
