@@ -424,11 +424,12 @@ async function loadPrograms() {
       return `<optgroup label="${label}">${opts || "<option disabled>Coming soon</option>"}</optgroup>`;
     }).join("");
     sel.value = programs.some(p => p.name === keep) ? keep : "";
-    buildPicker();
     $("offline").style.display = "none";
   } catch (e) {
     $("offline").style.display = "block";
   }
+  // Drawn outside the try: a page bug here used to show "Can't reach AskNick" while the server was fine.
+  try { buildPicker(); } catch (e) { console.error("Program picker failed to draw:", e); }
   renderSidebar();
 }
 document.querySelectorAll("input[name=mode], #program").forEach(el => el.addEventListener("change", renderSidebar));

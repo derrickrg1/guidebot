@@ -3,6 +3,7 @@
 Standard library only. Listens on 127.0.0.1, so nothing outside this PC can reach it.
 """
 import json
+import re
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -13,6 +14,16 @@ from guidebot import admin, chat, config, history
 PORT = 8600
 PAGE = config.ROOT / "ui" / "guidebot.html"
 ADMIN_PAGE = config.ROOT / "ui" / "admin.html"
+
+
+def _page(path) -> bytes:
+    """A page with its shared scripts stamped by modified time (md.js?v=...), so a browser or Cloudflare never runs a
+    stale copy against new page code. That mismatch broke the program list once and showed "Can't reach AskNick"."""
+    html = path.read_text(encoding="utf-8")
+    for name in ("md.js", "viewer.js"):
+        v = int((path.parent / name).stat().st_mtime)
+        html = re.sub(rf'src="(/?){re.escape(name)}"', rf'src="\g<1>{name}?v={v}"', html)
+    return html.encode("utf-8")
 # The page may also be opened straight from disk (file://), which sends Origin "null".
 ALLOWED_ORIGINS = {"null", f"http://localhost:{PORT}", f"http://127.0.0.1:{PORT}"}
 
@@ -33,6 +44,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
+        if ctype.startswith(("text/html", "text/javascript", "application/json")):
+            self.send_header("Cache-Control", "no-cache")   # pages, scripts and API answers always come fresh
         self._cors()
         self.end_headers()
         self.wfile.write(body)
@@ -69,7 +82,7 @@ class Handler(BaseHTTPRequestHandler):
         if not admin.allowed(self.headers):
             return self._json({"error": "admin only"}, 403)
         if path == "/admin":
-            return self._send(200, ADMIN_PAGE.read_bytes(), "text/html; charset=utf-8")
+            return self._send(200, _page(ADMIN_PAGE), "text/html; charset=utf-8")
         if path == "/admin/api/overview":
             return self._json({"programs": admin.overview()})
         if path == "/admin/api/chats":
@@ -92,7 +105,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/admin" or path.startswith("/admin/"):
             self._admin_get(path, parse_qs(url.query))
         elif path in ("/", "/index.html"):
-            self._send(200, PAGE.read_bytes(), "text/html; charset=utf-8")
+            self._send(200, _page(PAGE), "text/html; charset=utf-8")
         elif path in ("/md.js", "/viewer.js"):
             self._send(200, (PAGE.parent / path[1:]).read_bytes(), "text/javascript; charset=utf-8")
         elif path == "/logo.png":
