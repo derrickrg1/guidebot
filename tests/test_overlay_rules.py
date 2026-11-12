@@ -96,15 +96,79 @@ def test_approved_rules_replace_the_ai_overlay_step(monkeypatch, df):
     assert "Max LTV/CLTV: 85%" in out and "approved rules" in out and "If Rural" in out
 
 
-def test_unapproved_rules_fall_back_to_ai_with_a_warning(monkeypatch, df):
-    replies = iter([
-        answer.Criteria(is_scenario=True, matrix=0, column="Primary Residence / Purchase", missing=[],
-                        dims=[answer.DimValue(name="Loan Amount", value="650000"),
-                              answer.DimValue(name="FICO", value="720")]),
-        answer.Adjustments(notes=[], adjustments=[]),
-    ])
-    monkeypatch.setattr(answer, "ask_json", lambda *a, **k: next(replies))
+def test_unapproved_rules_give_no_final_number(monkeypatch, df):
+    # The AI picking overlays here turned a 75% deal into 80% and 70%. Unapproved rules stop at the matrix cell.
+    calls = []
+
+    def fake(system, *a, **k):
+        calls.append(system)
+        return answer.Criteria(is_scenario=True, matrix=0, column="Primary Residence / Purchase", missing=[],
+                               dims=[answer.DimValue(name="Loan Amount", value="650000"),
+                                     answer.DimValue(name="FICO", value="720")])
+    monkeypatch.setattr(answer, "ask_json", fake)
     mats = [{"df": df, "file": "g.pdf", "page": 1, "title": "LTV", "status": "verified"}]
     rules = {"status": "unapproved", "source": "g.pdf", "rules": IGNITE_1099}
     out = answer.scenario_answer("Purchase, primary, sfr, $650,000 loan, 720 FICO", [], mats, "", "m", rules)
-    assert "aren't approved yet" in out and "Max LTV/CLTV: 90%" in out
+    assert calls == [answer.CRITERIA_SYSTEM]               # no AI overlay call
+    assert "No final LTV yet" in out and "aren't approved yet" in out and "before overlays" in out
+    assert "Max LTV/CLTV" not in out
+    with pytest.raises(ValueError):
+        answer.checked_overlays("q", [], None, {"ltv": 90}, "", "m", rules)
+
+
+def test_compare_gives_no_final_number_for_unapproved_rules(monkeypatch, df):
+    monkeypatch.setattr(answer, "ask_json", lambda system, *a, **k: (
+        answer.RawScenario() if system == answer.RAW_SCENARIO_SYSTEM else
+        answer.Criteria(is_scenario=True, matrix=0, column="Primary Residence / Purchase", missing=[],
+                        dims=[answer.DimValue(name="Loan Amount", value="650000"),
+                              answer.DimValue(name="FICO", value="720")])))
+    mats = [{"df": df, "file": "g.pdf", "page": 1, "title": "LTV", "status": "verified"}]
+    data = [{"program": "P", "mats": mats, "docs_text": "",
+             "rules": {"status": "unapproved", "source": "g.pdf", "rules": IGNITE_1099}}]
+    comp = answer.compare_programs("Purchase, primary, sfr, $650,000 loan, 720 FICO", [], data, "m")
+    row = comp["results"][0]
+    assert row["eligible"] is None and "before overlays" in row["error"] and "max_ltv" not in row
+
+
+@pytest.mark.parametrize("question, earlier, deal", [
+    ("Max LTV for an investment cash out, single family, $1.2m loan, 705 FICO?", None, True),
+    ("What's the max LTV for a rate and term refi on a second home, $1,200,000 loan, 690 FICO?", None, True),
+    ("Purchase, primary residence, single family, $650,000 loan, 720 FICO", None, True),
+    ("what if it's an investment property?", "Purchase, primary, sfr, $650,000 loan, 720 FICO", True),
+    ("what if the FICO is 680?", "Purchase, primary, sfr, $650,000 loan, 720 FICO", True),
+    ("What are the reserve requirements for a $1,500,000 loan?", None, False),
+    ("What's the minimum credit score for co-borrowers?", None, False),
+    ("Can a first time home buyer purchase an investment property?", None, False),
+    ("What's the max DTI?", "Purchase, primary, sfr, $650,000 loan, 720 FICO", False),
+])
+def test_deal_questions_are_spotted_by_python(question, earlier, deal):
+    history = [{"role": "user", "content": earlier}, {"role": "assistant", "content": "x"}] if earlier else []
+    assert answer.looks_like_deal(question, history) is deal
+
+
+def test_newest_message_wins_on_follow_ups():
+    history = [{"role": "user", "content": "Purchase, investment, sfr, $650,000 loan, 720 FICO"},
+               {"role": "assistant", "content": "x"}]
+    raw = answer.said_scenario("what if it's a primary and 680 FICO?", history)
+    assert (raw.fico, raw.occupancy, raw.loan_amount, raw.purpose) == (680, "Primary Residence", 650000, "Purchase")
+
+
+def test_deal_question_never_reaches_the_free_text_reader(monkeypatch):
+    """Program on, Scenario off: a deal goes to the matrix lookup, and if that can't answer, no LTV at all."""
+    monkeypatch.setattr(chat.library, "programs", lambda: {"P": []})
+    monkeypatch.setattr(chat, "program_docs", lambda c, a: ([{"status": "verified"}], []))
+    monkeypatch.setattr(chat.library, "matrices", lambda d: [])
+    monkeypatch.setattr(chat.library, "render", lambda d: "")
+    monkeypatch.setattr(chat, "scenario_answer", lambda *a, **k: None)
+    monkeypatch.setattr(chat, "_stream", lambda *a, **k: pytest.fail("free-text reader was called"))
+    events = list(chat.respond("Max LTV for an investment cash out, sfr, $1.2m loan, 705 FICO?", [], "P",
+                               mode_program=True, mode_scenario=False))
+    assert "won't give an LTV" in events[-1]["replace"]
+
+    monkeypatch.setattr(chat, "scenario_answer", lambda *a, **k: "**Max LTV/CLTV: 75%**")
+    events = list(chat.respond("Max LTV for an investment cash out, sfr, $1.2m loan, 705 FICO?", [], "P",
+                               mode_program=True, mode_scenario=False))
+    assert events[-1]["replace"] == "**Max LTV/CLTV: 75%**"
+
+    events = list(chat.respond("Max LTV for an investment cash out, sfr, $1.2m loan, 705 FICO?", [], ""))
+    assert "only come from the matrix lookup" in events[-1]["replace"]

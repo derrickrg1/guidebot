@@ -6,7 +6,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import streamlit as st
 
 from guidebot import config, library, overlay_rules
-from guidebot.answer import full_doc_messages, filter_to_cited, full_section_messages, scenario_answer, search_messages, compare_programs, comparison_md
+from guidebot.answer import full_doc_messages, filter_to_cited, full_section_messages, looks_like_deal, scenario_answer, search_messages, compare_programs, comparison_md
 from guidebot.section_reader import route_and_load
 from ui.style import inject
 from guidebot.ingest.indexer import get_collection, sync_index
@@ -284,8 +284,13 @@ source_hits = []
 
 with st.chat_message("assistant"):
 
-    # --- Scenario mode ---
-    if mode_scenario:
+    # --- Scenario mode (and any deal question: LTVs only come from the matrix lookup) ---
+    deal = looks_like_deal(question, history)
+    if deal and not mode_scenario and not docs:
+        answer = ("That's a deal question, and LTVs only come from the matrix lookup. "
+                  "Turn on **Scenario** to check every program, or pick a program and ask again.")
+        st.markdown(answer)
+    elif mode_scenario or deal:
         if not choice:
             # All-programs comparison
             try:
@@ -319,6 +324,10 @@ with st.chat_message("assistant"):
                     answer = scen
             except Exception as e:
                 st.caption(f"Scenario check skipped: {e}")
+        if deal and not answer:
+            answer = ("I couldn't run the matrix lookup on this one, so I won't give an LTV. Spell out the FICO, "
+                      "loan amount, occupancy and purpose and ask again.")
+            st.markdown(answer)
 
     # --- Matrix / Program full-doc Q&A ---
     if mode_matrix and choice and docs and not answer:

@@ -204,14 +204,37 @@ def fill_scenario(raw: RawScenario, text: str) -> RawScenario:
     return raw
 
 
+def said_scenario(question: str, history: list[dict], ai: RawScenario | None = None) -> RawScenario:
+    """The deal as the user stated it. The newest message wins ("what if it's 680 FICO?" replaces the old FICO),
+    then the AI's read, then earlier user messages fill in only what's still unsaid."""
+    raw = fill_scenario(RawScenario(), question)
+    if ai:
+        raw = raw.model_copy(update={k: v for k, v in ai.model_dump(exclude={"missing"}).items()
+                                     if v is not None and getattr(raw, k) is None})
+    for m in reversed([m for m in history[-4:] if m["role"] == "user"]):
+        raw = fill_scenario(raw, m["content"])
+    return fill_scenario(raw, "")   # recount what's missing after the AI's fields went in
+
+
+def looks_like_deal(question: str, history: list[dict]) -> bool:
+    """Python's call on whether this asks for a number on a specific deal. Those always go through the matrix
+    lookup, whatever the toggles say, and never fall back to the AI writing an LTV."""
+    q = fill_scenario(RawScenario(), question)
+    if q.fico and (q.loan_amount or q.occupancy or q.purpose):
+        return True
+    if q.loan_amount and (q.occupancy or q.purpose) and re.search(r"ltv|cltv|eligib|qualif", question, re.I):
+        return True
+    said = (q.fico, q.loan_amount, q.occupancy, q.purpose)
+    return any(said) and any(looks_like_deal(m["content"], []) for m in history[-4:] if m["role"] == "user")
+
+
 def extract_scenario(question: str, history: list[dict], model: str) -> RawScenario | None:
     convo = "\n".join(f"{m['role']}: {m['content'][:300]}" for m in history[-4:])
-    said = " ".join([*(m["content"] for m in history[-4:] if m["role"] == "user"), question])
     try:
         raw = ask_json(RAW_SCENARIO_SYSTEM, f"Earlier messages:\n{convo}\n\nQuestion: {question}", RawScenario, model)
     except Exception:
-        raw = RawScenario()
-    return fill_scenario(raw, said)
+        raw = None
+    return said_scenario(question, history, raw)
 
 
 def compare_programs(
@@ -278,6 +301,11 @@ def compare_programs(
             results.append({"program": prog, "eligible": None, "error": "Matrix disagrees with the Revo site matrix"})
             continue
 
+        for d in crit.dims:   # the user's own numbers beat the AI's copy of them
+            if "loan" in d.name.lower() and raw.loan_amount:
+                d.value = str(raw.loan_amount)
+            elif "fico" in d.name.lower() and raw.fico:
+                d.value = str(raw.fico)
         res = lookup(mats[crit.matrix]["df"], {d.name: d.value for d in crit.dims}, crit.column)
         if not res["ok"]:
             results.append({"program": prog, "eligible": False, "cell": res.get("cell", ""), "trace": res.get("trace", []), "error": res.get("error", "")})
@@ -285,6 +313,12 @@ def compare_programs(
             results.append({"program": prog, "eligible": False, "cell": res.get("cell", "N/A"), "trace": res.get("trace", [])})
         else:
             row = {"program": prog, "eligible": True, "max_ltv": res["ltv"], "cell": res["cell"], "trace": res["trace"]}
+            rules = pd.get("rules")
+            if rules and rules["status"] != "approved":
+                results.append({"program": prog, "eligible": None, "cell": res["cell"], "trace": res["trace"],
+                                "error": f"Matrix cell {res['cell']} before overlays. No final number: "
+                                         f"{_lower_first(RULES_STATUS[rules['status']])}"})
+                continue
             try:
                 kept, rejected, _, calc = checked_overlays(question, history, crit, res, pd.get("docs_text", ""), model,
                                                            pd.get("rules"))
@@ -506,7 +540,7 @@ RULES_STATUS = {
 def rules_overlays(question: str, history: list[dict], res: dict, rules: dict):
     """Approved overlay rules, applied by Python to the facts the user stated. No model involved."""
     said = " ".join([*(m["content"] for m in history[-4:] if m["role"] == "user"), question])
-    raw = fill_scenario(RawScenario(), said)
+    raw = said_scenario(question, history)
     facts = overlay_rules.extract_facts(said, raw.occupancy, raw.purpose, raw.fico, raw.loan_amount)
     out = overlay_rules.apply_rules(rules["rules"], facts, rules["source"])
     kept = [Adjustment(trigger="", **{k: a[k] for k in ("reason", "kind", "value", "file", "page", "quote")})
@@ -516,17 +550,20 @@ def rules_overlays(question: str, history: list[dict], res: dict, rules: dict):
     return kept, [], notes, calc
 
 
+def _lower_first(s: str) -> str:
+    return s[:1].lower() + s[1:]
+
+
 def checked_overlays(question: str, history: list[dict], crit, res: dict, docs_text: str, model: str,
                      rules: dict | None = None):
-    """Approved rules if the program has them. Otherwise the AI finds overlays, Python gates each one
-    (check_adjustment) and does the math. Returns (kept, rejected [(adj, why)], cited notes, calc)."""
-    if rules and rules["status"] == "approved":
-        return rules_overlays(question, history, res, rules)
-    kept, rejected, notes, calc = _ai_overlays(question, history, crit, res, docs_text, model)
+    """Approved rules if the program has them. Programs with no rules file: the AI finds overlays, Python gates
+    each one (check_adjustment) and does the math. Returns (kept, rejected [(adj, why)], cited notes, calc).
+    A program whose rules aren't approved never gets here: callers stop at the matrix cell."""
     if rules:
-        notes.insert(0, f"⚠️ {RULES_STATUS[rules['status']]}, so these overlays were found by the AI and checked "
-                        "by Python. Approve the rules in Verify Documents to use them instead.")
-    return kept, rejected, notes, calc
+        if rules["status"] != "approved":
+            raise ValueError(RULES_STATUS[rules["status"]])
+        return rules_overlays(question, history, res, rules)
+    return _ai_overlays(question, history, crit, res, docs_text, model)
 
 
 def _ai_overlays(question: str, history: list[dict], crit, res: dict, docs_text: str, model: str):
@@ -584,10 +621,9 @@ def scenario_answer(question: str, history: list[dict], mats: list[dict], docs_t
     )
     if not crit.is_scenario:
         return None
+    raw = said_scenario(question, history)
     if crit.missing:
         # The model sometimes says occupancy/purpose are missing when they're right there. Python decides.
-        said = " ".join([*(h["content"] for h in history[-4:] if h["role"] == "user"), question])
-        raw = fill_scenario(RawScenario(), said)
         idx = crit.matrix if 0 <= crit.matrix < len(mats) else (0 if len(mats) == 1 else -1)
         mapped = python_mapping(mats[idx]["df"], raw) if idx >= 0 and not raw.missing else None
         if not mapped:
@@ -612,11 +648,16 @@ def scenario_answer(question: str, history: list[dict], mats: list[dict], docs_t
                 "so I won't quote numbers from it:\n" + "\n".join(f"- {d}" for d in ref["diffs"][:5])
                 + "\n\nCheck the PDF in **Verify Documents** and fix whichever side is wrong.")
 
-    said = " ".join([*(h["content"] for h in history[-4:] if h["role"] == "user"), question])
-    blocked = occupancy_block(fill_scenario(RawScenario(), said).occupancy, mats, docs_text)
+    blocked = occupancy_block(raw.occupancy, mats, docs_text)
     if blocked:
         return f"**Not eligible.** {blocked}"
 
+    # The numbers the user typed beat the AI's copy of them ("$1.2m" came back as "${400000}" style text)
+    for d in crit.dims:
+        if "loan" in d.name.lower() and raw.loan_amount:
+            d.value = str(raw.loan_amount)
+        elif "fico" in d.name.lower() and raw.fico:
+            d.value = str(raw.fico)
     res = lookup(m["df"], {d.name: d.value for d in crit.dims}, crit.column)
     out = [f"*Matrix: {m['file']} p. {m['page']}*"] + [f"- {t}" for t in res["trace"]]
     if ref.get("status") == "match":
@@ -625,6 +666,14 @@ def scenario_answer(question: str, history: list[dict], mats: list[dict], docs_t
         return "\n".join(out + ["", f"**Can't price this off the matrix:** {res['error']}"])
     if not res["eligible"]:
         return "\n".join(out + ["", f"**Not eligible.** The matrix shows **{res['cell']}** for this scenario."])
+    if rules and rules["status"] != "approved":
+        # This program's overlays are written down as rules. Until they're approved, nobody (AI included) decides
+        # which apply, so there's no final number. The AI guessing here gave 80% and 70% on a 75% deal.
+        return "\n".join(
+            [f"**No final LTV yet:** {_lower_first(RULES_STATUS[rules['status']])}.", ""] + out
+            + [f"- Matrix cell: **{res['cell']}** (before overlays, not the final max)", "",
+               "Overlays like credit events, condo type, declining market and seasoning can lower this. "
+               "Approve the overlay rules in **Verify Documents** and ask again for the final number."])
 
     kept, rejected, notes, calc = checked_overlays(question, history, crit, res, docs_text, model, rules)
 

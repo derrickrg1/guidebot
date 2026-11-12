@@ -7,7 +7,7 @@ import re
 
 from guidebot import config, library, overlay_rules
 from guidebot.answer import (compare_programs, comparison_md, filter_to_cited, full_doc_messages, full_section_messages,
-                             scenario_answer, search_messages)
+                             looks_like_deal, scenario_answer, search_messages)
 from guidebot.llm import stream_chat
 from guidebot.section_reader import route_and_load
 
@@ -89,7 +89,16 @@ def respond(question: str, history: list[dict], choice: str = "",
     ltv_ok = all(d["status"] == "verified" for d in docs)
     answer, hits = "", []
 
-    if mode_scenario:
+    # A number for a specific deal only ever comes from the matrix lookup. With Scenario off, the guideline
+    # reader used to write its own "Max LTV" (wrong FICO row, 80 - 5 = 76).
+    deal = looks_like_deal(question, history)
+    if deal and not mode_scenario and not docs:
+        yield {"replace": "That's a deal question, and LTVs only come from the matrix lookup. "
+                          "Turn on **Scenario** to check every program, or pick a program and ask again."}
+        return
+    skipped = ""
+
+    if mode_scenario or deal:
         if not choice:
             yield {"status": "Checking all programs…"}
             try:
@@ -104,6 +113,7 @@ def respond(question: str, history: list[dict], choice: str = "",
                 answer = comparison_md(compare_programs(question, history, data, model))
                 yield {"replace": answer}
             except Exception as e:
+                skipped = str(e)
                 yield {"status": f"Comparison skipped: {e}"}
         elif docs:
             yield {"status": "Checking the matrix…"}
@@ -115,7 +125,15 @@ def respond(question: str, history: list[dict], choice: str = "",
                     answer = scen
                     yield {"replace": answer}
             except Exception as e:
+                skipped = str(e)
                 yield {"status": f"Scenario check skipped: {e}"}
+
+    if deal and not answer:
+        yield {"replace": "I couldn't run the matrix lookup on this one"
+                          + (f" ({skipped})" if skipped else "")
+                          + ", so I won't give an LTV. Spell out the FICO, loan amount, occupancy and purpose "
+                            "and ask again."}
+        return
 
     if mode_program and docs and not answer:
         docs_text = "\n\n".join(library.render(d) for d in docs)
