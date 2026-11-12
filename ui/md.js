@@ -38,13 +38,19 @@ function inline(s) {
 function md(src) {
   const lines = src.replace(/\r/g, "").split("\n");
   let out = "", para = [], i = 0;
-  const flush = () => { if (para.length) { out += "<p>" + para.map(inline).join("<br>") + "</p>"; para = []; } };
+  // A paragraph that is only bold ("**Programs with a minimum score:**") is a section header, like the guides'.
+  const flush = () => {
+    if (!para.length) return;
+    const h = para.length === 1 && para[0].match(/^\s*\*\*([^*]+?):?\*\*:?\s*$/);
+    out += h ? `<h3 class="sec">${inline(h[1])}</h3>` : "<p>" + para.map(inline).join("<br>") + "</p>";
+    para = [];
+  };
   const cells = l => l.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim());
   while (i < lines.length) {
     const l = lines[i];
     if (!l.trim()) { flush(); i++; continue; }
     let m;
-    if ((m = l.match(/^(#{1,4})\s+(.*)/))) { flush(); out += `<h${m[1].length + 1}>${inline(m[2])}</h${m[1].length + 1}>`; i++; continue; }
+    if ((m = l.match(/^(#{1,4})\s+(.*)/))) { flush(); out += `<h${m[1].length + 1} class="sec">${inline(m[2])}</h${m[1].length + 1}>`; i++; continue; }
     if (/^\s*>/.test(l)) {
       flush();
       const q = [];
@@ -67,13 +73,16 @@ function md(src) {
         const mm = lines[i].match(/^(\s*)([-*•]|\d+[.)])\s+(.*)/);
         const depth = Math.floor(mm[1].replace(/\t/g, "    ").length / 2), tag = /\d/.test(mm[2]) ? "ol" : "ul";
         while (stack.length && stack[stack.length - 1].depth > depth) out += "</li></" + stack.pop().tag + ">";
+        // "**Term:** rule" items read like a guideline table: term on the left, rule on the right.
+        const row = mm[3].match(/^\*\*([^*]+?)(?::\*\*|\*\*:)\s*(.*)$/), li = row ? '<li class="row">' : "<li>";
         const top = stack[stack.length - 1];
-        if (!top || top.depth < depth) { out += `<${tag}><li>`; stack.push({ depth, tag }); }
-        else out += "</li><li>";
-        out += inline(mm[3]); i++;
+        if (!top || top.depth < depth) { out += `<${tag}>${li}`; stack.push({ depth, tag }); }
+        else out += "</li>" + li;
+        out += row ? `<span class="term">${inline(row[1])}</span><span class="def">${inline(row[2])}` : inline(mm[3]); i++;
         while (i < lines.length && lines[i].trim() && !/^\s*([-*•]|\d+[.)])\s+/.test(lines[i]) && /^\s+/.test(lines[i])) {
           out += "<br>" + inline(lines[i].trim()); i++;
         }
+        if (row) out += "</span>";
       }
       while (stack.length) out += "</li></" + stack.pop().tag + ">";
       continue;
