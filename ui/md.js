@@ -2,16 +2,38 @@
 // ---------- markdown (escapes everything first, so model output can't inject HTML) ----------
 const esc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
   .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+// Citations like (NonQM-Underwriting-Guidelines.pdf, section 7.2, p. 53; Ignite 1099 Expanded.pdf, p. 2) become
+// small chips, "NonQM Guide · §7.2 p. 53", one per source. Each opens the PDF at that page; the full citation
+// shows on hover. A long filename in every sentence made answers hard to read.
+const shortName = f => f.replace(/\.pdf$/i, "").replace(/[-_]+/g, " ").replace(/\b(Matrix|Expanded)\b/gi, "")
+  .replace(/NonQM Underwriting Guidelines/i, "NonQM Guide").replace(/\s{2,}/g, " ").trim();
+function citeChips(inner) {
+  let lastFile = "";
+  return inner.split(/;\s*/).map(part => {
+    const file = (part.match(/([^,;()]+?\.pdf)/i) || [])[1]?.trim() || lastFile;
+    if (!file) return "";
+    lastFile = file;
+    const pg = (part.match(/p(?:age|p)?\.?\s*(\d+)/i) || [])[1];
+    const sec = (part.match(/(?:section|§)\s*([\d.]+\d)/i) || [])[1];
+    const label = shortName(file) + (sec || pg ? " · " : "") + (sec ? `§${sec} ` : "") + (pg ? `p. ${pg}` : "");
+    return `<a class="cite" href="${API}/pdf/${encodeURIComponent(file)}${pg ? "#page=" + pg : ""}" target="_blank"
+      title="${esc(part.trim())}">${esc(label.trim())}</a>`;
+  }).join("");
+}
 function inline(s) {
+  const chips = [];   // pulled out before escaping so "&" in a filename doesn't split the list
+  s = s.replace(/\(([^()]*\.pdf[^()]*)\)/gi, (m, inner) => {
+    if (/^\s*(\/|https?:)/.test(inner)) return m;   // the URL half of a [text](/pdf/x.pdf) link
+    chips.push(citeChips(inner));
+    return `\u0000${chips.length - 1}\u0000`;
+  });
+  s = s.replace(/\s*(\u0000\d+\u0000)([.,;:]+)/g, "$2$1");   // "rule (cite)." reads as "rule. [chip]"
   s = esc(s);
   s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
   s = s.replace(/\[([^\]]+)\]\(((?:https?:\/\/|\/pdf\/)[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
   s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   s = s.replace(/(^|[^*])\*([^*\s][^*]*)\*/g, "$1<em>$2</em>");
-  // guideline citations like (NonQM-Underwriting-Guidelines.pdf, §5.3, p. 42) open the PDF at that page
-  s = s.replace(/\(([^()]*?([\w .&'-]+\.pdf)[^()]*?p\.\s*(\d+)[^()]*)\)/g,
-    (m, inner, file, pg) => `<a class="cite" href="${API}/pdf/${encodeURIComponent(file.trim())}#page=${pg}" target="_blank">(${inner})</a>`);
-  return s;
+  return s.replace(/\s*\u0000(\d+)\u0000/g, (m, i) => " " + chips[i]);
 }
 function md(src) {
   const lines = src.replace(/\r/g, "").split("\n");

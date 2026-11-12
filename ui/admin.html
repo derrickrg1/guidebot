@@ -98,6 +98,13 @@ label.toggle { display: flex; gap: 8px; align-items: center; font-size: 0.85rem;
 .md blockquote { margin: 4px 0 8px; padding: 4px 12px; border-left: 3px solid var(--gold); color: var(--steel); font-size: 0.9em; }
 .md code { background: var(--side); padding: 1px 5px; border-radius: 4px; font-size: 0.88em; }
 .md a { color: var(--gold); }
+.md a.cite {
+  display: inline-block; margin: 0 2px; padding: 0 7px; border: 1px solid var(--rule); border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05); color: var(--mist); font: 500 0.66rem/1.6 Inter, "Segoe UI", sans-serif;
+  text-decoration: none; white-space: nowrap; vertical-align: 0.12em;
+}
+.md a.cite:hover { color: var(--accent); border-color: rgba(217, 102, 31, 0.5); }
+.md li + li { margin-top: 0.45em; }
 .tbl { overflow-x: auto; margin: 0.6em 0; }
 .md table { width: auto; font-size: 0.88rem; }
 @media (max-width: 900px) {

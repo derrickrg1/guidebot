@@ -158,7 +158,15 @@ h1 { margin: 0; color: var(--navy); font-weight: 600; }
 .md blockquote { margin: 4px 0 8px; padding: 4px 12px; border-left: 3px solid var(--gold); color: var(--steel); font-size: 0.9em; }
 .md code { background: var(--side); padding: 1px 5px; border-radius: 4px; font-size: 0.88em; }
 .md a { color: var(--gold); }
-.md a.cite { font-size: 0.82em; font-style: italic; }
+/* Citations are small page chips so the sentence reads straight through (full filename on hover). */
+.md a.cite {
+  display: inline-block; margin: 0 2px; padding: 0 7px; border: 1px solid var(--rule); border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05); color: var(--mist); font: 500 0.66rem/1.6 Inter, "Segoe UI", sans-serif;
+  text-decoration: none; white-space: nowrap; vertical-align: 0.12em; transition: color 0.15s, border-color 0.15s;
+}
+.md a.cite:hover { color: var(--navy); border-color: rgba(217, 102, 31, 0.5); }
+.md li + li { margin-top: 0.45em; }
+.md td a.cite { margin: 1px 2px 1px 0; }
 .tbl { overflow-x: auto; margin: 0.6em 0; }
 .md table { border-collapse: collapse; font-size: 0.88rem; }
 .md th, .md td { border: 1px solid var(--rule); padding: 5px 9px; text-align: left; vertical-align: top; }
