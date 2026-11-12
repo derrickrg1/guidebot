@@ -41,7 +41,7 @@ iPhone). It finds the cited line on the page by word overlap and marks it; if th
 tries one page either side and says "closest match on p. X". Falls back to the browser's PDF viewer on error.
 `ui/md.js` is the shared markdown/citation renderer for both pages.
 * Program colors (`PROGRAMS` in `ui/md.js`) come from the Revo site's `scripts/pages/accents.json` (the lifted
-"hero" tones; FHA/VA lightened from their accents). Express and Ignite share a product's color. Dots show on
+"hero" tones; FHA Teal lightened; VA in flag red, white and blue stripes). Express and Ignite share a product's color. Dots show on
 citation chips, table program cells, "Term:" rows, the picker and the viewer title. The header button toggles a
 wide chat column (remembered per browser).
 * Admin console: `/admin` (`ui/admin.html`, `guidebot/admin.py`) replaces the Streamlit Verify page: doc

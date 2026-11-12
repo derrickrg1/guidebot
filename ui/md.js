@@ -4,8 +4,9 @@ const esc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").re
   .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 // ---------- program colors ----------
 // Each product wears its paint from the Revo site's accent registry (revo-funding-site, scripts/pages/accents.json),
-// using the "hero" tone that's lifted to read on a dark background. FHA and VA have no hero tone there, so theirs
-// are FHA Teal and Military Brown lightened the same way. Express and Ignite share a product's color.
+// using the "hero" tone that's lifted to read on a dark background. FHA has no hero tone there, so its color
+// is FHA Teal lightened the same way. VA wears the flag's red, white and blue (its "hero edge" red and blue, also
+// from accents.json): stripes on dots and bars, the red where one color is needed. Express and Ignite share a color.
 const PROGRAMS = [
   ["second", /\b(2nd|second)\b/i, "#b884a3"],     // 2nd Liens, High at the Gala
   ["dscr", /\bDSCR\b/i, "#c3593c"],               // DSCR, Black-Orange
@@ -14,7 +15,7 @@ const PROGRAMS = [
   ["1099", /\b1099\b/, "#6197c7"],                // 1099, London House
   ["pl", /P\s*&(?:amp;)?\s*L\b|profit/i, "#b78587"], // P&L, Rose After Dark
   ["fha", /\bFHA\b/, "#4f9ba6"],                  // FHA Teal #1c5d67, lifted
-  ["va", /\bVA\b/, "#ad9361"],                    // Military Brown #62502b, lifted
+  ["va", /\bVA\b/, "#c8323f"],                    // flag red, hero edge (stripes below)
   ["conv", /conventional/i, "#e2d4ae"],           // Conventional sand
 ];
 // One product named: its key. None, or several ("Ignite 1099, Ignite Bank Statements"): no color.
@@ -25,11 +26,13 @@ function progKey(text) {
 }
 const progAttr = text => { const k = progKey(text); return k ? ` data-prog="${k}"` : ""; };
 document.head.insertAdjacentHTML("beforeend", `<style>${PROGRAMS.map(([k, , c]) => `[data-prog="${k}"]{--pc:${c}}`).join("")}
-.pdot{display:inline-block;flex:none;width:7px;height:7px;border-radius:2px;background:var(--pc);margin-right:7px;vertical-align:0.08em}
+[data-prog="va"]{--pdot:linear-gradient(90deg,#c8323f 0 34%,#fff 34% 66%,#4f79d8 66%);
+  --pbar:linear-gradient(180deg,#c8323f 0 34%,#fff 34% 66%,#4f79d8 66%)}
+.pdot{display:inline-block;flex:none;width:7px;height:7px;border-radius:2px;background:var(--pdot,var(--pc));margin-right:7px;vertical-align:0.08em}
 .md a.cite[data-prog]::before,.md td[data-prog]::before{content:"";display:inline-block;width:6px;height:6px;border-radius:2px;
-  background:var(--pc);margin-right:5px;vertical-align:0.08em}
+  background:var(--pdot,var(--pc));margin-right:5px;vertical-align:0.08em}
 .md td[data-prog]::before{width:7px;height:7px;margin-right:7px}
-.md li.row[data-prog]{box-shadow:inset 3px 0 0 var(--pc);padding-left:12px}</style>`);
+.md li.row[data-prog]{background:var(--pbar,linear-gradient(var(--pc),var(--pc))) no-repeat 0 0/3px 100%;padding-left:12px}</style>`);
 
 // Citations like (NonQM-Underwriting-Guidelines.pdf, section 7.2, p. 53; Ignite 1099 Expanded.pdf, p. 2) become
 // small chips, "NonQM Guide · §7.2 p. 53", one per source. Each opens the PDF at that page; the full citation
