@@ -7,11 +7,6 @@ import pytest
 from guidebot import claude_status, llm
 
 
-@pytest.fixture(autouse=True)
-def state(tmp_path, monkeypatch):
-    monkeypatch.setattr(claude_status, "FILE", tmp_path / "claude_status.json")
-
-
 def test_out_skips_claude(monkeypatch):
     calls = []
     monkeypatch.setattr(llm, "_claude_stream", lambda m, model: calls.append(model) or iter(["claude"]))

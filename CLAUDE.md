@@ -44,7 +44,7 @@ Picked 2026-11-13 by `tools/backup_race.py` (answer keys from Sonnet's checked r
 `data/stress/backup.md`): on 37 guideline questions gemma4 33 right, qwen3.6:35b-a3b 33 (but 71 dead/ungrounded
 citations vs 39), gpt-oss:20b 24, old qwen3:14b 22 (its 16K context cut the 20K-41K section-wide prompts; it said
 "84 months" for NonQM foreclosure). Deal race 56/56. Gemma QAT no faster; qwen3.8/3.6 27B dense, granite4:small-h and
-nemotron-3-nano too slow on 16 GB (147-593 s an answer) or wrong. About 70 s an answer, partly on the CPU. Kimi K3 /
+nemotron-3-nano too slow on 16 GB (147-593 s an answer) or wrong. About 70 s an answer, partly on the CPU. Speed notes (2026-11-13): the question embedding runs on the CPU (`embed_query`, num_gpu 0), since nomic on the GPU evicted gemma and it reloaded every question; local output is capped (`LOCAL_MAX_ANSWER` 4096, `LOCAL_MAX_JSON` 1024) after gemma looped to 40,504 tokens twice on one question (the Verdict step; a capped JSON reply isn't retried). Leave Ollama's flash attention and KV cache type at defaults: with them on, prompt reading fell from ~1,500 to ~200 tok/s and writing from 86 to 9 tok/s (gemma is ~23% on the CPU). Trimming each sheet to the question's lines for the local model cut all-NonQM answers to ~21 s but it then called four Ignite reserve tables "Not specified": reverted. Today: one program ~10 s, all of NonQM 55-115 s. Kimi K3 /
 GLM / DeepSeek are cloud only on Ollama, not tried. `GUIDEBOT_MODEL` / `GUIDEBOT_EFFORT` in `.env`
 override. `nomic-embed-text` (embeddings, Ollama). When the fallback answers, the chat shows nothing about it: the server strips
 `FALLBACK_SHOWN` and sends `{"fallback": true}`, and the bottom-left label reads "Model: backup (Claude unavailable)" (not

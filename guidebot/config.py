@@ -36,6 +36,10 @@ EMBED_MODEL = "nomic-embed-text"
 EMBED_DOC_PREFIX = "search_document: "    # nomic needs these, set both to "" for other embed models
 EMBED_QUERY_PREFIX = "search_query: "
 CHAT_OPTIONS = {"temperature": 0.1, "num_ctx": LOCAL_CTX}
+# Longest a local answer / structured reply may run. Without a cap gemma4 once looped to 40,504 tokens, twice, on one
+# question (21 minutes, 2026-11-13). Claude's longest stress answers were about 2,500 tokens.
+LOCAL_MAX_ANSWER = 4096
+LOCAL_MAX_JSON = 1024   # router replies are ~30 tokens, a Verdict a few hundred
 RERANK = os.environ.get("GUIDEBOT_RERANK", "1") != "0"   # guidebot/rerank.py on the GPU; off when torch isn't there
 
 CHUNK_CHARS = 1200

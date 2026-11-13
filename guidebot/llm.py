@@ -16,7 +16,10 @@ def embed_docs(texts: list[str]) -> list[list[float]]:
 
 
 def embed_query(text: str) -> list[float]:
-    return ollama.embed(model=config.EMBED_MODEL, input=[config.EMBED_QUERY_PREFIX + text])["embeddings"][0]
+    # On the CPU (num_gpu 0): loading it on the GPU pushed the local model out, and the local model then reloaded
+    # for every question, 15-20 s each (2026-11-13). One short query embeds in milliseconds on the CPU.
+    return ollama.embed(model=config.EMBED_MODEL, input=[config.EMBED_QUERY_PREFIX + text],
+                        options={"num_gpu": 0})["embeddings"][0]
 
 
 # ---------- Claude ----------
@@ -109,11 +112,16 @@ def _open_stream(kwargs):
 
 def _ollama_stream(messages: list[dict], model: str):
     messages = [{"role": m["role"], "content": m["content"]} for m in messages]   # drop Claude-only keys ("cache")
-    kwargs = dict(model=model, messages=messages, stream=True, options=config.CHAT_OPTIONS)
+    kwargs = dict(model=model, messages=messages, stream=True,
+                  options={**config.CHAT_OPTIONS, "num_predict": config.LOCAL_MAX_ANSWER})
     first, stream = _open_stream(kwargs)
     yield first["message"]["content"] or ""
+    last = first
     for part in stream:
+        last = part
         yield part["message"]["content"] or ""
+    if last.get("done_reason") == "length":
+        yield "\n\n*This answer was cut off. Ask again or narrow the question.*"
 
 
 def _ollama_json(system: str, user: str, schema, model: str, retries: int):
@@ -123,7 +131,7 @@ def _ollama_json(system: str, user: str, schema, model: str, retries: int):
         model=model,
         messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         format=schema.model_json_schema(),
-        options={**config.CHAT_OPTIONS, "temperature": 0},
+        options={**config.CHAT_OPTIONS, "temperature": 0, "num_predict": config.LOCAL_MAX_JSON},
     )
     last = None
     for _ in range(retries):
@@ -135,6 +143,9 @@ def _ollama_json(system: str, user: str, schema, model: str, retries: int):
             return schema.model_validate_json(resp["message"]["content"])
         except ValidationError as e:
             last = e
+        if resp.get("done_reason") == "length":   # a loop: at temperature 0 a retry loops the same way
+            sys.stderr.write(f"{model} ran to the {config.LOCAL_MAX_JSON} token cap on {schema.__name__}\n")
+            break
     raise last
 
 
