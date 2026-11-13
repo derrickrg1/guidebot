@@ -126,7 +126,7 @@ so the bot no longer calls its own earlier citation wrong.
 
 ## Current status
 
-* 150 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 157 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked
@@ -167,7 +167,10 @@ Derrick needs to Re-read and approve each; until then the VA/FHA tabs say so ins
   95.01-97% rules. A picked program reads its sheet; section-wide deals go through `_compare` per program. All nine
   sheets re-read and approved 2026-11-12 by Claude at Derrick's explicit instruction, after checking every row and
   footnote against the PDF pages (an exception to "Claude never clicks Approve", not a change to it). Footnotes in a
-  right-hand box (refi sheets' "*Minimum Fico") are read apart from the left column (`footnotes`). Tests in `tests/test_conv_matrix.py`.
+  right-hand box (refi sheets' "*Minimum Fico") are read apart from the left column (`footnotes`). Each row's place
+  on the page is saved (`marks`, `colx` attrs) and the answer's chip carries it ("mark x0 y0 x1 y1 ..."), so the
+  viewer marks that exact row and cell: word matching can't tell "1 | 75% | 75%" under Second Home from Investment.
+  "Limited cash-out" / "no cash-out" read as Rate/Term (`_PURPOSE`; they used to read as cash-out). Tests in `tests/test_conv_matrix.py`.
 * Express 2nd (Express 8.15.2026, Premier 3.2.2026) parses as text only, no LTV grid yet.
 * NonQM Shared guidelines PDF changed since it was approved: needs a re-check.
 

@@ -240,7 +240,7 @@ class RawScenario(BaseModel):
 RAW_SCENARIO_SYSTEM = """Extract the loan scenario details from the user's message.
 Return null for any field not mentioned.
 occupancy: "Primary Residence", "Second Home", or "Investment Property"
-purpose: "Purchase", "Rate/Term Refinance", or "Cash Out Refinance"
+purpose: "Purchase", "Rate/Term Refinance", or "Cash Out Refinance" ("limited cash-out" and "no cash-out" are Rate/Term)
 property_type: "SFR", "Condo", "2-4 Unit", "Townhome", or "Rural"
 List any key fields not provided in 'missing' (fico, loan_amount, occupancy, purpose, property_type)."""
 
@@ -251,8 +251,9 @@ _AMOUNT = re.compile(r"\$\s*(\d[\d,]*(?:\.\d+)?)\s*([km]\b)?|\b(\d+(?:\.\d+)?)\s
 _OCCUPANCY = {"Investment Property": r"invest|rental|non[- ]?owner|\bnoo\b",
               "Second Home": r"second home|2nd home|vacation home",
               "Primary Residence": r"primary|owner[- ]occupied|\boo\b"}
-_PURPOSE = {"Cash Out Refinance": r"cash[- ]?out|\bc/o\b",   # not bare "co": that's co-borrower
-            "Rate/Term Refinance": r"rate[ /&-]*(and )?term|\br/?t\b|no cash|refi",
+# "limited cash-out" (Fannie) and "no cash-out" are rate/term: the cash-out pattern read them as cash-out once
+_PURPOSE = {"Cash Out Refinance": r"(?<!no )(?<!no-)(?<!limited )(?<!limited-)cash[- ]?out|\bc/o\b",   # not bare "co"
+            "Rate/Term Refinance": r"rate[ /&-]*(and )?term|\br/?t\b|(no|limited)[- ]cash|refi",
             "Purchase": r"purchas|buying|\bbuy\b"}
 REQUIRED = ("fico", "loan_amount", "occupancy", "purpose")
 
@@ -598,7 +599,7 @@ def comparison_md(comp: dict) -> str:
     errors = [r for r in results if r.get("eligible") is None]
     if eligible:
         rows = "\n".join(
-            f"| {r['program']} | **{r['max_ltv']:g}%** | {r.get('cell', '')} | "
+            f"| {r['program']} | **{r['max_ltv']:g}%** | {' '.join(x for x in (r.get('cell', ''), r.get('cite')) if x)} | "
             f"{', '.join(r.get('overlays') or []).replace('|', '/') or 'none'}{' ⚠️ stacked' if r.get('stacked') else ''} |"
             for r in eligible)
         parts.append("**Eligible programs**\n\n| Program | Max LTV | Matrix cell | Overlays applied |\n"

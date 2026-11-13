@@ -3,6 +3,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import re
+
 import pytest
 
 from guidebot import config, conv_matrix, library
@@ -106,3 +108,38 @@ def test_footnotes_read_like_the_sheet():
     # the "*Minimum Fico" box sits beside footnote 2's two lines on the page
     assert "2: Loans with resubordinated Affordable Seconds max TLTV of 105%" in notes
     assert notes[-1].startswith("*Minimum Fico requirements determined by LPA")
+
+
+@have_pdfs
+def test_answer_cites_the_exact_row(fannie):
+    # "1 | 75% | 75%" is on the page under Second Home and Investment: the chip carries this row's place
+    out = conv_matrix.answer(_deal(700, 300000, "Investment Property", "Cash Out Refinance"), "", fannie)
+    mark = re.search(r"\(Fannie-Mae-Matrix\.pdf, p\. 1, mark ([\d. ]+)\)", out)
+    assert mark
+    x0, y0, x1, y1, cx0, _, cx1, _ = map(float, mark[1].split())
+    df = conv_matrix.conv_mats(fannie)[0]["df"]
+    second = df.index[(df["Occupancy"] == "Second Home") & (df["Loan Purpose"] == "Cash-out")][0]
+    assert df.attrs["marks"][second][1] > y1   # Second Home's "1 | 75%" row is higher on the page
+    assert x0 <= cx0 < cx1 <= x1
+    res = conv_matrix.result(_deal(700, 300000, "Investment Property", "Cash Out Refinance"), "", fannie)
+    assert res["cite"] == mark[0]
+
+
+@pytest.mark.parametrize("text, purpose", [
+    ("680 FICO, $350k limited cash-out refi, investment, fourplex", "Rate/Term Refinance"),
+    ("no cash-out refi, 700 FICO", "Rate/Term Refinance"),
+    ("no cash out refinance", "Rate/Term Refinance"),
+    ("680 FICO, $500k cash-out refi, primary", "Cash Out Refinance"),
+    ("rate and term refi", "Rate/Term Refinance"),
+])
+def test_limited_cash_out_is_rate_term(text, purpose):
+    from guidebot.answer import said_scenario
+    assert said_scenario(text, []).purpose == purpose
+
+
+@have_pdfs
+def test_fannie_limited_cash_out_investment_fourplex(fannie):
+    from guidebot.answer import said_scenario
+    raw = said_scenario("680 FICO, $350k limited cash-out refi, investment, fourplex", [])
+    res = conv_matrix.result(raw, "680 FICO, $350k limited cash-out refi, investment, fourplex", fannie)
+    assert res["max_ltv"] == 75   # the Limited Cash-Out 1-4 row, not Cash-Out 2-4 (70%)

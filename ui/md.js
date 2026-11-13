@@ -61,8 +61,10 @@ function citeChips(inner) {
     const pg = (part.match(/p(?:age|p)?\.?\s*(\d+)/i) || [])[1];
     const sec = (part.match(/(?:section|§)\s*([\d.]+\d)/i) || [])[1];
     const label = shortName(file) + (sec || pg ? " · " : "") + (sec ? `§${sec} ` : "") + (pg ? `p. ${pg}` : "");
+    // "mark x0 y0 x1 y1 ...": a matrix row's exact place on the page, from the Python lookup (conv_matrix.cite)
+    const mark = (part.match(/,\s*mark ([\d. ]+)/) || [])[1]?.trim();
     return `<a class="cite"${progAttr(file)} href="${API}/pdf/${encodeURIComponent(file)}${pg ? "#page=" + pg : ""}" target="_blank"
-      title="${esc(part.trim())}">${esc(label.trim())}</a>`;
+      ${mark ? `data-mark="${esc(mark)}" ` : ""}title="${esc(part.replace(/,\s*mark [\d. ]+/, "").trim())}">${esc(label.trim())}</a>`;
   }).join("");
 }
 function inline(s) {
@@ -108,7 +110,8 @@ function md(src) {
       i += 2;
       while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) {
         // The first column names the program in comparison tables: give it the program's color dot.
-        t += "<tr>" + cells(lines[i]).map((c, j) => `<td${j ? "" : progAttr(c)}>${inline(c)}</td>`).join("") + "</tr>"; i++;
+        // (A cell that is a citation already wears the dot on its chip.)
+        t += "<tr>" + cells(lines[i]).map((c, j) => `<td${j || /\.pdf\b/i.test(c) ? "" : progAttr(c)}>${inline(c)}</td>`).join("") + "</tr>"; i++;
       }
       out += t + "</tbody></table></div>"; continue;
     }

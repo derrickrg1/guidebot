@@ -55,7 +55,8 @@ def parse_table(table) -> pd.DataFrame | None:
             rows.append(cells)
     full = lambda bb: bb[2] - bb[0] > 0.6 * (x1 - x0)
 
-    titles, notes, side, out, limits = [], [], [], [], {}
+    titles, notes, side, out, limits, marks, colx = [], [], [], [], {}, [], {}
+    page_h = table.page.height
     occ, cols, high_label, carry, in_body, done = "", None, "", {}, False, False
     for cells in rows:
         texts = [t for _, t in cells]
@@ -116,11 +117,12 @@ def parse_table(table) -> pd.DataFrame | None:
         if "Conforming Max LTV" not in names:
             continue
         high_label = high_label or next((c["label"] for c in cols if HIGH.search(c["label"])), "")
-        rec = {}
+        rec, ubb = {}, None
         for bb, t in cells:
             i = max(range(len(cols)), key=lambda k: _overlap((bb[0], bb[2]), cols[k]["x"]))
             if _overlap((bb[0], bb[2]), cols[i]["x"]) > 0.3:
                 rec.setdefault(names[i], t.lstrip(". ").strip())
+                ubb = bb if names[i] == "Units" and ubb is None else ubb
         if not rec.get("Units") and not any(k.endswith("Max LTV") for k in rec):
             continue
         in_body = True
@@ -131,6 +133,12 @@ def parse_table(table) -> pd.DataFrame | None:
                 rec[k] = carry[k]
         if "Loan Purpose" in rec and "Minimum FICO" in rec and "Units" in rec:
             out.append({"Occupancy": occ, **rec})
+            # where the row sits on the page (PDF units, y up), so the viewer marks this row and no other
+            ltv = [c["x"] for c, n in zip(cols, names) if n.endswith("Max LTV")]
+            ux = next(c["x"] for c, n in zip(cols, names) if n == "Units")
+            marks.append([round(v, 1) for v in (ux[0], page_h - ubb[3], max(x[1] for x in ltv), page_h - ubb[1])])
+            colx.update({n: [round(c["x"][0], 1), round(c["x"][1], 1)] for c, n in zip(cols, names)
+                         if n.endswith("Max LTV")})
     if not out:
         return None
     columns = ["Occupancy", "Loan Purpose", "Minimum FICO", "Max DTI", "Units", "Conforming Max LTV",
@@ -139,7 +147,7 @@ def parse_table(table) -> pd.DataFrame | None:
     df = pd.DataFrame([[r.get(c, "") for c in columns] for r in out], columns=columns)
     df.attrs.update(kind="conv", title=" · ".join(titles[:2]), dims=["Occupancy", "Loan Purpose", "Units"],
                     notes=" ".join(notes + side), limits={k: v for k, v in sorted(limits.items())},
-                    high_label=re.sub(r"\s*Max.*", "", high_label, flags=re.I).strip())
+                    high_label=re.sub(r"\s*Max.*", "", high_label, flags=re.I).strip(), marks=marks, colx=colx)
     return df
 
 
@@ -225,13 +233,25 @@ def lookup(df: pd.DataFrame, fico: int | None, loan: int | None, purpose: str, o
     ltv, marks, extra = ltv_of(r[col])
     if ltv is None:
         return {"why": f"{r[col] or 'blank'}: not allowed ({tier}, {r['Loan Purpose']}, {r['Units']})"}
-    return {"row": {c: r[c] for c in df.columns}, "ltv": ltv, "cell": r[col], "marks": marks, "extra": extra,
+    return {"row": {c: r[c] for c in df.columns}, "i": int(r.name), "col": col, "ltv": ltv, "cell": r[col], "marks": marks, "extra": extra,
             "tier": tier, "limit": lim[0] if tier == "Conforming" else lim[1]}
 
 
 def conv_mats(mats: list[dict]) -> list[dict]:
     """The sheet's LTV table, without the other grids on its pages (page 2's ARM caps table)."""
     return [m for m in mats if m["df"].attrs.get("kind") == "conv"]
+
+
+def cite(m: dict, res: dict) -> str:
+    """The matrix as a citation chip. "mark" carries the row's and the cell's place on the page, so the viewer
+    highlights them instead of guessing by words ("1 | 75% | 75%" is on the page twice)."""
+    marks, colx = m["df"].attrs.get("marks") or [], m["df"].attrs.get("colx") or {}
+    if res.get("i") is None or res["i"] >= len(marks):
+        return f"({m['file']}, p. {m['page']})"
+    x0, y0, x1, y1 = marks[res["i"]]
+    cx = colx.get(res["col"]) or [x0, x1]
+    nums = [x0, y0, x1, y1, cx[0], y0, cx[1], y1]
+    return f"({m['file']}, p. {m['page']}, mark {' '.join(f'{v:g}' for v in nums)})"
 
 
 def footnotes(notes: str) -> list[str]:
@@ -293,7 +313,7 @@ def result(raw, question: str, mats: list[dict]) -> dict:
         return {"eligible": False, "error": "; ".join(dict.fromkeys(why))}
     m, res = best
     note = ", ".join(x for x in (res["tier"], res["extra"]) if x)
-    return {"eligible": True, "max_ltv": res["ltv"], "cell": res["cell"], "trace": [m["file"]],
+    return {"eligible": True, "max_ltv": res["ltv"], "cell": res["cell"], "cite": cite(m, res), "trace": [m["file"]],
             "overlays": [f"{note}; matrix only, sheet requirements not applied"]}
 
 
@@ -329,7 +349,7 @@ def answer(raw, question: str, mats: list[dict]) -> str:
                                 else r["Units"], f"FICO {r['Minimum FICO']}+") if x)
     cond = "; ".join(x for x in (res["extra"], r.get("Max DTI") and f"max DTI {r['Max DTI']}",
                                  f"loan up to ${res['limit']:,.0f}") if x)
-    lines.append(f"| {m['file']} p. {m['page']} | {row} | {res['tier']} | **{res['cell']}** | {cond} |")
+    lines.append(f"| {cite(m, res)} | {row} | {res['tier']} | **{res['cell']}** | {cond} |")
     # "* Minimum Fico requirements determined by DU" sits beside footnote 2 on the refi sheets: its own line
     notes = footnotes(m["df"].attrs.get("notes", ""))
     if notes:

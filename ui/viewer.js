@@ -228,9 +228,13 @@ async function openGuideline(link) {
     V.marks = null;
     setHeader(target, "finding the line…");
     const claim = claimFor(link);
-    let at = target, rects = await findMarks(await V.doc.getPage(target), claim);
+    // A Python matrix lookup says exactly where its row and cell are: no guessing by words.
+    const nums = (link.dataset.mark || "").split(/\s+/).filter(Boolean).map(Number);
+    const placed = nums.length >= 4 && nums.length % 4 === 0;
+    let at = target, rects = placed ? [...Array(nums.length / 4)].map((_, i) => nums.slice(i * 4, i * 4 + 4))
+      : await findMarks(await V.doc.getPage(target), claim);
     // Citations are sometimes a page off. Look one page either side and say so in the header.
-    for (const n of [target + 1, target - 1]) {
+    for (const n of placed ? [] : [target + 1, target - 1]) {
       if (rects.length || n < 1 || n > V.n) continue;
       const r = await findMarks(await V.doc.getPage(n), claim);
       if (r.length) { at = n; rects = r; }
@@ -239,7 +243,7 @@ async function openGuideline(link) {
     V.marks = { page: at, rects };
     V.pinned = true;   // keep the marked line in view through refits until the reader scrolls
     await showMark();
-    const marked = `${rects.length === 1 ? "line" : rects.length + " lines"} marked`;
+    const marked = placed ? "matrix row and cell marked" : `${rects.length === 1 ? "line" : rects.length + " lines"} marked`;
     V.note = !rects.length ? `couldn't match the cited line on p. ${target}, check the page`
       : at !== target ? `closest match on p. ${at} (cited as p. ${target})` : marked;
     setHeader(at);
