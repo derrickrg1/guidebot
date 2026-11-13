@@ -35,7 +35,7 @@ task "Guidebot server" runs `scripts/run_server.ps1` at login, which relaunches 
 (log in `%LOCALAPPDATA%\guidebot\server.log`, with restart markers). To restart by hand, kill the python
 `-m guidebot.server` process; the loop brings it back in 5 to 30 seconds. The cloudflared
 service tunnels it to asknick.derrickgarcia.dev and guidebot.derrickgarcia.dev, both behind Cloudflare Access
-(policy "Derrick Access": his Gmail and nwilson@revofunding.com).
+(policy "Derrick Access": his Gmail, nwilson@ and calderon@revofunding.com; chat only, admin is his Gmail alone).
 * Citation chips open the PDF in a right-side panel (`ui/viewer.js`, PDF.js 3.11.174 from cdnjs, works on
 iPhone). It finds the cited line on the page by word overlap and marks it; if the cited page has no match it
 tries one page either side and says "closest match on p. X". Falls back to the browser's PDF viewer on error.
@@ -65,7 +65,7 @@ inside the server (indexer `_lock`). Files the agency stops listing are archived
 away; cited unreviewed guides get a "hasn't been reviewed yet" line from Python. A Mortgagee Letter or Circular
 newer than the handbook wins over it; NDM's sheet wins over all (`RULES`). Fannie blocks automated downloads
 (the classifier stopped a workaround, rightly): the check only posts a notice, Derrick saves the PDF into
-`agency/Conventional/Fannie Mae/` and the next check reads it. Indexed as program "<Section> Agency".
+`agency/Conventional/Fannie Mae/` and the next check reads it. Loaded 2026-11-12: Selling Guide published 11/4/2026, 1,199 pages, from the link Derrick found (`singlefamily.fanniemae.com/media/48416/display`; the page's own Download link 403s). Its pages are the general guideline for Fannie programs only (Fannie Mae, HomeReady, RefiNow); Freddie programs (`chat.FREDDIE`) get none until a Freddie guide is added. Indexed as program "<Section> Agency".
 `chat._agency_hits` takes 6 handbook pages and 3 letter/circular pages separately (ML 2026-11 crowded the
 handbook out and the 500 MDCS floor went missing), and each handbook page brings the next one along (that rule
 starts on p. 176, the standard is on p. 177). A newer letter is flagged "Newer agency guidance (supersedes

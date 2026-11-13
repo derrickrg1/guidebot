@@ -31,6 +31,11 @@ RULES = """Rules:
   state a requirement, there is no overlay and the general guideline's rule applies. Say "No overlay, general
   guideline applies" and give that rule with its citation. Never answer a program with only "not addressed on the
   sheet". Say a requirement isn't covered only when the general guideline doesn't state it either.
+- "No overlay, general guideline" needs the general guideline's own text and citation from the pages you were
+  given. When the sheet itself states the rule, it's the sheet's rule: cite the sheet, never call it "general
+  guideline". When the sheet is silent and the pages you have from the general guideline don't state it either
+  (or none were given), say "Not on the sheet; general guideline not in the pages loaded". Never present a rule
+  as the general guideline's without quoting a general guideline page.
 - The other way round: when the sheet states a requirement that differs from the general guideline (stricter,
   looser, or a different number), the sheet wins. Flag it as "**Overlay (supersedes general guideline):**" with the
   sheet's rule and citation, then give the general guideline's rule it replaces with its citation, so the reader
@@ -121,7 +126,10 @@ BROAD_SYSTEM = (
     "  One row per program, the number bolded in Requirement, citation in Source as (filename, p. X). A program with\n"
     "  no overlay gets the general guideline's rule, \"No overlay, general guideline\" in Conditions, and the general\n"
     "  guideline's citation in Source. A program whose sheet rule differs from the general guideline gets \"Overlay,\n"
-    "  supersedes general guideline (general: <its rule>)\" in Conditions. Put programs with the same answer next to each other. After the table, add\n"
+    "  supersedes general guideline (general: <its rule>)\" in Conditions. A rule the sheet itself states is\n"
+    "  the sheet's: cite the sheet and leave \"general guideline\" out of it. Rows go in the order the program\n"
+    "  sheets are given below, one row for every program sheet, whatever each one's answer. The agency's base\n"
+    "  programs (Fannie Mae, Freddie Mac, Standard) are program sheets too and come first. After the table, add\n"
     "  only short bullets for things the table can't hold.\n"
     "- Never state a max LTV or CLTV percentage, from a matrix or anywhere else. If the question needs one, say to\n"
     "  switch to Scenario mode and give the deal (FICO, loan amount, occupancy, purpose, property type).\n"

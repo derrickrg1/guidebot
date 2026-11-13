@@ -37,6 +37,30 @@ SECTIONS = {
     "VA": lambda name: name == "VA" or name.startswith("VA "),
 }
 
+# Base programs first, then their variants: Fannie Mae and Freddie Mac before HomeReady and RefiNow, Standard
+# before Streamline and IRRRL. Everything else stays alphabetical.
+_BASE = re.compile(r"(?:^Conventional (?:Fannie Mae|Freddie Mac)|^(?:FHA|VA) Standard)$")
+
+
+NO_GENERAL_NOTE = (
+    "##### NOTE: NO GENERAL GUIDELINE LOADED #####\n\nNo agency guide pages were found for this question, so there is "
+    "no general guideline text to compare against. Don't write \"No overlay, general guideline\" or \"supersedes "
+    "general guideline\" anywhere. Give each program's rule as its own sheet states it, cited to that sheet. Where a "
+    "sheet is silent, say \"Not on the sheet; agency guide not loaded\". Don't mention this note; at most, one closing "
+    "bullet may say the agency guide isn't loaded yet.")
+
+
+# Conventional programs follow their own agency's guide. Only Fannie's Selling Guide is loaded, so Freddie Mac
+# programs get no general guideline rather than Fannie's rules.
+FREDDIE = re.compile(r"freddie|home possible|homeone|refi possible", re.I)
+FANNIE_ONLY = ("; the general guideline for Fannie Mae programs only (Fannie Mae, HomeReady, RefiNow), never for "
+               "Freddie Mac programs (Freddie Mac, Home Possible, HomeOne, Refi Possible)]")
+
+
+def program_order(name: str) -> tuple:
+    return (not _BASE.search(name), name)
+
+
 _retriever = None
 
 
@@ -115,6 +139,8 @@ def _agency_hits(question: str, sec: str, k: int = 6, k_letters: int = 3) -> lis
     for i, h in enumerate(found):
         rec = agency.info(h["file"])
         head = f"[GENERAL GUIDELINE, agency guide: {agency.label(rec) if rec else h['file']}]"
+        if "Fannie Mae" in h["file"]:
+            head = head[:-1] + FANNIE_ONLY
         # The index holds one page per chunk, and a handbook rule often runs across pages (HUD's MDCS definition
         # on p. 176, its standard on p. 177; the gift donor list starts on p. 362, the hit was p. 363). Every
         # handbook page brings the next one along, and the three best also bring the one before.
@@ -211,10 +237,11 @@ def _program_answer(question, history, prog, docs, model):
     Conventional sheets also get the matching pages of their agency guides. Returns (answer, hits)."""
     ltv_ok = all(d["status"] == "verified" for d in docs)
     docs_text = "\n\n".join(library.render(d) for d in docs)
-    gov = _agency_hits(question, _agency_section(prog, ""))
+    gov = [] if FREDDIE.search(prog) else _agency_hits(question, _agency_section(prog, ""))
     if len(docs_text) <= config.FULL_DOC_MAX_CHARS:
         yield {"status": f"Reading {prog}…"}
-        answer = yield from _stream(full_doc_messages(question, docs_text + _agency_block(gov), history,
+        no_general = "\n\n" + NO_GENERAL_NOTE if _agency_section(prog, "") and not gov else ""
+        answer = yield from _stream(full_doc_messages(question, docs_text + _agency_block(gov) + no_general, history,
                                                       ltv_ok=ltv_ok, model=model), model)
         return answer, gov
     yield {"status": f"Searching {prog}…"}
@@ -234,7 +261,7 @@ def _broad_answer(question, history, all_programs, model, section=""):
     Now every program sheet is read whole; guides too long for that (FHA, VA, 2nds) are searched, and the shared
     guide is routed to its relevant sections as before. Returns (answer, hits)."""
     sheets, long_progs = [], []
-    for prog in sorted(all_programs):
+    for prog in sorted(all_programs, key=program_order):
         if prog == SHARED:
             continue
         paths, _ = library.unique_docs(all_programs[prog])   # the shared guide is added once below, not per program
@@ -265,8 +292,13 @@ def _broad_answer(question, history, all_programs, model, section=""):
                       if h["text"].strip()[:200] not in routed_text]
     except Exception:
         pass   # no index yet: the sheets and routed shared guide still answer
-    gov = _agency_hits(question, _agency_section("", section))
+    sec = _agency_section("", section)
+    gov = _agency_hits(question, sec)
     extra += [h["text"] for h in found + gov]
+    if sec and not gov:
+        # No agency guide loaded (Fannie's Selling Guide is a manual download): with nothing to quote, the model
+        # was labeling each sheet's own rule "No overlay, general guideline".
+        extra.append(NO_GENERAL_NOTE)
     yield {"status": f"Reading {len(sheets)} program sheets…"}
     answer = yield from _stream(broad_messages(question, "\n\n".join(sheets), "\n\n".join(extra), history, model), model)
     if found:

@@ -293,3 +293,20 @@ def test_section_narrows_programs(monkeypatch):
     assert seen["progs"] == ["Express 1099", chat.SHARED]
     assert list(chat.respond("reserves?", [], section="Conventional")) == [
         {"replace": "No Conventional programs are loaded yet."}]
+
+
+def test_base_programs_first_and_no_unquoted_general_guideline():
+    """Fannie Mae and Freddie Mac lead the Conventional table; a sheet's own rule is never labeled general guideline."""
+    names = ["Conventional HomeOne", "Conventional RefiNow", "Conventional Freddie Mac", "Conventional Fannie Mae"]
+    assert sorted(names, key=chat.program_order)[:2] == ["Conventional Fannie Mae", "Conventional Freddie Mac"]
+    from guidebot.answer import BROAD_SYSTEM, RULES
+    flat = " ".join(RULES.split())
+    assert "general guideline not in the pages loaded" in flat
+    assert "order the program sheets are given" in " ".join(BROAD_SYSTEM.split())
+
+
+def test_freddie_programs_skip_fannie_guide():
+    assert all(chat.FREDDIE.search(p) for p in ["Conventional Freddie Mac", "Conventional Home Possible VLIP",
+                                                 "Conventional HomeOne", "Conventional Refi Possible"])
+    assert not any(chat.FREDDIE.search(p) for p in ["Conventional Fannie Mae", "Conventional HomeReady",
+                                                     "Conventional RefiNow"])
