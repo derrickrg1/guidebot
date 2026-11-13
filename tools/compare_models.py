@@ -1,6 +1,6 @@
 """Race chat models on scenarios whose answers were checked by hand against each program's PDF.
 
-Run:  python -m tools.compare_models claude-sonnet-5-5 qwen3:14b
+Run:  python -m tools.compare_models claude-sonnet-5-5 gemma4:26b
       python -m tools.compare_models claude-sonnet-5-5 --program "Ignite P&L"
 
 Scenario answers use each program's overlay rules (treated as approved in memory only, nothing is saved),
@@ -15,7 +15,7 @@ import re
 import sys
 import time
 
-from guidebot import chat, library, overlay_rules
+from guidebot import chat, config, library, overlay_rules
 from guidebot.answer import full_doc_messages, scenario_answer
 from guidebot.llm import stream_chat
 
@@ -163,5 +163,5 @@ if __name__ == "__main__":
         i = args.index("--program")
         only = args[i + 1]
         del args[i:i + 2]
-    for m in args or ["qwen3:14b", "gpt-oss:20b"]:
+    for m in args or [config.LOCAL_MODEL]:
         run(m, only)

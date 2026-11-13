@@ -189,9 +189,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json({"error": "not found"}, 404)
 
 
-TEST_MODELS = {"claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", config.LOCAL_MODEL,
-               "qwen3:14b", "gpt-oss:20b", "gemma4:26b", "qwen3.8:27b", "qwen3.6:35b", "granite4:small-h",
-               "nemotron-3-nano:30b"}   # local backup candidates
+TEST_MODELS = {"claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", config.LOCAL_MODEL}
 
 
 def _test_model(headers, body) -> str:

@@ -26,7 +26,7 @@ Matrices are editable grids. Fix anything off, then hit **Approve**.
 ## Setup (Windows)
 
 ```
-ollama pull qwen3:14b
+ollama pull gemma4:26b
 ollama pull nomic-embed-text
 python -m venv .venv
 .venv\Scripts\activate
