@@ -305,8 +305,11 @@ def test_base_programs_first_and_no_unquoted_general_guideline():
     assert "order the program sheets are given" in " ".join(BROAD_SYSTEM.split())
 
 
-def test_freddie_programs_skip_fannie_guide():
+def test_each_conventional_program_gets_its_own_agency_guide():
     assert all(chat.FREDDIE.search(p) for p in ["Conventional Freddie Mac", "Conventional Home Possible VLIP",
                                                  "Conventional HomeOne", "Conventional Refi Possible"])
     assert not any(chat.FREDDIE.search(p) for p in ["Conventional Fannie Mae", "Conventional HomeReady",
                                                      "Conventional RefiNow"])
+    assert chat.agency_folder("Conventional Home Possible") == "Conventional/Freddie Mac"
+    assert chat.agency_folder("Conventional HomeReady") == "Conventional/Fannie Mae"
+    assert chat.agency_folder("FHA Standard") == ""

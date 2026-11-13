@@ -184,3 +184,12 @@ def test_agency_section_and_rules():
     assert "GENERAL GUIDELINE, agency guide" in rules and "Every VA Circular you're given is still in force" in rules
     assert "never an agency letter" in rules
     assert '"depends" (on the program), never "no"' in " ".join(answer.VERDICT_SYSTEM.split())
+
+
+def test_freddie_notice_asks_monthly():
+    from datetime import date
+    v = lambda d: agency.freddie_guide(d)[0]["version"]
+    assert v(date(2026, 11, 12)) == "2026-11-01"   # a copy published 11/4 answers it
+    assert v(date(2026, 12, 9)) == "2026-11-01"
+    assert v(date(2026, 12, 10)) == "2026-12-01"
+    assert v(date(2027, 1, 3)) == "2026-12-01"

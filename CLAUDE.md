@@ -33,7 +33,9 @@ override. `nomic-embed-text` (embeddings, Ollama).
 * Main UI: `ui/guidebot.html` served by `python -m guidebot.server` on 127.0.0.1:8600. A Windows scheduled
 task "Guidebot server" runs `scripts/run_server.ps1` at login, which relaunches the server if it ever exits
 (log in `%LOCALAPPDATA%\guidebot\server.log`, with restart markers). To restart by hand, kill the python
-`-m guidebot.server` process; the loop brings it back in 5 to 30 seconds. The cloudflared
+`-m guidebot.server` process; the loop brings it back in 5 to 30 seconds. The task runs it through
+`conhost.exe --headless` (since 2026-11-12: `-WindowStyle Hidden` still opened a Windows Terminal window, and closing
+it killed the loop), plus a trigger every 5 minutes (IgnoreNew) that restarts a dead loop. The cloudflared
 service tunnels it to asknick.derrickgarcia.dev and guidebot.derrickgarcia.dev, both behind Cloudflare Access
 (policy "Derrick Access": his Gmail, nwilson@ and calderon@revofunding.com; chat only, admin is his Gmail alone).
 * Citation chips open the PDF in a right-side panel (`ui/viewer.js`, PDF.js 3.11.174 from cdnjs, works on
@@ -65,7 +67,7 @@ inside the server (indexer `_lock`). Files the agency stops listing are archived
 away; cited unreviewed guides get a "hasn't been reviewed yet" line from Python. A Mortgagee Letter or Circular
 newer than the handbook wins over it; NDM's sheet wins over all (`RULES`). Fannie blocks automated downloads
 (the classifier stopped a workaround, rightly): the check only posts a notice, Derrick saves the PDF into
-`agency/Conventional/Fannie Mae/` and the next check reads it. Loaded 2026-11-12: Selling Guide published 11/4/2026, 1,199 pages, from the link Derrick found (`singlefamily.fanniemae.com/media/48416/display`; the page's own Download link 403s). Its pages are the general guideline for Fannie programs only (Fannie Mae, HomeReady, RefiNow); Freddie programs (`chat.FREDDIE`) get none until a Freddie guide is added. Indexed as program "<Section> Agency".
+`agency/Conventional/Fannie Mae/` and the next check reads it. Loaded 2026-11-12: Selling Guide published 11/4/2026, 1,199 pages, from the link Derrick found (`singlefamily.fanniemae.com/media/48416/display`; the page's own Download link 403s). Its pages are the general guideline for Fannie programs only (Fannie Mae, HomeReady, RefiNow); Freddie programs (`chat.FREDDIE`) get Freddie's Seller/Servicer Guide instead (`agency_folder`): the whole current guide in one PDF (3,433 pages as of Bulletin 2026-15), link `guide.freddiemac.com/ci/okcsFattach/get/1002095_2` from Derrick. guide.freddiemac.com's robots.txt disallows bots, so nothing fetches it: from the 10th of each month the Updates tab asks for a fresh copy until one dated that month is saved in `agency/Conventional/Freddie Mac/`. Indexed as program "<Section> Agency".
 `chat._agency_hits` takes 6 handbook pages and 3 letter/circular pages separately (ML 2026-11 crowded the
 handbook out and the 500 MDCS floor went missing), and each handbook page brings the next one along (that rule
 starts on p. 176, the standard is on p. 177). A newer letter is flagged "Newer agency guidance (supersedes

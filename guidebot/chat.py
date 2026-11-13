@@ -50,11 +50,22 @@ NO_GENERAL_NOTE = (
     "bullet may say the agency guide isn't loaded yet.")
 
 
-# Conventional programs follow their own agency's guide. Only Fannie's Selling Guide is loaded, so Freddie Mac
-# programs get no general guideline rather than Fannie's rules.
+# Conventional programs follow their own agency's guide: Fannie's Selling Guide for Fannie Mae, HomeReady and
+# RefiNow, Freddie's Seller/Servicer Guide for Freddie Mac, Home Possible, HomeOne and Refi Possible.
 FREDDIE = re.compile(r"freddie|home possible|homeone|refi possible", re.I)
-FANNIE_ONLY = ("; the general guideline for Fannie Mae programs only (Fannie Mae, HomeReady, RefiNow), never for "
-               "Freddie Mac programs (Freddie Mac, Home Possible, HomeOne, Refi Possible)]")
+AGENCY_ONLY = {
+    "Conventional/Fannie Mae": "; the general guideline for Fannie Mae programs only (Fannie Mae, HomeReady, "
+                               "RefiNow), never for Freddie Mac programs]",
+    "Conventional/Freddie Mac": "; the general guideline for Freddie Mac programs only (Freddie Mac, Home Possible, "
+                                "HomeOne, Refi Possible), never for Fannie Mae programs]",
+}
+
+
+def agency_folder(prog: str) -> str:
+    """The one agency guide a Conventional program follows; "" for FHA and VA (their whole section applies)."""
+    if not SECTIONS["Conventional"](prog):
+        return ""
+    return "Conventional/Freddie Mac" if FREDDIE.search(prog) else "Conventional/Fannie Mae"
 
 
 def program_order(name: str) -> tuple:
@@ -122,16 +133,18 @@ def _agency_section(choice: str, section: str) -> str:
     return next((s for s in agency.SECTIONS if section == s or (choice and SECTIONS[s](choice))), "")
 
 
-def _agency_hits(question: str, sec: str, k: int = 6, k_letters: int = 3) -> list[dict]:
+def _agency_hits(question: str, sec: str, k: int = 6, k_letters: int = 3, folder: str = "") -> list[dict]:
     """The agency guide pages that best match the question, each headed with its date and review status. The
     handbook and the letters/circulars each get their own share: a letter that's all about one topic outranked
     every handbook page on it, and the handbook's own rule went missing (FHA minimum score, 2026-11-12)."""
     if not sec:
         return []
     try:
-        pool = retriever().search(question, k=40, programs=[f"{sec} Agency"])
+        pool = retriever().search(question, k=80 if folder else 40, programs=[f"{sec} Agency"])
     except Exception:
         return []   # no index yet
+    if folder:   # one agency's guide only: a Freddie program never gets Fannie's rules
+        pool = [h for h in pool if (agency.info(h["file"]) or {}).get("rel", "").startswith(folder + "/")][:40]
     letter = lambda h: re.search(r"Mortgagee Letter|Circular", h["file"]) is not None
     books = sorted((h for h in pool if not letter(h)), key=lambda h: agency.off_topic(h["text"]))   # stable
     found = books[:k] + [h for h in pool if letter(h)][:k_letters]
@@ -139,8 +152,10 @@ def _agency_hits(question: str, sec: str, k: int = 6, k_letters: int = 3) -> lis
     for i, h in enumerate(found):
         rec = agency.info(h["file"])
         head = f"[GENERAL GUIDELINE, agency guide: {agency.label(rec) if rec else h['file']}]"
-        if "Fannie Mae" in h["file"]:
-            head = head[:-1] + FANNIE_ONLY
+        rel = rec["rel"] if rec else ""
+        for f, note in AGENCY_ONLY.items():
+            if rel.startswith(f + "/"):
+                head = head[:-1] + note
         # The index holds one page per chunk, and a handbook rule often runs across pages (HUD's MDCS definition
         # on p. 176, its standard on p. 177; the gift donor list starts on p. 362, the hit was p. 363). Every
         # handbook page brings the next one along, and the three best also bring the one before.
@@ -237,7 +252,7 @@ def _program_answer(question, history, prog, docs, model):
     Conventional sheets also get the matching pages of their agency guides. Returns (answer, hits)."""
     ltv_ok = all(d["status"] == "verified" for d in docs)
     docs_text = "\n\n".join(library.render(d) for d in docs)
-    gov = [] if FREDDIE.search(prog) else _agency_hits(question, _agency_section(prog, ""))
+    gov = _agency_hits(question, _agency_section(prog, ""), folder=agency_folder(prog))
     if len(docs_text) <= config.FULL_DOC_MAX_CHARS:
         yield {"status": f"Reading {prog}…"}
         no_general = "\n\n" + NO_GENERAL_NOTE if _agency_section(prog, "") and not gov else ""

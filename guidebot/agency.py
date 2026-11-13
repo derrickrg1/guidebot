@@ -46,6 +46,8 @@ KNOWVA = "https://www.knowva.ebenefits.va.gov/system/ws/v11/ss"
 KNOWVA_Q = "$lang=en-us&portalId=554400000001018&usertype=customer"
 VA_CIRCULARS = "https://www.benefits.va.gov/homeloans/resources_circulars.asp"
 FANNIE = "https://selling-guide.fanniemae.com/"
+# The whole current guide in one PDF, rebuilt with each bulletin (link from Derrick, 2026-11-12).
+FREDDIE_PDF = "https://guide.freddiemac.com/ci/okcsFattach/get/1002095_2"
 # Mortgagee Letters for multifamily, healthcare, public housing and reverse mortgage (HECM) programs say nothing
 # about a forward single family loan.
 NOT_SINGLE_FAMILY = re.compile(r"multifamily|lihtc|tax credit|section 2(?:02|21|23|32|42)\b|section 8\b|section 811|"
@@ -260,6 +262,18 @@ def fannie_selling_guide() -> list[dict]:
              "version": published, "date": published}]
 
 
+def freddie_guide(today: date | None = None) -> list[dict]:
+    """Freddie rebuilds its one-PDF guide with each bulletin, about monthly. guide.freddiemac.com's robots.txt shuts
+    out everything but search engines, so nothing here touches it: from the 10th of each month the notice asks for a
+    fresh copy until one dated that month or later (its first page says "Published on ...") is in
+    agency/Conventional/Freddie Mac/."""
+    today = today or date.today()
+    y, m = (today.year, today.month) if today.day >= 10 else \
+        ((today.year, today.month - 1) if today.month > 1 else (today.year - 1, 12))
+    return [{"manual": True, "title": "Freddie Mac Seller/Servicer Guide", "url": FREDDIE_PDF,
+             "version": f"{y}-{m:02d}-01"}]
+
+
 SOURCES = [
     {"key": "hud-4000", "name": "HUD Handbook 4000.1", "section": "FHA", "folder": "FHA/HUD 4000.1",
      "items": hud_handbook, "manages": True},
@@ -271,6 +285,8 @@ SOURCES = [
      "items": va_circulars, "manages": True},
     {"key": "fannie", "name": "Fannie Mae Selling Guide", "section": "Conventional", "folder": "Conventional/Fannie Mae",
      "items": fannie_selling_guide, "manages": False},
+    {"key": "freddie", "name": "Freddie Mac Seller/Servicer Guide", "section": "Conventional",
+     "folder": "Conventional/Freddie Mac", "items": freddie_guide, "manages": False},
 ]
 
 
@@ -439,8 +455,12 @@ def check(log=print, on_index=None) -> list[dict]:
             got = 0
             for it in items:
                 if it.get("manual"):
-                    have = state["sources"].get(src["key"], {}).get("have_version")
-                    if have != it["version"] and src["key"] not in state["notices"]:
+                    # The newest copy in the folder answers it too, notice or not (a guide saved before any
+                    # notice went up, dated from its own first page).
+                    have = max([state["sources"].get(src["key"], {}).get("have_version") or ""]
+                               + [r.get("date") or "" for rel, r in state["files"].items()
+                                  if rel.startswith(src["folder"] + "/")])
+                    if have < it["version"] and src["key"] not in state["notices"]:
                         state["notices"][src["key"]] = {"title": it["title"], "version": it["version"],
                                                         "url": it["url"], "folder": src["folder"], "seen": today}
                         log(f"New {it['title']} published {it['version']}: download it into agency/{src['folder']}/")
@@ -512,7 +532,9 @@ def _process(state: dict, today: str, moved: list[str], log) -> list[dict]:
             notice = state["notices"].pop(src["key"], None)
             if notice:
                 state["sources"].setdefault(src["key"], {})["have_version"] = notice["version"]
-                rec = {**rec, "title": notice["title"], "url": notice["url"], "date": notice["version"]}
+                # The guide's own first page dates it best; Freddie's notice version is only a reminder date.
+                rec = {**rec, "title": notice["title"], "url": notice["url"],
+                       "date": find_date(texts[0][:1500] if texts else "") or notice["version"]}
         state["files"][rel] = {**rec, "hash": h, "title": rec.get("title") or path.stem, "section": section_of(path),
                                "downloaded": today, "reviewed": False, "pages": len(texts)}
         if not rec.get("date"):
