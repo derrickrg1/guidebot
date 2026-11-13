@@ -369,10 +369,19 @@ _HUD_ORIGINATION = re.compile(r"II\. ORIGINATION[^\n]*\n(?:A\. Title II Insured 
                               r"C\. Condominium|[DF]\. Appraiser)")
 
 
+# Freddie's guide is 3,433 pages; origination is Series 4000-6000. Its servicing chapters (8000-9000, about 1,300
+# pages) repeat "Chapter 7 bankruptcy" and the like in a servicing sense, so they rank last too.
+_FREDDIE_CHAPTER = re.compile(r"Seller/Servic\w* Guide\s+Chapter\s+(\d)\d{3}")
+
+
 def off_topic(text: str) -> bool:
-    """A HUD handbook page outside forward mortgage origination (its running header says which part it's in)."""
+    """A HUD handbook page outside forward mortgage origination, or a Freddie guide page outside Series 4000-6000
+    (each one's running header says which part it's in)."""
     head = text[:600]
-    return "Handbook 4000.1" in head and not _HUD_ORIGINATION.search(head)
+    if "Handbook 4000.1" in head:
+        return not _HUD_ORIGINATION.search(head)
+    m = _FREDDIE_CHAPTER.search(text)
+    return bool(m) and m[1] not in "456"
 
 
 _pages_cache: dict = {}

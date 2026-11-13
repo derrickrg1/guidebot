@@ -109,6 +109,19 @@ async function findMarks(page, claimText, min = 4) {
       if (!win || adj > win.adj) win = { run, sc, adj };
     }
   }
+  // A quote in the answer is the page's own words: a line holding it wins over word overlap. "Per DU" scores
+  // nothing as words (stop word, too short), and the Fannie matrix's rental income row took the mark instead.
+  const flat = s => s.toLowerCase().replace(/[“”"]/g, "").replace(/\s+/g, " ").trim();
+  const quotes = [...claimText.matchAll(/["“]([^"”]{2,160})["”]/g)].map(m => flat(m[1])).reverse();
+  for (const q of quotes) {
+    const has = lines.filter(l => flat(l.text).includes(q));
+    if (has.length) {
+      const l = has.sort((a, b) => b.score - a.score)[0];
+      const xs = l.items.flatMap(x => [x.it.transform[4], x.it.transform[4] + x.it.width]);
+      const h = Math.max(...l.items.map(x => x.h));
+      return [[Math.min(...xs), l.y - h * 0.25, Math.max(...xs), l.y + h * 0.95]];
+    }
+  }
   if (!win || win.sc < min) return [];
   // A single best line can have equally good matches elsewhere on the page (the same tier in two tables).
   const picked = win.run.length > 1 ? win.run
@@ -191,6 +204,7 @@ async function openGuideline(link) {
   const file = decodeURIComponent(u.pathname.split("/pdf/")[1] || ""), page = +((u.hash.match(/page=(\d+)/) || [])[1] || 1);
   const url = `${API}/pdf/${encodeURIComponent(file)}`, token = ++V.token;
   const k = progKey(file);
+  if (k) vel("viewer").dataset.prog = k; else delete vel("viewer").dataset.prog;   // the marker takes the agency's color
   vel("vname").innerHTML = (k ? `<i class="pdot" data-prog="${k}"></i>` : "") + esc(shortName(file));
   vel("vpage").textContent = `Page ${page} · ${file}`;
   vel("vopen").href = `${url}#page=${page}`;

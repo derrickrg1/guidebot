@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from guidebot import gov_matrix, overlay_rules
+from guidebot import conv_matrix, gov_matrix, overlay_rules
 from guidebot.llm import ask_json
 from guidebot.matrix_lookup import apply_adjustments, dimension_columns, header_problems, lookup, value_columns
 
@@ -337,6 +337,13 @@ def compare_programs(
         prog = pd["program"]
         if gov_matrix.is_gov(pd["mats"]):   # FHA/VA: Python reads the eligibility rows, no AI mapping
             results.append({"program": prog, **gov_matrix.result(raw, question, pd["mats"])})
+            continue
+        if conv_matrix.is_conv(pd["mats"]):   # Conventional: same, the sheet's rows read by Python
+            results.append({"program": prog, **conv_matrix.result(raw, question, pd["mats"])})
+            continue
+        if prog.startswith("Conventional"):   # an approved copy from before conv_matrix: page 2's ARM grid only
+            results.append({"program": prog, "eligible": None,
+                            "error": "Approved copy has no LTV table yet. Re-read the PDF and approve it"})
             continue
         mats = [m for m in pd["mats"] if m["status"] == "verified"]
         if not mats:

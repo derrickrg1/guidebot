@@ -659,10 +659,11 @@ def parse_page(page) -> dict:
     for t in tables:
         rows = t.extract()
         mats, rest = parse_matrices(rows)
-        if not mats:   # FHA/VA sheets: one row per way to qualify, not a loan amount x FICO grid
-            from guidebot.gov_matrix import parse_table
-            gov = parse_table(t)
-            mats = [gov] if gov is not None else []
+        if not mats:   # Conventional, then FHA/VA sheets: one row per way to qualify, not a loan amount x FICO grid
+            from guidebot import conv_matrix, gov_matrix
+            one = conv_matrix.parse_table(t)   # first: HomeOne's one-LTV-column table also reads as a gov sheet
+            one = one if one is not None else gov_matrix.parse_table(t)
+            mats = [one] if one is not None else []
         matrices += mats
         if any(len(_compact(r)) > 3 for r in rest):     # a grid or side-by-side boxes: read by position
             keep = {id(r) for r in rest}

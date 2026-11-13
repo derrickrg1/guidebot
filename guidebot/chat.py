@@ -5,7 +5,7 @@ All LTV guards live in answer.py, so both UIs get the same rules.
 """
 import re
 
-from guidebot import agency, config, gov_matrix, library, overlay_rules
+from guidebot import agency, config, conv_matrix, gov_matrix, library, overlay_rules
 from guidebot.answer import (broad_messages, compare_programs, comparison_md, filter_to_cited, full_doc_messages,
                              full_section_messages, looks_like_deal, said_scenario, scenario_answer, search_messages)
 from guidebot.llm import stream_chat
@@ -345,6 +345,8 @@ def respond(question: str, history: list[dict], choice: str = "",
     # FHA and VA are one program per sheet, but their eligibility rows are all read by gov_matrix: with none
     # picked, a deal runs against every sheet in the tab together.
     gov = section in ("FHA", "VA") and not choice or choice and (SECTIONS["FHA"](choice) or SECTIONS["VA"](choice))
+    # A picked Conventional sheet is read by conv_matrix. With none picked, the deal runs program by program (_compare).
+    conv = bool(choice) and not members and SECTIONS["Conventional"](choice)
     answer, hits = "", []
 
     # A number for a specific deal only ever comes from the matrix lookup. With Scenario off, the guideline
@@ -369,6 +371,12 @@ def respond(question: str, history: list[dict], choice: str = "",
             answer = (gov_matrix.answer(said_scenario(asked, history), asked, mats) if mats else
                       f"The approved copies of the {choice or section} matrices have no LTV table in them yet. On the admin page, "
                       "open each one, hit **Re-read the PDF**, check the table against the page, and approve it.")
+            yield {"replace": answer}
+        elif conv and docs:
+            mats = library.matrices(docs)
+            answer = (conv_matrix.answer(said_scenario(asked, history), asked, mats) if conv_matrix.is_conv(mats) else
+                      f"The approved copy of the {choice} matrix has no LTV table in it yet. On the admin page, open it, "
+                      "hit **Re-read the PDF**, check the table against the page, and approve it.")
             yield {"replace": answer}
         elif docs:
             yield {"status": "Checking the matrix…"}

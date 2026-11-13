@@ -40,7 +40,8 @@ service tunnels it to asknick.derrickgarcia.dev and guidebot.derrickgarcia.dev, 
 (policy "Derrick Access": his Gmail, nwilson@ and calderon@revofunding.com; chat only, admin is his Gmail alone).
 * Citation chips open the PDF in a right-side panel (`ui/viewer.js`, PDF.js 3.11.174 from cdnjs, works on
 iPhone). It finds the cited line on the page by word overlap and marks it; if the cited page has no match it
-tries one page either side and says "closest match on p. X". Falls back to the browser's PDF viewer on error.
+tries one page either side and says "closest match on p. X". Falls back to the browser's PDF viewer on error. A quote in the answer ("Per DU") is
+looked for word for word first; short quotes scored nothing as words and the mark landed on the wrong row.
 `ui/md.js` is the shared markdown/citation renderer for both pages.
 * Program colors (`PROGRAMS` in `ui/md.js`) come from the Revo site's `scripts/pages/accents.json` (the lifted
 "hero" tones; FHA Teal lightened; VA's dot is a tiny US flag, an SVG in `md.js`). Express and Ignite share a product's color. Dots show on
@@ -67,7 +68,8 @@ inside the server (indexer `_lock`). Files the agency stops listing are archived
 away; cited unreviewed guides get a "hasn't been reviewed yet" line from Python. A Mortgagee Letter or Circular
 newer than the handbook wins over it; NDM's sheet wins over all (`RULES`). Fannie blocks automated downloads
 (the classifier stopped a workaround, rightly): the check only posts a notice, Derrick saves the PDF into
-`agency/Conventional/Fannie Mae/` and the next check reads it. Loaded 2026-11-12: Selling Guide published 11/4/2026, 1,199 pages, from the link Derrick found (`singlefamily.fanniemae.com/media/48416/display`; the page's own Download link 403s). Its pages are the general guideline for Fannie programs only (Fannie Mae, HomeReady, RefiNow); Freddie programs (`chat.FREDDIE`) get Freddie's Seller/Servicer Guide instead (`agency_folder`): the whole current guide in one PDF (3,433 pages as of Bulletin 2026-15), link `guide.freddiemac.com/ci/okcsFattach/get/1002095_2` from Derrick. guide.freddiemac.com's robots.txt disallows bots, so nothing fetches it: from the 10th of each month the Updates tab asks for a fresh copy until one dated that month is saved in `agency/Conventional/Freddie Mac/`. Indexed as program "<Section> Agency".
+`agency/Conventional/Fannie Mae/` and the next check reads it. Loaded 2026-11-12: Selling Guide published 11/4/2026, 1,199 pages, from the link Derrick found (`singlefamily.fanniemae.com/media/48416/display`; the page's own Download link 403s). Its pages are the general guideline for Fannie programs only (Fannie Mae, HomeReady, RefiNow); Freddie programs (`chat.FREDDIE`) get Freddie's Seller/Servicer Guide instead (`agency_folder`): the whole current guide in one PDF (3,433 pages as of Bulletin 2026-15), link `guide.freddiemac.com/ci/okcsFattach/get/1002095_2` from Derrick. guide.freddiemac.com's robots.txt disallows bots, so nothing fetches it: from the 10th of each month the Updates tab asks for a fresh copy until one dated that month is saved in `agency/Conventional/Freddie Mac/`. Its servicing chapters (Series 7000-9000 and
+1000-3000, about 1,800 pages) rank last (`agency.off_topic`), like HUD's non-origination pages. Indexed as program "<Section> Agency".
 `chat._agency_hits` takes 6 handbook pages and 3 letter/circular pages separately (ML 2026-11 crowded the
 handbook out and the 500 MDCS floor went missing), and each handbook page brings the next one along (that rule
 starts on p. 176, the standard is on p. 177). A newer letter is flagged "Newer agency guidance (supersedes
@@ -123,7 +125,7 @@ so the bot no longer calls its own earlier citation wrong.
 
 ## Current status
 
-* 139 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 149 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked
@@ -157,6 +159,13 @@ shown (funding fee, 203(h), AZ/UT). "96.5%, 100%³" headlines 96.5 (100% is the 
 rows say NA (no LTV limit). Stops at the matrix: the sheets' credit/property pages aren't applied. All five match
 the site's HTML tables (`site_grids.gov_check`). The approved JSONs were saved before this, with no table, so
 Derrick needs to Re-read and approve each; until then the VA/FHA tabs say so instead of giving a number.
+* Conventional LTV tables: `guidebot/conv_matrix.py` (2026-11-12). Each sheet's page 1 table: occupancy, purpose,
+  min FICO, units, Conforming and High Balance (Freddie: Super Conforming) columns, plus the per-unit loan limits that
+  pick the column. Tried before the gov parser (HomeOne's one-column table also reads as gov). Footnotes stop at the
+  "Matrix Updates" legend. Lookup is Python only; "Fixed 97%" notes fixed rate only, ">95%" points to the sheet's
+  95.01-97% rules. A picked program reads its sheet; section-wide deals go through `_compare` per program. Approved
+  JSONs from before this have only page 2's ARM caps grid, so each sheet needs Re-read and approve; until then the
+  answer says so. Tests in `tests/test_conv_matrix.py`.
 * Express 2nd (Express 8.15.2026, Premier 3.2.2026) parses as text only, no LTV grid yet.
 * NonQM Shared guidelines PDF changed since it was approved: needs a re-check.
 

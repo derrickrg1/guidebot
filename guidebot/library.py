@@ -51,7 +51,7 @@ def _to_json(pages):
             "text": p["text"],
             "matrices": [
                 {"title": m.attrs.get("title", ""), "dims": m.attrs.get("dims", []),
-                 **{k: m.attrs[k] for k in ("kind", "notes") if k in m.attrs},
+                 **{k: m.attrs[k] for k in ("kind", "notes", "limits", "high_label") if k in m.attrs},
                  "columns": list(m.columns), "rows": m.astype(str).values.tolist()}
                 for m in p["matrices"]
             ],
@@ -67,7 +67,7 @@ def _from_json(data):
         for m in p["matrices"]:
             df = pd.DataFrame(m["rows"], columns=m["columns"])
             df.attrs["title"], df.attrs["dims"] = m["title"], m["dims"]
-            df.attrs.update({k: m[k] for k in ("kind", "notes") if k in m})
+            df.attrs.update({k: m[k] for k in ("kind", "notes", "limits", "high_label") if k in m})
             mats.append(df)
         pages.append({"page": p["page"], "text": p["text"], "matrices": mats})
     return pages

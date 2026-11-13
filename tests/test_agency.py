@@ -193,3 +193,10 @@ def test_freddie_notice_asks_monthly():
     assert v(date(2026, 12, 9)) == "2026-11-01"
     assert v(date(2026, 12, 10)) == "2026-12-01"
     assert v(date(2027, 1, 3)) == "2026-12-01"
+
+
+def test_freddie_servicing_pages_rank_last():
+    head = "Freddie Mac Single-Family Seller/Servicer Guide Chapter {} As of 10/14/26 Page {}-42\n"
+    assert agency.off_topic(head.format(9206, 9206) + "Chapter 7 bankruptcy Borrowers who have received a discharge")
+    assert not agency.off_topic(head.format(5501, 5501) + "Chapter 7 bankruptcy: 48 months")
+    assert not agency.off_topic("Fannie Mae Selling Guide B3-5.3-07 bankruptcy")

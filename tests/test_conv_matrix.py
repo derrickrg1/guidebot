@@ -1,0 +1,97 @@
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+import pytest
+
+from guidebot import config, conv_matrix, library
+from guidebot.answer import RawScenario
+from guidebot.extract_pdf import extract_document
+
+FANNIE = "Conventional Fannie Mae/Fannie-Mae-Matrix.pdf"
+FREDDIE = "Conventional Freddie Mac/Freddie-Mac-Matrix.pdf"
+HOMEONE = "Conventional HomeOne/Home-One-Matrix.pdf"
+REFINOW = "Conventional RefiNow/Fannie-Mae-Refi-Now.pdf"
+have_pdfs = pytest.mark.skipif(not all((config.DOCS_DIR / p).exists() for p in (FANNIE, FREDDIE, HOMEONE, REFINOW)),
+                               reason="Conventional PDFs not in docs/")
+
+
+def _mats(rel, status="verified"):
+    # through the same JSON round trip the approved copies take
+    pages = library._from_json(library._to_json(extract_document(config.DOCS_DIR / rel)))
+    return [{"df": m, "file": Path(rel).name, "page": p["page"], "status": status, "reference": None}
+            for p in pages for m in p["matrices"]]
+
+
+def _deal(fico, loan, occ, purpose):
+    return RawScenario(fico=fico, loan_amount=loan, occupancy=occ, purpose=purpose)
+
+
+@pytest.fixture(scope="module")
+def fannie():
+    return _mats(FANNIE)
+
+
+@have_pdfs
+def test_fannie_grid_rows_limits_and_notes(fannie):
+    df = conv_matrix.conv_mats(fannie)[0]["df"]
+    assert len(df) == 19
+    assert df.attrs["limits"]["2"] == [1081950.0, 1622925.0] and df.attrs["high_label"] == "High Balance"
+    two = df[(df["Occupancy"] == "Primary Residence") & (df["Units"] == "2 Units")].iloc[0]
+    assert two["Conforming Max LTV"] == "95% 1, 2" and two["High Balance Max LTV"] == "85%"
+    # footnotes stop at the color legend: nothing from the loan limits or MI tables below it
+    assert "Minimum Loan Amount" not in df.attrs["notes"] and "Actual loan limits" not in df.attrs["notes"]
+
+
+@have_pdfs
+def test_fannie_lookups(fannie):
+    cash_out = conv_matrix.result(_deal(680, 500000, "Primary Residence", "Cash Out Refinance"), "", fannie)
+    assert cash_out["eligible"] and cash_out["max_ltv"] == 80
+    inv = conv_matrix.result(_deal(640, 300000, "Investment Property", "Purchase"), "3 units", fannie)
+    assert inv["max_ltv"] == 75
+    sfr = conv_matrix.result(_deal(700, 400000, "Primary Residence", "Purchase"), "", fannie)
+    assert sfr["max_ltv"] == 97 and "fixed rate only" in sfr["overlays"][0]
+    high_2 = conv_matrix.result(_deal(700, 1500000, "Primary Residence", "Purchase"), "duplex", fannie)
+    assert high_2["max_ltv"] == 85 and "High Balance" in high_2["overlays"][0]
+    assert conv_matrix.result(_deal(600, 400000, "Primary Residence", "Purchase"), "", fannie)["eligible"] is False
+    over = conv_matrix.result(_deal(700, 1300000, "Primary Residence", "Purchase"), "", fannie)
+    assert over["eligible"] is False and "over the 1-unit limit" in over["error"]
+    mh = conv_matrix.result(_deal(700, 900000, "Primary Residence", "Purchase"), "manufactured home", fannie)
+    assert mh["eligible"] is False   # manufactured is conforming only (NA high balance)
+
+
+@have_pdfs
+def test_freddie_super_conforming_and_homeone():
+    freddie = _mats(FREDDIE)
+    res = conv_matrix.result(_deal(700, 1100000, "Primary Residence", "Purchase"), "2 unit", freddie)
+    assert res["max_ltv"] == 85 and "Super Conforming" in res["overlays"][0]
+    home_one = _mats(HOMEONE)   # one LTV column: must read as Conventional, not as an FHA/VA sheet
+    assert conv_matrix.is_conv(home_one)
+    assert conv_matrix.result(_deal(700, 400000, "Primary Residence", "Purchase"), "", home_one)["max_ltv"] == 97
+    assert conv_matrix.result(_deal(700, 900000, "Primary Residence", "Purchase"), "", home_one)["eligible"] is False
+
+
+@have_pdfs
+def test_refi_now_answer():
+    mats = _mats(REFINOW)
+    out = conv_matrix.answer(_deal(680, 500000, "Primary Residence", "Rate/Term Refinance"), "", mats)
+    assert "**Max LTV/CLTV: 97%**" in out and "max DTI 65%" in out and "105% TLTV" in out
+    assert out.count("2: Loans with resubordinated") == 1   # nested duplicate cell dropped
+    no = conv_matrix.answer(_deal(680, 500000, "Primary Residence", "Purchase"), "", mats)
+    assert "Not eligible" in no
+
+
+@have_pdfs
+def test_unverified_gives_no_number():
+    mats = _mats(REFINOW, status="pending")
+    out = conv_matrix.answer(_deal(680, 500000, "Primary Residence", "Rate/Term Refinance"), "", mats)
+    assert "%" not in out.split("approve")[0].replace("Refi-Now", "")
+    assert conv_matrix.result(_deal(680, 500000, "Primary Residence", "Rate/Term Refinance"), "", mats)["eligible"] is None
+
+
+def test_ltv_cells():
+    assert conv_matrix.ltv_of("95¹%") == (95.0, ["1"], "")
+    assert conv_matrix.ltv_of("95% 1, 2")[:2] == (95.0, ["1", "2"])
+    assert conv_matrix.ltv_of("Fixed 97%/105%¹,²") == (97.0, ["1", "2"], "fixed rate only; 105% TLTV")
+    assert conv_matrix.ltv_of("NA")[0] is None

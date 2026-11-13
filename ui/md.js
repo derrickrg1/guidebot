@@ -14,14 +14,19 @@ const PROGRAMS = [
   ["fulldoc", /full[\s-]*doc/i, "#d38645"],       // Full Doc, Midwest Cowboy
   ["1099", /\b1099\b/, "#6197c7"],                // 1099, London House
   ["pl", /P\s*&(?:amp;)?\s*L\b|profit/i, "#b78587"], // P&L, Rose After Dark
-  ["fha", /\bFHA\b/, "#4f9ba6"],                  // FHA Teal #1c5d67, lifted
+  // Agencies (Derrick's picks, 2026-11-12): Fannie blue, Freddie green, FHA green, VA red. The program sheets
+  // and the agency guides both match, so a citation chip and its highlighted page wear the agency's color.
+  ["fannie", /fannie|home[\s-]*ready|refi[\s-]*now/i, "#4a90d9"],                    // Fannie Mae blue, lifted
+  ["freddie", /freddie|home[\s-]*possible|home[\s-]*one|refi[\s-]*possible/i, "#2fae6b"], // Freddie Mac green
+  ["fha", /\bFHA\b|\bHUD\b|mortgagee[\s-]*letter/i, "#7cbf4f"],                      // FHA green
   ["va", /\bVA\b/, "#c8323f"],                    // flag red, hero edge (stripes below)
-  ["conv", /conventional/i, "#e2d4ae"],           // Conventional sand
+  ["conv", /conventional/i, "#e2d4ae"],           // Conventional sand (the tab; each program is Fannie or Freddie)
 ];
 // One product named: its key. None, or several ("Ignite 1099, Ignite Bank Statements"): no color.
 function progKey(text) {
   const hits = new Set(PROGRAMS.filter(([, re]) => re.test(text)).map(([k]) => k));
   if (hits.has("second")) return "second";   // "2nd Mortgage ... DSCR" is a 2nd
+  if (hits.has("fannie") || hits.has("freddie")) hits.delete("conv");   // "Conventional HomeReady" is Fannie's
   return hits.size === 1 ? [...hits][0] : "";
 }
 // VA's dot is a tiny US flag: 13 stripes and a blue canton with a few stars (most blur out at 7px, that's fine).
@@ -43,8 +48,10 @@ document.head.insertAdjacentHTML("beforeend", `<style>${PROGRAMS.map(([k, , c]) 
 // Citations like (NonQM-Underwriting-Guidelines.pdf, section 7.2, p. 53; Ignite 1099 Expanded.pdf, p. 2) become
 // small chips, "NonQM Guide · §7.2 p. 53", one per source. Each opens the PDF at that page; the full citation
 // shows on hover. A long filename in every sentence made answers hard to read.
-const shortName = f => f.replace(/\.pdf$/i, "").replace(/[-_]+/g, " ").replace(/\b(Matrix|Expanded)\b/gi, "")
-  .replace(/NonQM Underwriting Guidelines/i, "NonQM Guide").replace(/\s{2,}/g, " ").trim();
+const shortName = f => f.replace(/\.pdf$/i, "").replace(/ \d{4}-\d{2}-\d{2}$/, "")   // the edition date is on hover
+  .replace(/[-_]+/g, " ").replace(/\b(Matrix|Expanded)\b/gi, "")
+  .replace(/NonQM Underwriting Guidelines/i, "NonQM Guide").replace(/Fannie Mae Selling Guide/i, "Fannie Selling Guide")
+  .replace(/Freddie Mac Seller Servicer Guide/i, "Freddie Guide").replace(/\s{2,}/g, " ").trim();
 function citeChips(inner) {
   let lastFile = "";
   return inner.split(/;\s*/).map(part => {
