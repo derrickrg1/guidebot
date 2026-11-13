@@ -422,6 +422,19 @@ def named_programs(question: str, programs: list[str]) -> list[str]:
 
 def respond(question: str, history: list[dict], choice: str = "",
             mode_program: bool = False, mode_scenario: bool = False, section: str = "", model: str = ""):
+    """The answer's events. The backup model's note shows once, not once per program in a side by side answer."""
+    from guidebot.llm import FALLBACK_SHOWN
+    noted = False
+    for ev in _respond(question, history, choice, mode_program, mode_scenario, section, model):
+        if FALLBACK_SHOWN in ev.get("text", ""):
+            if noted:
+                ev = {**ev, "text": ev["text"].replace(FALLBACK_SHOWN, "")}
+            noted = True
+        yield ev
+
+
+def _respond(question: str, history: list[dict], choice: str = "",
+             mode_program: bool = False, mode_scenario: bool = False, section: str = "", model: str = ""):
     model = model or config.CHAT_MODEL
     all_programs = library.programs()
     asked = question
@@ -531,13 +544,20 @@ def respond(question: str, history: list[dict], choice: str = "",
         answer = limits   # "conforming limit in LA County?": FHFA's file, read by Python
         yield {"replace": answer}
 
+    if mode_program and members and not answer and len(only := named_programs(asked, members)) == 1:
+        # "...on Express Full Doc?" with the Full Doc pair picked: answer the one asked about. The Ignite half
+        # used to open with "I couldn't find Express Full Doc" (2026-11-13).
+        members, docs = [], program_docs(only[0], all_programs)[0]
+        choice = only[0]
+
     if mode_program and members and not answer:
         # Each program answers from its own guidelines, one after the other under its own heading.
         parts = []
         for i, prog in enumerate(members):
             head = ("\n\n" if i else "") + f"## {prog}\n\n"
             yield {"text": head}
-            part, found = yield from _program_answer(question, history, prog, program_docs(prog, all_programs)[0], model)
+            part, found = yield from _program_answer(f"{question}\n\n(Answer for {prog}.)", history, prog,
+                                                     program_docs(prog, all_programs)[0], model)
             parts.append(head + part)
             hits += found
         answer = "".join(parts)

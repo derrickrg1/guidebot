@@ -7,7 +7,7 @@ import ollama
 from guidebot import config
 
 FALLBACK_BETA = "server-side-fallback-2026-07-01"   # a declined request reruns on another Claude model
-FALLBACK_SHOWN = "*Claude is unavailable right now, so the local backup model answered. Double-check this one.*\n\n"
+FALLBACK_SHOWN = "*Answered by the backup model. Double-check this one.*\n\n"
 
 
 def embed_docs(texts: list[str]) -> list[list[float]]:

@@ -21,7 +21,7 @@ Python does the lookup and math (`matrix\_lookup.py`).
 the toggles say). In Guidelines mode with no program picked, a deal gets "Pick a program" / "Review all"
 buttons instead (`choices` event; Review all resends it in Scenario mode). A deal that names a program
 ("Freddie Mac: 700 FICO...") runs on that one with All picked; two named are compared (`chat.named_programs`,
-not FHA/VA). A program whose overlay rules aren't approved stops at the matrix cell, no final number.
+not FHA/VA). With an Express + Ignite pair picked, a question naming one of the two answers that one only. A program whose overlay rules aren't approved stops at the matrix cell, no final number.
 * A rule question that names a purpose ("Are temporary buydowns allowed on a cash-out refi?") is not a deal
 (`asks_rule`), even in Scenario mode. A message stating 3 of FICO/amount/occupancy/purpose is a new deal and
 borrows nothing from history (`said_scenario`, `fresh`). The deal reader tells loan from price/value
@@ -46,8 +46,8 @@ citations vs 39), gpt-oss:20b 24, old qwen3:14b 22 (its 16K context cut the 20K-
 "84 months" for NonQM foreclosure). Deal race 56/56. Gemma QAT no faster; qwen3.8/3.6 27B dense, granite4:small-h and
 nemotron-3-nano too slow on 16 GB (147-593 s an answer) or wrong. About 70 s an answer, partly on the CPU. Kimi K3 /
 GLM / DeepSeek are cloud only on Ollama, not tried. `GUIDEBOT_MODEL` / `GUIDEBOT_EFFORT` in `.env`
-override. `nomic-embed-text` (embeddings, Ollama). The fallback answer starts with a visible "Claude is unavailable
-right now" line (`FALLBACK_SHOWN`); "credit balance is too low" counts as down (`_down`). On 2026-11-13 the account
+override. `nomic-embed-text` (embeddings, Ollama). The fallback answer starts with a visible "Answered by the backup model" line, once per
+answer, never naming Claude (`FALLBACK_SHOWN`); "credit balance is too low" counts as down (`_down`). On 2026-11-13 the account
 was out of credits, so every answer was the local model until Derrick tops it up.
 * pdfplumber, pandas, ChromaDB + BM25 (hybrid search), Streamlit UI.
 * GPU (RTX 5070 Ti, 16 GB): torch cu128 in `.venv` (Docling's install swapped it to CPU once; reinstall cu128 with
