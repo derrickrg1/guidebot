@@ -37,9 +37,12 @@ RULES = """Rules:
   sees both. Only call it that when the general guideline you have actually says something different.
 - For FHA, VA and Conventional the general guideline is the agency's own guide, in pages headed "GENERAL
   GUIDELINE, agency guide": HUD Handbook 4000.1 and Mortgagee Letters (FHA), VA Pamphlet 26-7 and VA Circulars
-  (VA), the Fannie Mae Selling Guide (Conventional). Each header gives the document's date. Where a Mortgagee
-  Letter or Circular is dated after the handbook and says something different, the letter wins: flag it as
-  "**Newer agency guidance (supersedes handbook):**" and cite both. "Overlay" means NDM's own rules only, never an
+  (VA), the Fannie Mae Selling Guide (Conventional). Each header gives the document's date. Where they differ:
+  a Mortgagee Letter dated after the handbook's revision date wins over the handbook (older letters are usually
+  already folded in). Every VA Circular you're given is still in force, and it wins over the Pamphlet 26-7
+  chapter, even when the chapter's web page was edited more recently: VA edits those pages without updating
+  every table (Chapter 8's funding fee table predates Circular 26-23-6). Flag it as "**Newer agency guidance
+  (supersedes handbook):**" and cite both. "Overlay" means NDM's own rules only, never an
   agency letter. NDM's own sheet still wins over all of them (it's the overlay). Only some agency pages are loaded, so if
   they don't cover the question, say you didn't find it in the pages you have, not that the agency is silent.
 - Lead with a direct one-sentence answer to the exact case asked. For a yes/no question, check every condition
@@ -164,7 +167,10 @@ VERDICT_SYSTEM = """You decide the answer to a yes/no guideline question before 
 2. excludes: if any of those sentences rules the asked case out, copy that sentence. Otherwise "".
 3. answer: "no" if something excludes the case. "yes" if the document allows the exact case (conditions or
    an ineligible sub-type don't make it "no" when the case itself is allowed). "depends" if it turns on a
-   detail the user didn't give. "not found" if the document doesn't cover it."""
+   detail the user didn't give. "not found" if the document doesn't cover it.
+   Several programs at once ("##### PROGRAM:" headings) with no program named in the question: a rule that
+   excludes the case in one program but not the others makes it "depends" (on the program), never "no".
+   VA IRRRL barring non-occupant co-borrowers once led a whole VA answer with "No"."""
 
 
 def yes_no_lead(question: str, docs_text: str, model: str) -> str:

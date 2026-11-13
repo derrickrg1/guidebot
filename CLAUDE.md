@@ -47,6 +47,8 @@ wide chat column (remembered per browser).
 * Settings (account row, bottom left; header gear on a phone or with the sidebar hidden): text size (scales chat
 messages via `--ts`; sizes inside messages are in em), chat width, program colors on/off. The sidebar collapses
 (panel icon by the logo). All kept per browser in localStorage (`asknick.*`).
+* Fonts: Lato everywhere (both pages), Bodoni Moda only for the ASKNICK wordmark. Matte page: soft vignette plus
+an SVG grain; flat translucent answer cards; the sidebar casts a shadow over the chat; section tabs centered.
 * Admin console: `/admin` (`ui/admin.html`, `guidebot/admin.py`) replaces the Streamlit Verify page: doc
 statuses, PDF page beside editable matrix/text, re-read, approve docs and overlay rules. Only his Gmail via
 Cloudflare Access, or direct from this PC. Claude never clicks Approve. Tabs: Documents, Chats (every user's
@@ -67,7 +69,7 @@ newer than the handbook wins over it; NDM's sheet wins over all (`RULES`). Fanni
 `chat._agency_hits` takes 6 handbook pages and 3 letter/circular pages separately (ML 2026-11 crowded the
 handbook out and the 500 MDCS floor went missing), and each handbook page brings the next one along (that rule
 starts on p. 176, the standard is on p. 177). A newer letter is flagged "Newer agency guidance (supersedes
-handbook)", never "Overlay". First load 2026-11-12: 127 files, 2,551 pages (4000.1 Update 18 is 1,872).
+handbook)", never "Overlay". The top 3 handbook hits also bring the previous page (FHA gift donor list starts a page early); HUD pages outside forward origination rank last (`agency.off_topic`, Title I/HECM answered a gifts question once). Every VA Circular loaded is in force and beats the Pamphlet chapter (Ch. 8 fee table predates Circular 26-23-6), and a circular brings its exhibits (`_exhibits`). Shortened citations get their full filename back (`_fix_agency_cites`); filenames carry no commas (`_safe`). First load 2026-11-12: 127 files, 2,551 pages (4000.1 Update 18 is 1,872).
 * Chat history: `guidebot/history.py`, SQLite at `data/chats.db` (git-ignored), keyed to the Cloudflare Access
 email ("local" on this PC). The server saves each turn after the answer finishes; people see only their own.
 * Search index (ChromaDB in `db/`): update it only through the admin Index tab, never from a second process
@@ -117,7 +119,7 @@ so the bot no longer calls its own earlier citation wrong.
 
 ## Current status
 
-* 137 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 139 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked

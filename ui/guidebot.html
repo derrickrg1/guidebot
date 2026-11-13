@@ -8,21 +8,22 @@
 <!-- Closest free match to Claude's type: serif for answers, clean sans for the interface. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500&family=Space+Mono&family=Barlow+Condensed:wght@600&family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500&family=Lato:ital,wght@0,400;0,700;0,900;1,400&display=swap">
 <style>
 /* One theme: Inked Japan black, silver from the tin rim, burnt orange accents (--navy is the accent slot). */
 :root {
   color-scheme: dark;
-  --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --serif: Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --ink: #e6e8ea; --steel: #b3b9be; --mist: #7d878c; --rule: rgba(200, 204, 210, 0.1);
   --navy: #d9661f; --gold: #c8ccd2; --page: #131c1e; --side: rgba(0, 0, 0, 0.5);
-  --card: rgba(0, 0, 0, 0.38); --user: rgba(217, 102, 31, 0.18); --user-ink: #f6ece4; --warn: #e2b866;
+  --card: rgba(0, 0, 0, 0.24); --user: rgba(217, 102, 31, 0.18); --user-ink: #f6ece4; --warn: #e2b866;
   --warn-bg: rgba(226, 184, 102, 0.1); --bad: #e08080; --ok: #7cc48a;
 }
 /* Black overlay over the paint: lit in the middle, falling off to black at the edges like the photo. */
 html {
   background:
-    radial-gradient(ellipse 70% 60% at 55% 35%, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.7) 75%, rgba(0, 0, 0, 0.88)),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse 75% 65% at 55% 35%, rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.5) 75%, rgba(0, 0, 0, 0.68)),
     var(--page);
   background-attachment: fixed;
 }
@@ -30,25 +31,26 @@ html {
 html, body { margin: 0; height: 100%; }
 body {
   background: transparent; color: var(--ink);
-  font: 15px/1.55 "Inter", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font: 15px/1.55 Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   display: flex;
 }
 aside {
   width: 280px; flex: none; background: var(--side); backdrop-filter: blur(18px); border-right: 1px solid var(--rule);
+  position: relative; z-index: 2; box-shadow: 6px 0 28px rgba(0, 0, 0, 0.55), 1px 0 0 rgba(0, 0, 0, 0.4);
   padding: 20px 18px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto;
 }
 /* Wordmark styled after the Inked Japan paint label: Bodoni caps, a raised white ++, mono tagline in parentheses. */
 .brand { color: var(--gold); display: flex; align-items: center; gap: 14px; }
 .brand .mark { display: block; font: 500 1.6rem/1 "Bodoni Moda", Didot, "Bodoni MT", serif; letter-spacing: 0.04em; }
-/* Bodoni's own + is a hairline that disappears at this size, so the ++ is drawn in Inter. */
-.brand .mark span { color: var(--navy); font: 600 0.55em Inter, "Segoe UI", sans-serif; vertical-align: 0.7em; margin-left: 1px; letter-spacing: 0; }
-.brand .tag-line { display: block; margin-top: 5px; font: 0.56rem "Space Mono", Consolas, monospace;
-  letter-spacing: 0.18em; color: var(--mist); }
+/* Bodoni's own + is a hairline that disappears at this size, so the ++ is drawn in Lato. */
+.brand .mark span { color: var(--navy); font: 600 0.55em Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; vertical-align: 0.7em; margin-left: 1px; letter-spacing: 0; }
+.brand .tag-line { display: block; margin-top: 5px; font: 700 0.46rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: 0.22em; color: var(--mist); }
 /* Round crop, silver ring like the tin rim. The crop also hides the corner watermark. */
 .brand img { width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--gold);
   box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.6), 0 6px 18px rgba(0, 0, 0, 0.5); }
 /* Two plain choices: what to do (mode tiles), and where (program list). */
-.label { font: 600 0.68rem "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 0.2em; color: var(--mist); }
+.label { font: 600 0.68rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.2em; color: var(--mist); }
 .modes { display: flex; flex-direction: column; gap: 6px; }
 .modes label {
   display: block; padding: 9px 12px; border: 1px solid var(--rule); border-radius: 8px; cursor: pointer;
@@ -87,7 +89,7 @@ select option { background: #131c1e; }
   background: rgba(10, 14, 16, 0.94); backdrop-filter: blur(22px); border: 1px solid rgba(200, 204, 210, 0.14);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.65); scrollbar-width: thin; scrollbar-color: rgba(200, 204, 210, 0.2) transparent;
 }
-.picker-group { font: 600 0.66rem "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 0.2em; color: var(--mist);
+.picker-group { font: 600 0.66rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.2em; color: var(--mist);
   text-transform: uppercase; padding: 12px 10px 4px; }
 .picker-group:first-child { padding-top: 4px; }
 .picker-opt { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 7px; font-size: 0.84rem; cursor: pointer;
@@ -107,8 +109,8 @@ select option { background: #131c1e; }
 }
 .newchat:hover { background: rgba(217, 102, 31, 0.16); }
 .newchat svg { width: 15px; height: 15px; }
-.chats { display: flex; flex-direction: column; gap: 1px; min-height: 0; }
-.chats .when { font: 600 0.62rem "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 0.2em; color: var(--mist);
+.chats { display: flex; flex-direction: column; gap: 1px; min-height: 60px; overflow-y: auto; }   /* scrolls on short windows instead of running under the footer */
+.chats .when { font: 600 0.62rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.2em; color: var(--mist);
   text-transform: uppercase; padding: 10px 8px 4px; }
 .chat-item { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 7px; cursor: pointer;
   font-size: 0.8rem; color: var(--steel); }
@@ -130,7 +132,7 @@ select option { background: #131c1e; }
 /* Account row, bottom left like Claude's: who you are plus the settings menu (text size, width, colors). */
 .acct { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 1px solid var(--rule);
   border-radius: 10px; background: rgba(255, 255, 255, 0.03); color: var(--ink); cursor: pointer; text-align: left;
-  font: 500 0.8rem Inter, "Segoe UI", sans-serif; }
+  font: 500 0.8rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
 .acct:hover, .acct[aria-expanded=true] { border-color: rgba(217, 102, 31, 0.5); }
 .acct-av { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border-radius: 50%;
   background: rgba(217, 102, 31, 0.2); color: var(--navy); font-weight: 700; font-size: 0.72rem; text-transform: uppercase; }
@@ -138,13 +140,13 @@ select option { background: #131c1e; }
 .acct svg, #hsettings svg { width: 16px; height: 16px; flex: none; color: var(--mist); }
 .settings { position: fixed; z-index: 80; width: 280px; padding: 14px; border: 1px solid rgba(200, 204, 210, 0.16);
   border-radius: 14px; background: #101718; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55); color: var(--ink);
-  font: 400 0.82rem Inter, "Segoe UI", sans-serif; }
-.settings .set-h { font: 600 0.72rem "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 0.18em;
+  font: 400 0.82rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
+.settings .set-h { font: 600 0.72rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.18em;
   text-transform: uppercase; color: var(--mist); margin-bottom: 10px; }
 .set-row { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
 .seg { display: flex; padding: 3px; gap: 3px; border: 1px solid var(--rule); border-radius: 9px; background: rgba(0, 0, 0, 0.3); }
 .seg button { flex: 1; padding: 5px 0; border: 0; border-radius: 6px; background: none; color: var(--steel); cursor: pointer;
-  font: 500 0.78rem Inter, "Segoe UI", sans-serif; }
+  font: 500 0.78rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
 .seg button:hover { color: var(--ink); }
 .seg button.on { background: rgba(217, 102, 31, 0.18); color: var(--navy); }
 .seg button[data-v="0.9"] { font-size: 0.7rem; } .seg button[data-v="1.12"] { font-size: 0.86rem; }
@@ -189,11 +191,11 @@ h1, .subtitle, .empty, .msg.bot { font: 400 1rem/1.65 var(--serif); letter-spaci
 h1 { margin: 0; color: var(--navy); font-weight: 600; }
 .subtitle { color: var(--mist); }
 /* Section tabs across the top: NonQM, Conventional, FHA, VA. Each narrows the picker and the chat to its programs. */
-.sections { display: flex; gap: 6px; margin: 0 0 14px; overflow-x: auto; scrollbar-width: none; }
+.sections { display: flex; justify-content: center; gap: 6px; margin: 0 0 14px; overflow-x: auto; scrollbar-width: none; }
 .sections::-webkit-scrollbar { display: none; }
 .sections button { display: flex; align-items: center; gap: 7px; flex: none; padding: 6px 14px; border: 1px solid var(--rule);
-  border-radius: 999px; background: none; color: var(--steel); cursor: pointer; letter-spacing: 0.16em;
-  font: 600 0.8rem "Barlow Condensed", "Arial Narrow", sans-serif; text-transform: uppercase; }
+  border-radius: 999px; background: none; color: var(--steel); cursor: pointer; letter-spacing: 0.1em;
+  font: 700 0.72rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; text-transform: uppercase; }
 .sections button:hover { color: var(--ink); border-color: rgba(217, 102, 31, 0.4); }
 .sections button[aria-selected=true] { background: rgba(217, 102, 31, 0.16); border-color: rgba(217, 102, 31, 0.6); color: var(--navy); }
 #offline { display: none; margin-top: 10px; }
@@ -205,7 +207,7 @@ h1 { margin: 0; color: var(--navy); font-weight: 600; }
   align-self: flex-end; background: rgba(255, 255, 255, 0.07); color: var(--ink); padding: 10px 16px;
   border-radius: 16px; white-space: pre-wrap; max-width: min(620px, 85%); font: 400 1rem/1.65 var(--serif);
 }
-.msg.bot { background: var(--card); backdrop-filter: blur(12px); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35); border: 1px solid var(--rule); border-radius: 4px 14px 14px 14px; padding: 12px 16px; }
+.msg.bot { background: var(--card); box-shadow: none; border: 1px solid var(--rule); border-radius: 4px 14px 14px 14px; padding: 12px 16px; }
 .status { color: var(--mist); font-size: 0.82em; font-style: italic; }
 .status::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%;
   background: var(--gold); animation: pulse 1s infinite alternate; }
@@ -222,7 +224,7 @@ h1 { margin: 0; color: var(--navy); font-weight: 600; }
 /* Citations are small page chips so the sentence reads straight through (full filename on hover). */
 .md a.cite {
   display: inline-block; margin: 0 2px; padding: 0 7px; border: 1px solid var(--rule); border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05); color: var(--mist); font: 500 0.66em/1.6 Inter, "Segoe UI", sans-serif;
+  background: rgba(255, 255, 255, 0.05); color: var(--mist); font: 500 0.66em/1.6 Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   text-decoration: none; white-space: nowrap; vertical-align: 0.12em; transition: color 0.15s, border-color 0.15s;
 }
 .md a.cite:hover { color: var(--navy); border-color: rgba(217, 102, 31, 0.5); }
@@ -232,7 +234,7 @@ h1 { margin: 0; color: var(--navy); font-weight: 600; }
    sheet like the NDM matrices, the opening line reads as the summary. Tables are left as they were. */
 .md > p:first-child:not(:only-child) { color: var(--ink); padding-bottom: 0.7em; border-bottom: 1px solid var(--rule); }
 .md .sec { display: flex; align-items: center; gap: 10px; margin: 1.3em 0 0.5em; color: var(--navy);
-  font: 600 0.78em/1.3 "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 0.16em; text-transform: uppercase; }
+  font: 600 0.78em/1.3 Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.16em; text-transform: uppercase; }
 .md .sec::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
 .md ul { list-style: square; }
 .md li::marker { color: var(--navy); }

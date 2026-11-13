@@ -109,23 +109,59 @@ def _agency_hits(question: str, sec: str, k: int = 6, k_letters: int = 3) -> lis
     except Exception:
         return []   # no index yet
     letter = lambda h: re.search(r"Mortgagee Letter|Circular", h["file"]) is not None
-    found = [h for h in pool if not letter(h)][:k] + [h for h in pool if letter(h)][:k_letters]
+    books = sorted((h for h in pool if not letter(h)), key=lambda h: agency.off_topic(h["text"]))   # stable
+    found = books[:k] + [h for h in pool if letter(h)][:k_letters]
     out = []
-    for h in found:
+    for i, h in enumerate(found):
         rec = agency.info(h["file"])
         head = f"[GENERAL GUIDELINE, agency guide: {agency.label(rec) if rec else h['file']}]"
-        # The index holds one page per chunk, and a handbook rule often runs onto the next page (HUD's MDCS
-        # definition on p. 176, its standard on p. 177), so a handbook page brings the following one along.
+        # The index holds one page per chunk, and a handbook rule often runs across pages (HUD's MDCS definition
+        # on p. 176, its standard on p. 177; the gift donor list starts on p. 362, the hit was p. 363). Every
+        # handbook page brings the next one along, and the three best also bring the one before.
         n = int(re.sub(r"\D", "", h.get("loc", "")) or 0)
-        nxt = "" if letter(h) or not n else agency.page_text(h["file"], n + 1).strip()
-        more = f"\n=== {h['file']} | p. {n + 1} ===\n{nxt}" if nxt else ""
-        out.append({**h, "text": f"{head}\n{h['text']}{more}", "agency": True, "page": n})
+        before, after = "", ""
+        if n and not letter(h):
+            prev, nxt = (agency.page_text(h["file"], n - 1).strip() if i < 3 else ""), agency.page_text(h["file"], n + 1).strip()
+            before = f"=== {h['file']} | p. {n - 1} ===\n{prev}\n" if prev else ""
+            after = f"\n=== {h['file']} | p. {n + 1} ===\n{nxt}" if nxt else ""
+        out.append({**h, "text": f"{head}\n{before}{h['text']}{after}{_exhibits(h['file'])}", "agency": True, "page": n})
     return out
+
+
+def _exhibits(filename: str) -> str:
+    """A VA circular's exhibits, which hold its tables: 26-23-6 says the current funding fees are "in Exhibit B"."""
+    m = re.match(r"VA Circular (26-\d+-\d+)(?: Change \d+)?\.pdf$", filename)
+    if not m:
+        return ""
+    parts = []
+    for p in agency.files():
+        if p.name.startswith(f"VA Circular {m[1]} Exhibit"):
+            text = "\n".join(t.strip() for t in agency.pages(p))[:6000]
+            parts.append(f"\n=== {p.name} | p. 1 ===\n{text}")
+    return "".join(parts)
 
 
 def _agency_block(hits: list[dict]) -> str:
     return ("\n\n##### GENERAL GUIDELINE: AGENCY GUIDES (most relevant pages) #####\n\n"
             + "\n\n".join(h["text"] for h in hits)) if hits else ""
+
+
+def _fix_agency_cites(answer: str) -> str:
+    """Puts the full filename back on agency citations the model shortened ("VA M26-7 Chapter 07, p. 2"), so the
+    chip opens the PDF and the page counts as cited. Only a name that starts exactly one agency file is changed."""
+    stems = {p.stem: p.name for p in agency.files()}
+
+    def seg(s):
+        name = s.split(",")[0].strip()
+        if len(name) < 8 or ".pdf" in s.lower():
+            return s
+        key = re.sub(r"Chapter (\d)\b", r"Chapter 0\1", name).lower()
+        match = [st for st in stems if st.lower().startswith(key)]
+        return s.replace(name, stems[match[0]], 1) if len(match) == 1 else s
+
+    def paren(m):
+        return "(" + ";".join(seg(s) for s in m[1].split(";")) + ")" if re.search(r",\s*pp?\.\s*\d", m[1]) else m[0]
+    return re.sub(r"\(([^()]*)\)", paren, answer)
 
 
 def _agency_note(answer: str, hits: list[dict]) -> tuple[str, list[dict]]:
@@ -353,6 +389,9 @@ def respond(question: str, history: list[dict], choice: str = "",
         answer = yield from _stream(full_doc_messages(question, docs_text, history, ltv_ok=ltv_ok, model=model), model)
 
     # agency pages only count as sources when the answer cited them; unreviewed guides get a line saying so
+    if any(h.get("agency") for h in hits) and (fixed := _fix_agency_cites(answer)) != answer:
+        answer = fixed
+        yield {"replace": answer}
     note, cited = _agency_note(answer, hits)
     hits = [h for h in hits if not h.get("agency")] + cited
     if note:

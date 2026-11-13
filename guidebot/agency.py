@@ -89,7 +89,8 @@ def _hash(path: Path) -> str:
 
 
 def _safe(name: str) -> str:
-    return re.sub(r"\s+", " ", re.sub(r'[<>:"/\\|?*\']', "", name)).strip()[:120]
+    """A filename part. No commas either: a citation is "(filename, p. X)", so a comma in the name splits it."""
+    return re.sub(r"\s+", " ", re.sub(r'[<>:"/\\|?*\',]', "", name)).strip()[:120]
 
 
 def _download(url: str) -> tuple[bytes, str]:
@@ -226,17 +227,24 @@ def va_circulars() -> list[dict]:
             if "rescinded" in status[-1].lower() or (ends and ends <= today):
                 continue
         subject = _plain((re.search(r"<strong>(.*?)</strong>", p, re.S) or [None, ""])[1])
+        base, entry_date = "", ""
         for href, label in re.findall(r'<a href="([^"]+\.pdf)"[^>]*>(.*?)</a>', p, re.S | re.I):
-            m = re.match(r"Circular (26-\d+-\d+)(?: \(Change (\d+)\))?(?: - (.+))?$", _plain(label))
-            if not m:
-                continue   # exhibits
-            num = m[1] + (f" Change {m[2]}" if m[2] else "")
+            label = _plain(label)
+            m = re.match(r"Circular (26-\d+-\d+)(?: \(Change (\d+)\))?(?: - (.+))?$", label)
+            if m:
+                base = base or m[1]
+                entry_date = entry_date or find_date(m[3] or "")
+                num, when = m[1] + (f" Change {m[2]}" if m[2] else ""), find_date(m[3] or "")
+            elif base and label.lower().startswith("exhibit"):
+                # Exhibits hold the actual tables (26-23-6's Exhibit B is the current funding fee table)
+                num, when = f"{base} {_safe(label)}", entry_date
+            else:
+                continue
             url = urljoin(VA_CIRCULARS, href)
             if any(o["rel"] == f"VA/Circulars/VA Circular {num}.pdf" for o in out):
                 continue   # a change's entry links the original again; the original's own entry comes later
             out.append({"rel": f"VA/Circulars/VA Circular {num}.pdf", "title": f"VA Circular {num}: {subject}",
-                        "url": url, "version": url, "date": find_date(m[3] or ""),
-                        "fetch": lambda url=url: _download(url)})
+                        "url": url, "version": url, "date": when, "fetch": lambda url=url: _download(url)})
     return out
 
 
@@ -336,6 +344,19 @@ def pages(path: Path) -> list[str]:
     TEXT_DIR.mkdir(parents=True, exist_ok=True)
     tp.write_text(json.dumps({"hash": h, "pages": texts}), encoding="utf-8")
     return texts
+
+
+# HUD 4000.1 is 1,872 pages and about 500 of them are about originating a forward mortgage. The rest (servicing,
+# Title I, reverse mortgages, claims, quality control, the index) answered gift questions with the Title I and
+# reverse mortgage gift rules, so those pages rank after the origination ones.
+_HUD_ORIGINATION = re.compile(r"II\. ORIGINATION[^\n]*\n(?:A\. Title II Insured Housing Programs Forward|"
+                              r"C\. Condominium|[DF]\. Appraiser)")
+
+
+def off_topic(text: str) -> bool:
+    """A HUD handbook page outside forward mortgage origination (its running header says which part it's in)."""
+    head = text[:600]
+    return "Handbook 4000.1" in head and not _HUD_ORIGINATION.search(head)
 
 
 _pages_cache: dict = {}

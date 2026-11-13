@@ -7,12 +7,12 @@
 <link rel="icon" href="/logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500&family=Space+Mono&family=Barlow+Condensed:wght@600&family=Inter:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500&family=Lato:ital,wght@0,400;0,700;0,900;1,400&display=swap">
 <style>
 /* Same theme as guidebot.html. */
 :root {
   color-scheme: dark;
-  --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  --serif: Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --ink: #e6e8ea; --steel: #b3b9be; --mist: #7d878c; --rule: rgba(200, 204, 210, 0.1);
   --accent: #d9661f; --gold: #c8ccd2; --page: #131c1e; --side: rgba(0, 0, 0, 0.5);
   --card: rgba(0, 0, 0, 0.38); --warn: #e2b866; --warn-bg: rgba(226, 184, 102, 0.1); --bad: #e08080; --ok: #7cc48a;
@@ -26,16 +26,16 @@ html {
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
 body { background: transparent; color: var(--ink); display: flex;
-  font: 14px/1.5 "Inter", "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
+  font: 14px/1.5 Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
 aside { width: 300px; flex: none; background: var(--side); backdrop-filter: blur(18px); border-right: 1px solid var(--rule);
   padding: 20px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
 .brand { color: var(--gold); display: flex; align-items: center; gap: 12px; text-decoration: none; }
 .brand img { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--gold); }
 .brand .mark { display: block; font: 500 1.35rem/1 "Bodoni Moda", Didot, serif; letter-spacing: 0.04em; }
-.brand .mark span { color: var(--accent); font: 600 0.55em Inter, sans-serif; vertical-align: 0.7em; margin-left: 1px; }
-.brand .tag-line { display: block; margin-top: 5px; font: 0.56rem "Space Mono", Consolas, monospace;
+.brand .mark span { color: var(--accent); font: 600 0.55em Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; vertical-align: 0.7em; margin-left: 1px; }
+.brand .tag-line { display: block; margin-top: 5px; font: 0.56rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   letter-spacing: 0.18em; color: var(--mist); }
-.label { font: 600 0.68rem "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 0.2em; color: var(--mist);
+.label { font: 600 0.68rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.2em; color: var(--mist);
   text-transform: uppercase; }
 .prog { margin-top: 4px; }
 .prog > .label { display: block; margin: 8px 0 4px; }
@@ -60,7 +60,7 @@ h2 { font: 600 1rem var(--serif); margin: 0 0 8px; }
 .note.warn { color: var(--warn); background: var(--warn-bg); }
 .note.bad { color: var(--bad); background: rgba(224, 128, 128, 0.08); }
 .note ul { margin: 6px 0 0; padding-left: 18px; }
-button.act { font: 600 0.85rem Inter, sans-serif; padding: 9px 16px; border-radius: 999px; cursor: pointer;
+button.act { font: 600 0.85rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; padding: 9px 16px; border-radius: 999px; cursor: pointer;
   border: 1px solid var(--accent); background: var(--accent); color: #fff; }
 button.act.ghost { background: transparent; color: var(--accent); }
 button.act:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -81,7 +81,7 @@ textarea { width: 100%; min-height: 280px; resize: vertical; background: rgba(0,
 label.toggle { display: flex; gap: 8px; align-items: center; font-size: 0.85rem; color: var(--steel); cursor: pointer; }
 .tabs { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--rule); border-radius: 999px; background: var(--card); }
 .tabs button { flex: 1; padding: 6px 4px; border: 0; border-radius: 999px; background: none; color: var(--steel);
-  font: 600 0.75rem Inter, sans-serif; cursor: pointer; }
+  font: 600 0.75rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; cursor: pointer; }
 .tabs button:hover { color: var(--ink); }
 .tabs button.on { background: rgba(217, 102, 31, 0.16); color: var(--accent); }
 #side { display: flex; flex-direction: column; gap: 10px; }
@@ -100,7 +100,7 @@ label.toggle { display: flex; gap: 8px; align-items: center; font-size: 0.85rem;
 .md a { color: var(--gold); }
 .md a.cite {
   display: inline-block; margin: 0 2px; padding: 0 7px; border: 1px solid var(--rule); border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05); color: var(--mist); font: 500 0.66rem/1.6 Inter, "Segoe UI", sans-serif;
+  background: rgba(255, 255, 255, 0.05); color: var(--mist); font: 500 0.66rem/1.6 Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   text-decoration: none; white-space: nowrap; vertical-align: 0.12em;
 }
 .md a.cite:hover { color: var(--accent); border-color: rgba(217, 102, 31, 0.5); }
@@ -110,7 +110,7 @@ label.toggle { display: flex; gap: 8px; align-items: center; font-size: 0.85rem;
    sheet like the NDM matrices, the opening line reads as the summary. Tables are left as they were. */
 .md > p:first-child:not(:only-child) { color: var(--ink); padding-bottom: 0.7em; border-bottom: 1px solid var(--rule); }
 .md .sec { display: flex; align-items: center; gap: 10px; margin: 1.3em 0 0.5em; color: var(--accent);
-  font: 600 0.78rem/1.3 "Barlow Condensed", "Arial Narrow", sans-serif; letter-spacing: 0.16em; text-transform: uppercase; }
+  font: 600 0.78rem/1.3 Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.16em; text-transform: uppercase; }
 .md .sec::after { content: ""; flex: 1; border-top: 1px solid var(--rule); }
 .md ul { list-style: square; }
 .md li::marker { color: var(--accent); }
@@ -127,11 +127,11 @@ label.toggle { display: flex; gap: 8px; align-items: center; font-size: 0.85rem;
 .md table { width: auto; font-size: 0.88rem; }
 /* Updates tab: one card per change to an agency guide */
 .badge { display: inline-block; min-width: 16px; padding: 0 5px; margin-left: 4px; border-radius: 999px; background: var(--accent);
-  color: #fff; font: 600 0.62rem/1.5 Inter, sans-serif; vertical-align: 0.1em; }
+  color: #fff; font: 600 0.62rem/1.5 Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; vertical-align: 0.1em; }
 .upd { border-left: 3px solid var(--accent); } .upd.done { border-left-color: var(--rule); opacity: 0.75; }
 .upd .head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .upd .head h2 { flex: 1; margin: 0; min-width: 240px; }
-.kind { font: 600 0.66rem "Barlow Condensed", sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: var(--warn); }
+.kind { font: 600 0.66rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: var(--warn); }
 .lines { font-size: 0.8rem; margin: 6px 0 0; padding: 0; list-style: none; max-height: 320px; overflow-y: auto; }
 .lines li { padding: 3px 0 3px 8px; border-top: 1px solid var(--rule); }
 .lines li.add { border-left: 2px solid var(--ok); } .lines li.del { border-left: 2px solid var(--bad); color: var(--steel); text-decoration: line-through; }

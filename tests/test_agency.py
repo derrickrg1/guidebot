@@ -127,7 +127,8 @@ def test_circulars_skip_rescinded_and_exhibits(monkeypatch):
     <p><a href="/c/26-24-19.pdf">Circular 26-24-19 - Sep 13, 2024</a><br /><strong>Invoices</strong> (Valid until rescinded)</p>"""
     monkeypatch.setattr(agency, "_page", lambda url: page)
     got = {i["rel"].split("/")[-1]: i for i in agency.va_circulars()}
-    assert sorted(got) == ["VA Circular 26-24-19 Change 1.pdf", "VA Circular 26-24-19.pdf", "VA Circular 26-26-5.pdf"]
+    assert sorted(got) == ["VA Circular 26-24-19 Change 1.pdf", "VA Circular 26-24-19 Exhibit A.pdf",
+                           "VA Circular 26-24-19.pdf", "VA Circular 26-26-5.pdf"]   # exhibits hold the tables
     assert got["VA Circular 26-26-5.pdf"]["date"] == "2026-10-27"
 
 
@@ -156,8 +157,30 @@ def test_unreviewed_agency_pages_get_a_note(monkeypatch):
     assert chat._agency_note("(FHA HUD 4000.1 Handbook.pdf, p. 1)", hits)[0] == ""
 
 
+def test_shortened_agency_cites_get_the_full_name(monkeypatch):
+    names = ["VA M26-7 Chapter 07 Loans Requiring Special Underwriting.pdf", "VA M26-7 Chapter 08 Fees.pdf",
+             "FHA HUD 4000.1 Handbook.pdf"]
+    monkeypatch.setattr(agency, "files", lambda: [Path(n) for n in names])
+    out = chat._fix_agency_cites("Occupancy (VA M26-7 Chapter 7, p. 2; VA Standard Matrix.pdf, p. 3). "
+                                 "Score (FHA HUD 4000.1, p. 177). Fees (VA M26-7, p. 1). Plain (see note).")
+    assert "(VA M26-7 Chapter 07 Loans Requiring Special Underwriting.pdf, p. 2; VA Standard Matrix.pdf, p. 3)" in out
+    assert "(FHA HUD 4000.1 Handbook.pdf, p. 177)" in out
+    assert "(VA M26-7, p. 1)" in out and "(see note)" in out          # ambiguous or not a citation: left alone
+
+
+def test_hud_pages_outside_origination_rank_last():
+    page = lambda part, sub: f"[FHA Agency | x]\n=== x | p. 1 ===\n{part}\n{sub}\nHandbook 4000.1 258\nLast Revised"
+    assert not agency.off_topic(page("II. ORIGINATION THROUGH POST-CLOSING/ENDORSEMENT",
+                                     "A. Title II Insured Housing Programs Forward Mortgages"))
+    assert agency.off_topic(page("II. ORIGINATION THROUGH POST-CLOSING/ENDORSEMENT", "E. Title I Insured Programs"))
+    assert agency.off_topic(page("III. SERVICING AND LOSS MITIGATION", "A. Title II Insured Housing Programs Forward"))
+    assert not agency.off_topic("=== VA M26-7 Chapter 04.pdf | p. 3 ===\nTopic 2. Income")
+
+
 def test_agency_section_and_rules():
     assert chat._agency_section("VA", "") == "VA" and chat._agency_section("", "FHA") == "FHA"
     assert chat._agency_section("Ignite 1099", "NonQM") == ""
     rules = " ".join(answer.RULES.split())
-    assert "the letter wins" in rules and "GENERAL GUIDELINE, agency guide" in rules
+    assert "GENERAL GUIDELINE, agency guide" in rules and "Every VA Circular you're given is still in force" in rules
+    assert "never an agency letter" in rules
+    assert '"depends" (on the program), never "no"' in " ".join(answer.VERDICT_SYSTEM.split())
