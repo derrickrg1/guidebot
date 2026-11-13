@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 from guidebot import conv_matrix, gov_matrix, overlay_rules
+from guidebot.extract_pdf import grid_mark
 from guidebot.llm import ask_json
 from guidebot.matrix_lookup import apply_adjustments, dimension_columns, header_problems, lookup, value_columns
 
@@ -19,6 +20,8 @@ RULES = """Rules:
   lay out each case briefly.
 - Cite every fact using the filename and page from the section header above it, formatted as (filename, p. X). The header looks like [§5.3 Title | NonQM-Underwriting-Guidelines.pdf | p. 35-39] — copy the filename exactly from there.
 - Copy numbers exactly as written.
+- For the rule that decides the answer, put the document's own words in double quotes, copied exactly (a short
+  phrase, under 15 words), next to its citation. The source opens on the quoted line.
 - An earlier answer in this chat may cite a page that isn't in your material now: it was loaded for that earlier
   question. Don't call it wrong or tell the user to disregard it for that reason alone.
 - Shorthand is spelled out after the question ("Terms: NOD = Notice of Default, a pre-foreclosure credit event").
@@ -95,9 +98,10 @@ SEARCH_SYSTEM = (
     "You are a mortgage guideline assistant for loan set-up and underwriting staff.\n"
     "You have the most relevant sections from several programs guidelines below.\n\n"
     "IMPORTANT: Do NOT quote, estimate, or reason about maximum LTV or CLTV percentages for any specific\n"
-    "loan scenario. LTV lookups require an exact matrix read that only works when a single program is selected.\n"
-    "If someone asks for max LTV or whether a specific deal is eligible, tell them:\n"
-    '"Pick a specific program in the sidebar. I cannot look up LTV numbers from search results."\n\n'
+    "loan scenario. LTV numbers only come from the matrix lookup, never from these sections.\n"
+    "If someone asks for max LTV or whether a specific deal is eligible, tell them, in one line:\n"
+    '"LTV numbers come from the matrix lookup. Give me the FICO, loan amount, occupancy and purpose."\n'
+    "Then answer the rest of the question (anything that isn't an LTV) from the sections.\n\n"
     "Synthesis rules:\n"
     "- Read EVERY section provided before you start writing. The complete answer often requires combining two or three sections.\n"
     "- Programs can differ -- never mix one program's rules into another's answer. Name the program for every fact.\n"
@@ -127,7 +131,9 @@ BROAD_SYSTEM = (
     "  no overlay gets the general guideline's rule, \"No overlay, general guideline\" in Conditions, and the general\n"
     "  guideline's citation in Source. A program whose sheet rule differs from the general guideline gets \"Overlay,\n"
     "  supersedes general guideline (general: <its rule>)\" in Conditions. A rule the sheet itself states is\n"
-    "  the sheet's: cite the sheet and leave \"general guideline\" out of it. Rows go in the order the program\n"
+    "  the sheet's: cite the sheet and leave \"general guideline\" out of it. Conditions also carries the cited\n"
+    "  page's own words for the rule in double quotes, copied exactly (a short phrase, under 15 words), so the\n"
+    "  reader can see it and the source opens on that line. Rows go in the order the program\n"
     "  sheets are given below, one row for every program sheet, whatever each one's answer. The agency's base\n"
     "  programs (Fannie Mae, Freddie Mac, Standard) are program sheets too and come first. After the table, add\n"
     "  only short bullets for things the table can't hold.\n"
@@ -250,7 +256,7 @@ _FICO = re.compile(r"\b(\d{3})\s*(?:fico|credit|score|mid)\b|\b(?:fico|score)\s*
 _AMOUNT = re.compile(r"\$\s*(\d[\d,]*(?:\.\d+)?)\s*([km]\b)?|\b(\d+(?:\.\d+)?)\s*([km])\b", re.I)
 _OCCUPANCY = {"Investment Property": r"invest|rental|non[- ]?owner|\bnoo\b",
               "Second Home": r"second home|2nd home|vacation home",
-              "Primary Residence": r"primary|owner[- ]occupied|\boo\b"}
+              "Primary Residence": r"primary|owner[- ]occ|\boo\b|\blive (in|there)\b|living in|move in"}
 # "limited cash-out" (Fannie) and "no cash-out" are rate/term: the cash-out pattern read them as cash-out once
 _PURPOSE = {"Cash Out Refinance": r"(?<!no )(?<!no-)(?<!limited )(?<!limited-)cash[- ]?out|\bc/o\b",   # not bare "co"
             "Rate/Term Refinance": r"rate[ /&-]*(and )?term|\br/?t\b|(no|limited)[- ]cash|refi",
@@ -258,13 +264,41 @@ _PURPOSE = {"Cash Out Refinance": r"(?<!no )(?<!no-)(?<!limited )(?<!limited-)ca
 REQUIRED = ("fico", "loan_amount", "occupancy", "purpose")
 
 
+# What an amount is, from the words around it. "buying a primary for $850k with 20% down" took $850k as the loan,
+# and "value is $1M, they want a $650k cash-out refi" took the $1M.
+_LOAN_AFTER = re.compile(r"\s*(loan|mortgage|cash[- ]?out|refi|rate|r/t|c/o|1st|first|2nd|second lien)", re.I)
+_LOAN_BEFORE = re.compile(r"(loan|borrow\w*|mortgage|financ\w*|cash[- ]?out|refi)\s*(amount)?\s*(is|of|at|for|:|=)?\s*$", re.I)
+_PRICE_BEFORE = re.compile(r"(price|value|valued|worth|apprais\w*|sales?|\bfor)\s*(is|of|at|:|=)?\s*"   # not bare "at": "700 at 1.5m"
+                           r"(about|around)?\s*$", re.I)
+_PRICE_AFTER = re.compile(r"\s*(purchase price|price|value|home|house|property|condo|townhome|duplex|triplex"
+                          r"|fourplex|sfr)\b", re.I)
+_DOWN_PCT = re.compile(r"(\d+(?:\.\d+)?)\s*%\s*down", re.I)
+
+
 def _amount(text: str) -> int | None:
+    loans, prices, downs, other = [], [], [], []
     for m in _AMOUNT.finditer(text):
         num, unit = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
         value = float(num.replace(",", "")) * {"k": 1e3, "m": 1e6}.get((unit or "").lower(), 1)
-        if value >= 10000:
-            return int(value)
-    return None
+        if value < 10000:
+            continue
+        end = m.start() + len(m.group().rstrip(", "))   # "$1,500,000, loan amount $975k": the comma isn't the number's
+        before, after = text[max(0, m.start() - 30):m.start()], text[end:end + 25]
+        if re.match(r"\s*down", after, re.I):
+            downs.append(value)
+        elif _LOAN_AFTER.match(after) or _LOAN_BEFORE.search(before):
+            loans.append(value)
+        elif _PRICE_BEFORE.search(before) or _PRICE_AFTER.match(after):
+            prices.append(value)
+        else:
+            other.append(value)
+    if loans:
+        return int(loans[0])
+    if prices and (pct := _DOWN_PCT.search(text)):
+        return int(round(prices[0] * (1 - float(pct[1]) / 100)))
+    if prices and downs:
+        return int(prices[0] - downs[0])
+    return int(other[0]) if other else None   # a price or value alone isn't the loan amount: ask for it
 
 
 def fill_scenario(raw: RawScenario, text: str) -> RawScenario:
@@ -285,17 +319,34 @@ def said_scenario(question: str, history: list[dict], ai: RawScenario | None = N
     """The deal as the user stated it. The newest message wins ("what if it's 680 FICO?" replaces the old FICO),
     then the AI's read, then earlier user messages fill in only what's still unsaid."""
     raw = fill_scenario(RawScenario(), question)
+    # A message that states a whole new deal (3 of FICO, amount, occupancy, purpose) stands alone: "700 FICO,
+    # purchase, primary" right after a $2.5M deal took the $2.5M and answered for it instead of asking.
+    fresh = sum(getattr(raw, f) not in (None, "") for f in REQUIRED) >= 3
     if ai:
         raw = raw.model_copy(update={k: v for k, v in ai.model_dump(exclude={"missing"}).items()
-                                     if v is not None and getattr(raw, k) is None})
-    for m in reversed([m for m in history[-4:] if m["role"] == "user"]):
+                                     if v is not None and getattr(raw, k) is None
+                                     and not (fresh and k in REQUIRED)})
+    for m in [] if fresh else reversed([m for m in history[-4:] if m["role"] == "user"]):
         raw = fill_scenario(raw, m["content"])
     return fill_scenario(raw, "")   # recount what's missing after the AI's fields went in
+
+
+# "Are temporary buydowns allowed on a cash-out refi?" names a purpose but asks about a rule, not a deal.
+_RULE_Q = re.compile(r"\b(allowed|permitted|eligible for|ineligible|required|requirements?|how (many|long|much)"
+                     r"|can (i|we|you|they|the|a|an)|is there|are there|do(es)? .{0,60}\b(allow|require|need))\b", re.I)
+
+
+def asks_rule(question: str) -> bool:
+    """A guideline question with no deal numbers in it (no FICO, no loan amount)."""
+    q = fill_scenario(RawScenario(), question)
+    return not q.fico and not q.loan_amount and bool(_RULE_Q.search(question))
 
 
 def looks_like_deal(question: str, history: list[dict]) -> bool:
     """Python's call on whether this asks for a number on a specific deal. Those always go through the matrix
     lookup, whatever the toggles say, and never fall back to the AI writing an LTV."""
+    if asks_rule(question):
+        return False
     q = fill_scenario(RawScenario(), question)
     if q.fico and (q.loan_amount or q.occupancy or q.purpose):
         return True
@@ -399,7 +450,8 @@ def compare_programs(
         elif not res["eligible"]:
             results.append({"program": prog, "eligible": False, "cell": res.get("cell", "N/A"), "trace": res.get("trace", [])})
         else:
-            row = {"program": prog, "eligible": True, "max_ltv": res["ltv"], "cell": res["cell"], "trace": res["trace"]}
+            row = {"program": prog, "eligible": True, "max_ltv": res["ltv"], "cell": res["cell"], "trace": res["trace"],
+                   "cite": matrix_cite(mats[crit.matrix], res)}
             rules = pd.get("rules")
             if rules and rules["status"] != "approved":
                 results.append({"program": prog, "eligible": None, "cell": res["cell"], "trace": res["trace"],
@@ -519,7 +571,8 @@ An overlay for a different occupancy, purpose or property type than the user's d
 Do not include overlays that depend on facts the user didn't state (declining market, non-occupant co-borrower,
 credit events, location). Put those in notes as short "If ..." lines with (file, p. X). Also put other
 requirements that apply to this deal but don't change the LTV (reserves, escrows, seasoning, max loan amount)
-in notes, with citations. Every note ends with (file, p. X). Notes never restate the base LTV, the math,
+in notes, with citations. Each note puts the sheet's own words for the rule in double quotes, copied exactly
+(a short phrase, under 15 words), then ends with (file, p. X). Notes never restate the base LTV, the math,
 or why something does or doesn't apply."""
 
 OCCUPANCY = {"investment": ("investment", "investor", "non owner", "rental", "noo"),
@@ -586,6 +639,17 @@ def describe_matrices(mats: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def matrix_cite(m: dict, res: dict) -> str:
+    """The grid as a citation chip that opens on its row and cell (they were plain text and opened nothing)."""
+    try:
+        col = res.get("col") or res["trace"][-1].removeprefix("Column: ")
+        nums = grid_mark(m["path"], m["page"], m["df"], res["i"], col) if m.get("path") and res.get("i") is not None else None
+    except Exception:
+        nums = None
+    mark = f", mark {' '.join(f'{v:.1f}' for v in nums)}" if nums else ""
+    return f"({m['file']}, p. {m['page']}{mark})"
+
+
 def comparison_md(comp: dict) -> str:
     """Markdown for compare_programs results, shared by both UIs."""
     if comp["missing"]:
@@ -602,7 +666,7 @@ def comparison_md(comp: dict) -> str:
             f"| {r['program']} | **{r['max_ltv']:g}%** | {' '.join(x for x in (r.get('cell', ''), r.get('cite')) if x)} | "
             f"{', '.join(r.get('overlays') or []).replace('|', '/') or 'none'}{' ⚠️ stacked' if r.get('stacked') else ''} |"
             for r in eligible)
-        parts.append("**Eligible programs**\n\n| Program | Max LTV | Matrix cell | Overlays applied |\n"
+        parts.append("**Eligible programs**\n\n| Program | Max LTV | Matrix cell | Overlays and notes |\n"
                      f"|---|---|---|---|\n{rows}")
     if ineligible:
         parts.append("**Not eligible**\n\n" + "\n".join(
@@ -612,8 +676,11 @@ def comparison_md(comp: dict) -> str:
             f"- {r['program']}: {r.get('error', 'unknown error')}" for r in errors))
     if any(r.get("stacked") for r in eligible):
         parts.append("⚠️ Stacked means more than one reduction was applied. Confirm with underwriting that they stack.")
-    parts.append("*Overlays checked against each program's guidelines. Pick a program to see the quotes, "
-                 "the math, and anything left out.*")
+    if any("Table only" in o for r in results for o in r.get("overlays") or []):   # Conventional, FHA, VA
+        parts.append("*Pick a program to see its row on the sheet and the footnotes on that cell.*")
+    else:
+        parts.append("*Overlays checked against each program's guidelines. Pick a program to see the quotes, "
+                     "the math, and anything left out.*")
     return "\n\n".join(parts)
 
 
@@ -666,6 +733,8 @@ def _ai_overlays(question: str, history: list[dict], crit, res: dict, docs_text:
                       *(m["content"] for m in history if m["role"] == "user")])
     kept, rejected = [], []
     for a in adj.adjustments:
+        if not a.quote.strip() or not a.file.strip():
+            continue   # no source at all: the AI talking itself out of an overlay showed up as "(, p. 0)"
         why = check_adjustment(a, doc, facts)
         (rejected.append((a, why)) if why else kept.append(a))
     calc = apply_adjustments(res["ltv"], [a.model_dump() for a in kept])
@@ -746,7 +815,7 @@ def scenario_answer(question: str, history: list[dict], mats: list[dict], docs_t
         elif "fico" in d.name.lower() and raw.fico:
             d.value = str(raw.fico)
     res = lookup(m["df"], {d.name: d.value for d in crit.dims}, crit.column)
-    out = [f"*Matrix: {m['file']} p. {m['page']}*"] + [f"- {t}" for t in res["trace"]]
+    out = [f"*Matrix:* {matrix_cite(m, res)}"] + [f"- {t}" for t in res["trace"]]
     if ref.get("status") == "match":
         out.append("- ✅ Matrix matches the Revo site's copy cell for cell")
     if not res["ok"]:

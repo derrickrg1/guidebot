@@ -55,7 +55,10 @@ const shortName = f => f.replace(/\.pdf$/i, "").replace(/ \d{4}-\d{2}-\d{2}$/, "
 function citeChips(inner) {
   let lastFile = "";
   return inner.split(/;\s*/).map(part => {
-    const file = (part.match(/([^,;()]+?\.pdf)/i) || [])[1]?.trim() || lastFile;
+    // no colon in a filename: "(All three matrices state the same tables: VA Standard Matrix.pdf, p. 6)" linked to a
+    // file named after the whole sentence
+    // nor a leading "also" / "see": "(also Premier-2nd-Mortgage-UW-Guidelines.pdf, p. 14)"
+    const file = (part.match(/([^,;():]+?\.pdf)/i) || [])[1]?.trim().replace(/^(also|see|and|plus|per|via)\s+/i, "") || lastFile;
     if (!file) return "";
     lastFile = file;
     const pg = (part.match(/p(?:age|p)?\.?\s*(\d+)/i) || [])[1];

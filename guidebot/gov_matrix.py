@@ -214,7 +214,7 @@ def result(raw, question: str, mats: list[dict]) -> dict:
     if best["ltv"] is None:
         return {"eligible": None, "cell": best["cell"], "error": f"No max LTV on {m['file']} (NA). Pick this program."}
     return {"eligible": True, "max_ltv": best["ltv"], "cell": best["cell"], "trace": [m["file"]],
-            "overlays": ["matrix only, sheet requirements not applied"]}
+            "overlays": ["Table only. Check the sheet's credit, property and other pages."]}
 
 
 def answer(raw, question: str, mats: list[dict]) -> str:
@@ -273,6 +273,5 @@ def answer(raw, question: str, mats: list[dict]) -> str:
             lines += ["", f"**Footnotes, {m['file']}**"] + [f"- {n}" for n in notes]
     if any((m.get("reference") or {}).get("status") == "match" for m, _ in found):
         lines += ["", "✅ Matches the Revo site's copy of the matrix cell for cell"]
-    lines += ["", "*Python lookup on the matrix only. Credit, property and reserve requirements on the sheet's "
-                  "other pages aren't applied here.*"]
+    lines += ["", "*Table only. Check the sheet's credit, property and reserve rules on its other pages.*"]
     return "\n".join(lines)

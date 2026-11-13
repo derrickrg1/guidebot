@@ -1,5 +1,6 @@
 """Turn a guideline PDF into clean pages: text outside tables, regular tables as cell rows,
 and matrices rebuilt as real grids (headers combined, merged cells filled down)."""
+import functools
 import itertools
 import re
 import threading
@@ -687,3 +688,53 @@ PDFIUM_LOCK = threading.Lock()
 def page_image(path, page_number: int, resolution: int = 110):
     with pdfplumber.open(path) as pdf:
         return pdf.pages[page_number - 1].to_image(resolution=resolution).original
+
+
+@functools.lru_cache(maxsize=64)
+def _page_lines(path: str, page_number: int) -> tuple[float, list[list[dict]]]:
+    """The page's words grouped into lines, top to bottom (cached: a deal answer reads the same page every time)."""
+    with pdfplumber.open(path) as pdf:
+        page = pdf.pages[page_number - 1]
+        words = sorted(page.extract_words(), key=lambda w: (w["top"], w["x0"]))
+        height = float(page.height)
+    lines: list[list[dict]] = []
+    for w in words:
+        if lines and abs(lines[-1][0]["top"] - w["top"]) <= 2:
+            lines[-1].append(w)
+        else:
+            lines.append([w])
+    return height, [sorted(l, key=lambda w: w["x0"]) for l in lines]
+
+
+def _tok(s) -> str:
+    return re.sub(r"[*\s]|(?<=%)\d+$", "", str(s)).lower()
+
+
+def grid_mark(path, page_number: int, df: pd.DataFrame, i: int, column: str) -> list[float] | None:
+    """Where a loan amount x FICO grid's row i and its cell in `column` sit on the page, in PDF units (y up):
+    [x0, y0, x1, y1] for the row, then the cell's. The row is found by its FICO and LTV cells in order; rows that
+    read the same ("720 90% 90% ..." under two loan amounts) are told apart by their order on the page. None when
+    the page doesn't line up with the grid, so the chip opens the page without a mark instead of a wrong one."""
+    cols = [str(c) for c in df.columns]
+    lead = [c for c in cols if c == "FICO" or c.lower().startswith("fico")]
+    vals = [c for c in cols if c not in lead and c != "Loan Amount" and not c.lower().startswith("loan")]
+    if not lead or column not in vals:
+        return None
+    seq = lambda r: [_tok(df.iloc[r][lead[0]])] + [_tok(df.iloc[r][c]) for c in vals]
+    want = seq(i)
+    rank = sum(seq(r) == want for r in range(i))
+    total = sum(seq(r) == want for r in range(len(df)))
+    height, lines = _page_lines(str(path), page_number)
+    hits = []
+    for line in lines:
+        toks = [_tok(w["text"]) for w in line]
+        for s in range(len(toks) - len(want) + 1):
+            if toks[s:s + len(want)] == want:
+                hits.append(line[s:s + len(want)])
+                break
+    if len(hits) != total:
+        return None
+    row = hits[rank]
+    cell = row[1 + vals.index(column)]
+    y0, y1 = height - max(w["bottom"] for w in row) - 2, height - min(w["top"] for w in row) + 2
+    return [row[0]["x0"] - 3, y0, row[-1]["x1"] + 3, y1, cell["x0"] - 3, y0, cell["x1"] + 3, y1]

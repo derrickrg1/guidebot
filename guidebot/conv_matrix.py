@@ -242,6 +242,18 @@ def conv_mats(mats: list[dict]) -> list[dict]:
     return [m for m in mats if m["df"].attrs.get("kind") == "conv"]
 
 
+def still_check(m: dict, res: dict) -> str:
+    """What the LTV table doesn't cover, for this deal. Python reads the table only; the sheet's other rules
+    can still lower the number or rule the deal out."""
+    items = []
+    if res["ltv"] > 95:
+        items.append("the 95.01-97% rules (fixed rate, 1-unit primary, first-time buyer on a purchase)")
+    if re.search(r"home\s*ready|home\s*possible", m["df"].attrs.get("title", ""), re.I):
+        items.append("the income limit")
+    items.append("the sheet's other pages (MI, ARMs, buydowns, property)")
+    return "Table only. Check " + (", ".join(items[:-1]) + " and " if len(items) > 1 else "") + items[-1] + "."
+
+
 def cite(m: dict, res: dict) -> str:
     """The matrix as a citation chip. "mark" carries the row's and the cell's place on the page, so the viewer
     highlights them instead of guessing by words ("1 | 75% | 75%" is on the page twice)."""
@@ -314,7 +326,7 @@ def result(raw, question: str, mats: list[dict]) -> dict:
     m, res = best
     note = ", ".join(x for x in (res["tier"], res["extra"]) if x)
     return {"eligible": True, "max_ltv": res["ltv"], "cell": res["cell"], "cite": cite(m, res), "trace": [m["file"]],
-            "overlays": [f"{note}; matrix only, sheet requirements not applied"]}
+            "overlays": [f"{note}. {still_check(m, res)}"]}
 
 
 def answer(raw, question: str, mats: list[dict]) -> str:
@@ -359,9 +371,6 @@ def answer(raw, question: str, mats: list[dict]) -> str:
         others = [n for n in notes if n not in cited] if cited else []
         if others:
             lines += ["", "**Other footnotes on the sheet**"] + [f"- {n}" for n in others]
-    lines += ["", "- County loan limits can be lower than the sheet's maximums (FHFA, high-cost areas)."]
-    if res["ltv"] > 95:
-        lines.append("- Over 95% LTV the sheet's 95.01-97% LTV requirements apply too; check them on the sheet.")
-    lines += ["", "*Python lookup on the matrix only. Credit, property, MI and the sheet's other pages "
-                  "aren't applied here.*"]
+    lines += ["", "- County loan limits can be lower than the sheet's maximums (FHFA, high-cost areas).",
+              "", f"*{still_check(m, res)}*"]
     return "\n".join(lines)

@@ -5,9 +5,9 @@ All LTV guards live in answer.py, so both UIs get the same rules.
 """
 import re
 
-from guidebot import agency, config, conv_matrix, gov_matrix, library, overlay_rules
+from guidebot import agency, config, conv_matrix, gov_matrix, library, ltv_overview, overlay_rules
 from guidebot.answer import (broad_messages, compare_programs, comparison_md, filter_to_cited, full_doc_messages,
-                             full_section_messages, looks_like_deal, said_scenario, scenario_answer, search_messages)
+                             full_section_messages, asks_rule, looks_like_deal, said_scenario, scenario_answer, search_messages)
 from guidebot.llm import stream_chat
 from guidebot.section_reader import cited_pages, expand_terms, route_and_load
 
@@ -205,6 +205,60 @@ def _fix_agency_cites(answer: str) -> str:
     return re.sub(r"\(([^()]*)\)", paren, answer)
 
 
+_WORDS = lambda s: re.findall(r"[a-z0-9%$]+", s.lower().replace(",", "").replace("’", "'"))
+
+
+def _in_order(quote: list[str], words: list[str], gap: int = 6) -> bool:
+    """The quote's words on the page in order, a few words apart at most (table cells and line breaks split them)."""
+    for s in (i for i, w in enumerate(words) if quote and w == quote[0]):
+        j = s
+        for w in quote[1:]:
+            j = next((k for k in range(j + 1, min(len(words), j + 2 + gap)) if words[k] == w), None)
+            if j is None:
+                break
+        else:
+            return True
+    return False
+
+
+def _cited_text(file: str, page: int) -> str:
+    path = next((p for ps in library.programs().values() for p in ps if p.name == file), None)
+    if path:
+        pages = {p["page"]: p for p in library.load(path)["pages"]}
+        return library.render_page(file, pages[page]) if page in pages else ""
+    return agency.page_text(file, page)
+
+
+def _unquote_unfound(answer: str) -> str:
+    """A quote has to be the cited page's own words. The stress test found ~1.5% that weren't: a paraphrase in
+    quote marks, or a sibling sheet's line under the shared guide's citation. Those lose their quote marks (the
+    rule stays, the viewer then marks it by word overlap). Checked against the cited pages and the ones beside them."""
+    out = []
+    for line in answer.split("\n"):
+        cites = []
+        for inner in re.findall(r"\(([^()]*\.pdf[^()]*)\)", line, re.I):
+            last = ""
+            for part in re.split(r";\s*", inner):
+                f = re.search(r"([^,;():]+?\.pdf)", part, re.I)
+                last = re.sub(r"^(also|see|and|plus|per|via)\s+", "", f[1].strip(), flags=re.I) if f else last
+                pg = re.search(r"pp?\.?\s*(\d+)", part)
+                if last and pg and " mark " not in f" {part} ":
+                    cites.append((last, int(pg[1])))
+        # quote marks paired in order, outside the citations; an odd one out leaves the line alone
+        bare = re.sub(r"\([^()]*\.pdf[^()]*\)", lambda m: " " * len(m[0]), line, flags=re.I)
+        marks = [m.start() for m in re.finditer(r"[\"“”]", bare)]
+        if cites and marks and len(marks) % 2 == 0:
+            words = [_WORDS(" ".join(_cited_text(f, p) for p in (pg - 1, pg, pg + 1))) for f, pg in cites]
+            drop = []
+            for a, b in zip(marks[::2], marks[1::2]):
+                q = _WORDS(line[a + 1:b])
+                if len(q) >= 2 and not any(_in_order(q, w) for w in words):
+                    drop += [a, b]
+            line = "".join(ch for i, ch in enumerate(line) if i not in drop)
+        out.append(line)
+    return "\n".join(out)
+
+
 def _agency_note(answer: str, hits: list[dict]) -> tuple[str, list[dict]]:
     """The agency pages the answer cited, and a line naming any of their guides that haven't been reviewed yet."""
     def used(h):
@@ -374,6 +428,8 @@ def respond(question: str, history: list[dict], choice: str = "",
     # deal runs against every program, same as Deal check mode; a family runs against its members.
     deal = looks_like_deal(asked, history)
     skipped = ""
+    if mode_scenario and asks_rule(asked):   # Scenario mode, but a guideline question: answer it as one
+        mode_scenario = False
 
     if deal and not mode_scenario and not choice and not named:
         # Guidelines mode, no program picked: ask before running every matrix (Derrick, 2026-11-12)
@@ -424,6 +480,16 @@ def respond(question: str, history: list[dict], choice: str = "",
                           + ", so I won't give an LTV. Spell out the FICO, loan amount, occupancy and purpose "
                             "and ask again."}
         return
+
+    if not answer and not deal and ltv_overview.asks_ltv(asked):
+        # "FHA cash-out max LTV?" got "switch to Scenario mode" (the AI may not state LTVs): Python reads the grids
+        scope = (members or ([choice] if choice else []) or named_programs(asked, user_programs)
+                 or ltv_overview.aliased(asked, user_programs) or (user_programs if section else []))
+        if scope:
+            over = ltv_overview.overview(asked, {p: library.matrices(program_docs(p, all_programs)[0]) for p in scope})
+            if over:
+                answer = over
+                yield {"replace": answer}
 
     if mode_program and members and not answer:
         # Each program answers from its own guidelines, one after the other under its own heading.
@@ -476,6 +542,9 @@ def respond(question: str, history: list[dict], choice: str = "",
 
     # agency pages only count as sources when the answer cited them; unreviewed guides get a line saying so
     if any(h.get("agency") for h in hits) and (fixed := _fix_agency_cites(answer)) != answer:
+        answer = fixed
+        yield {"replace": answer}
+    if not deal and (fixed := _unquote_unfound(answer)) != answer:
         answer = fixed
         yield {"replace": answer}
     note, cited = _agency_note(answer, hits)

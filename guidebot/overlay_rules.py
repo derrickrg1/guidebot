@@ -169,7 +169,11 @@ def apply_rules(rules: list[dict], facts: dict, file: str) -> dict:
             seen.add(tuple(missing))
             effect = "ineligible" if r["kind"] == "ineligible" else (
                 f"{r['value']}% reduction" if r["kind"] == "reduction" else f"max {_value_text(r)}")
-            unknown.append(f"If {r['label']}: {effect} ({file}, p. {r['page']})"
+            # the sheet's own words go in the line: the viewer finds a quote word for word, a label like
+            # "DTI over 50%" it couldn't find at all
+            words = re.sub(r"\s*\|\s*", " ", r["quote"]).strip()
+            said = f' (sheet: "{words}")' if len(words) <= 90 else ""
+            unknown.append(f"If {r['label']}: {effect}{said} ({file}, p. {r['page']})"
                            + (f". Need: {missing[0]}" if missing[0].startswith("which kind") else ""))
             continue
         if not state:

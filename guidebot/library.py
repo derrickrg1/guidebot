@@ -135,7 +135,7 @@ def matrices(docs: list[dict]) -> list[dict]:
         refs = iter(crosscheck.check(d))
         for p in d["pages"]:
             for m in p["matrices"]:
-                out.append({"df": m, "file": d["path"].name, "page": p["page"],
+                out.append({"df": m, "file": d["path"].name, "path": d["path"], "page": p["page"],
                             "title": m.attrs.get("title") or "LTV matrix", "status": d["status"],
                             "reference": next(refs)})
     return out

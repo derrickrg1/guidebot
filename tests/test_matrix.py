@@ -289,7 +289,7 @@ def test_compare_applies_checked_overlays(monkeypatch, df):
     assert (a["program"], a["max_ltv"], a["overlays"]) == ("A", 80, ["investment"])
     assert d["program"] == "DSCR" and d["eligible"] is True   # Python mapped the column the AI wouldn't
     md = answer.comparison_md(comp)
-    assert "| A | **80%** | 85% | investment |" in md
+    assert "| A | **80%** | 85% (g.pdf, p. 1) | investment |" in md
 
 
 def test_unverified_matrix_blocks_numbers(monkeypatch, df):

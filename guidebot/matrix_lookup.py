@@ -110,7 +110,10 @@ def lookup(df: pd.DataFrame, dims: dict, column: str) -> dict:
             tiers = sorted((to_number(v), v) for v in values)
             eligible = [v for n, v in tiers if n <= x]
             if not eligible:
-                return {"ok": False, "error": f"{dim} {given} is below the lowest tier ({tiers[0][1]}) for this row group", "trace": trace, "notes": notes}
+                # the lowest row it missed, so the chip can mark it
+                low = rows[rows[dim].astype(str) == tiers[0][1]]
+                return {"ok": False, "error": f"{dim} {given} is below the lowest tier ({tiers[0][1]}) for this row group",
+                        "trace": trace, "notes": notes, "i": df.index.get_loc(low.index[0]), "col": column}
             match = eligible[-1]
             trace.append(f"{dim}: {match} row" + ("" if match == given else f" (yours: {given})"))
 
@@ -125,12 +128,14 @@ def lookup(df: pd.DataFrame, dims: dict, column: str) -> dict:
     if column not in df.columns:
         return {"ok": False, "error": f"Column '{column}' not in matrix", "trace": trace, "notes": notes}
     cell = str(rows[column].iloc[0])
+    i = df.index.get_loc(rows.index[0])   # the row's place in the grid, for the page mark
     trace.append(f"Column: {column}")
     if "*" in cell:
         notes.append(f"The matrix cell {cell} has a footnote marker (*). Check the footnote before quoting it.")
     if not cell.strip("*").endswith("%"):
-        return {"ok": True, "eligible": False, "cell": cell, "ltv": None, "trace": trace, "notes": notes}
-    return {"ok": True, "eligible": True, "cell": cell, "ltv": float(cell.strip("*%")), "trace": trace, "notes": notes}
+        return {"ok": True, "eligible": False, "cell": cell, "ltv": None, "trace": trace, "notes": notes, "i": i}
+    return {"ok": True, "eligible": True, "cell": cell, "ltv": float(cell.strip("*%")), "trace": trace, "notes": notes,
+            "i": i}
 
 
 def apply_adjustments(base: float, adjustments: list[dict]) -> dict:

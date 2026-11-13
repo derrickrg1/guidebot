@@ -22,6 +22,15 @@ the toggles say). In Guidelines mode with no program picked, a deal gets "Pick a
 buttons instead (`choices` event; Review all resends it in Scenario mode). A deal that names a program
 ("Freddie Mac: 700 FICO...") runs on that one with All picked; two named are compared (`chat.named_programs`,
 not FHA/VA). A program whose overlay rules aren't approved stops at the matrix cell, no final number.
+* A rule question that names a purpose ("Are temporary buydowns allowed on a cash-out refi?") is not a deal
+(`asks_rule`), even in Scenario mode. A message stating 3 of FICO/amount/occupancy/purpose is a new deal and
+borrows nothing from history (`said_scenario`, `fresh`). The deal reader tells loan from price/value
+(`_amount`: "$850k with 20% down" is $680k, "value is $1M ... $650k cash-out" is $650k; a price or value alone is
+no loan amount, so it asks).
+* "Max LTV for X" with no deal (no FICO + loan amount) in Guidelines mode: `guidebot/ltv_overview.py` reads the
+approved grids in Python (rows that fit the stated occupancy/purpose/units/DSCR, top cell and where, marked chips,
+matching sheet footnotes first). It used to dead-end in "switch to Scenario mode". With no table to show (FHA/VA
+today) the guideline answer runs as before.
 * Chat runs on the Claude API (Derrick chose this 2026-11-12, replacing "Ollama only"). Questions and guideline
 text go to Anthropic; embeddings and the qwen3 fallback stay local. Otherwise free/open tools only.
 * Sandbox phase on his personal machine and personal Anthropic account. Real borrower data never goes in here.
@@ -128,7 +137,7 @@ so the bot no longer calls its own earlier citation wrong.
 
 ## Current status
 
-* 158 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 172 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked
@@ -173,6 +182,17 @@ Derrick needs to Re-read and approve each; until then the VA/FHA tabs say so ins
   on the page is saved (`marks`, `colx` attrs) and the answer's chip carries it ("mark x0 y0 x1 y1 ..."), so the
   viewer marks that exact row and cell: word matching can't tell "1 | 75% | 75%" under Second Home from Investment.
   "Limited cash-out" / "no cash-out" read as Rate/Term (`_PURPOSE`; they used to read as cash-out). Tests in `tests/test_conv_matrix.py`.
+* NonQM grid chips are marked too: `extract_pdf.grid_mark` finds the row on the page by its FICO and LTV cells in
+  order (identical rows under two loan amounts told apart by order), at answer time, so approved JSONs didn't
+  change. A row it can't line up gets a chip with no mark, never a wrong one. `answer.matrix_cite` builds the chip.
+* Stress test (2026-11-12): `tools/stress_bank.py` (266 AE/UW questions), `tools/stress_run.py` (posts to the
+  server, no chat id so nothing is saved), `tools/stress_check.py` (route, deal read, cell vs the grid, citations
+  open, numbers and quotes on the cited pages; report in `data/stress/report.md`). Chip highlights were checked in
+  the page with the viewer's own `findMarks`. Answers quote the decisive rule's own words so the viewer lands on it;
+  `chat._unquote_unfound` drops the quote marks from any quote whose words aren't on the cited pages (about 1.5%
+  were paraphrases or a sibling sheet's line).
+* Express Bank Statements' approved copy has no text on page 1 (matrix only; a fresh read has the credit section,
+  48 months BK/FC seasoning). Derrick needs to Re-read and approve it.
 * Express 2nd (Express 8.15.2026, Premier 3.2.2026) parses as text only, no LTV grid yet.
 * NonQM Shared guidelines PDF changed since it was approved: needs a re-check.
 

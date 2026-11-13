@@ -143,3 +143,92 @@ def test_fannie_limited_cash_out_investment_fourplex(fannie):
     raw = said_scenario("680 FICO, $350k limited cash-out refi, investment, fourplex", [])
     res = conv_matrix.result(raw, "680 FICO, $350k limited cash-out refi, investment, fourplex", fannie)
     assert res["max_ltv"] == 75   # the Limited Cash-Out 1-4 row, not Cash-Out 2-4 (70%)
+
+
+def test_rule_question_is_not_a_deal():
+    from guidebot.answer import asks_rule, looks_like_deal
+    deals = [{"role": "user", "content": "Fannie Mae: 700 FICO, $845,000 purchase, primary, SFR"},
+             {"role": "assistant", "content": "**Max LTV/CLTV: 97%**"}]
+    q = "Are temporary buydowns allowed on a cash-out refi?"
+    assert asks_rule(q) and not looks_like_deal(q, deals)
+    assert looks_like_deal("what if it's a cash-out?", deals)   # a real follow-up still is
+    assert not asks_rule("700 FICO, $400k cash-out, is that allowed on a fourplex?")   # numbers: it's a deal
+
+
+def test_new_deal_does_not_borrow_the_last_loan_amount():
+    from guidebot.answer import said_scenario
+    hist = [{"role": "user", "content": "Freddie Mac: 700 FICO, $2.5M purchase, primary, fourplex"},
+            {"role": "assistant", "content": "Not eligible"}]
+    raw = said_scenario("Fannie Mae: 700 FICO, purchase, primary", hist)
+    assert raw.loan_amount is None and "loan_amount" in raw.missing
+    assert said_scenario("what if it's 680 FICO?", hist).loan_amount == 2_500_000   # follow-ups still carry
+
+
+@pytest.mark.parametrize("text, loan, occ", [
+    ("borrower has a 712 score, buying a primary for $850k with 20% down", 680_000, "Primary Residence"),
+    ("value is $1M, they want a $650k cash-out refi on their primary, FICO 681", 650_000, "Primary Residence"),
+    ("appraised at $1,500,000, loan amount $975k", 975_000, None),
+    ("buying a $900k home with $180k down, 740 fico", 720_000, None),
+    ("buying a duplex to live in, 704 fico, $640k loan", 640_000, "Primary Residence"),
+    ("max ltv for 700 at 1.5m primary purchase", 1_500_000, "Primary Residence"),
+    ("refi for $400k, primary, 700", 400_000, "Primary Residence"),
+    ("value is $1M, primary cash out, 700 FICO", None, "Primary Residence"),   # a value alone isn't the loan
+])
+def test_deal_reader_tells_loan_from_price(text, loan, occ):
+    from guidebot.answer import fill_scenario
+    raw = fill_scenario(RawScenario(), text)
+    assert (raw.loan_amount, raw.occupancy) == (loan, occ)
+
+
+def test_nonqm_matrix_chip_marks_row_and_cell():
+    import pdfplumber
+    from guidebot.answer import matrix_cite
+    from guidebot.matrix_lookup import lookup
+    docs = [library.load(p) for p in library.programs().get("Ignite 1099", [])]
+    if not docs:
+        pytest.skip("no Ignite 1099 docs")
+    m = library.matrices(docs)[0]
+    res = lookup(m["df"], {"Loan Amount": "1200000", "FICO": "705"}, "Investment Property / Cash Out")
+    cite = matrix_cite(m, res)
+    nums = [float(x) for x in cite.split("mark ")[1].rstrip(")").split()]
+    with pdfplumber.open(m["path"]) as pdf:
+        page = pdf.pages[m["page"] - 1]
+        h = page.height
+        row = page.crop((nums[0], h - nums[3], nums[2], h - nums[1])).extract_text()
+        cell = page.crop((nums[4], h - nums[7], nums[6], h - nums[5])).extract_text()
+    assert row.split()[0] == "700" and cell == res["cell"]
+
+
+def _overview(question, *progs):
+    from guidebot import ltv_overview
+    mats = {p: library.matrices([library.load(x) for x in library.programs().get(p, [])]) for p in progs}
+    if not all(mats.values()):
+        pytest.skip("program docs missing")
+    return ltv_overview.overview(question, mats)
+
+
+def test_ltv_question_without_a_deal_is_answered_from_the_grid():
+    from guidebot import ltv_overview
+    assert ltv_overview.asks_ltv("Max LTV for a 3-unit investment cash-out on Freddie?")
+    assert not ltv_overview.asks_ltv("max ltv for 700 FICO, $500k loan, primary purchase")   # a deal: matrix lookup
+    assert not ltv_overview.asks_ltv("Are temporary buydowns allowed on a cash-out refi?")
+    out = _overview("Max LTV for a 3-unit investment cash-out on Freddie?", "Conventional Freddie Mac")
+    assert "Investment Property, Cash-Out, 2-4 Units" in out and "Conforming: **70%**" in out and ", mark " in out
+    assert out.count("| Investment") == 1
+
+
+def test_ltv_overview_reads_the_dscr_band_and_footnotes():
+    out = _overview("What's the max LTV for a cash-out with a DSCR of 0.9?", "Express DSCR")
+    assert "| Cash Out | **70%** (down to 60%)" in out
+    out = _overview("What's the CLTV limit with a community second on Fannie?", "Conventional Fannie Mae")
+    assert out.index("up to 105%") < out.index("| Row |")   # the footnote answers it, so it leads
+
+
+def test_quotes_not_on_the_cited_page_lose_their_quote_marks():
+    from guidebot.chat import _unquote_unfound
+    if not library.programs().get("Ignite 1099"):
+        pytest.skip("no Ignite 1099 docs")
+    real = 'BK: "36 months OR 24 months with a 5% reduction" (Ignite 1099 Expanded.pdf, p. 3)'
+    fake = 'BK: "no bankruptcies ever allowed on this sheet" (Ignite 1099 Expanded.pdf, p. 3)'
+    assert _unquote_unfound(real) == real
+    assert _unquote_unfound(fake) == "BK: no bankruptcies ever allowed on this sheet (Ignite 1099 Expanded.pdf, p. 3)"
