@@ -211,6 +211,10 @@ h1 { margin: 0; color: var(--navy); font-weight: 600; }
   background: var(--gold); animation: pulse 1s infinite alternate; }
 @keyframes pulse { from { opacity: 0.25; } to { opacity: 1; } }
 .err { color: var(--bad); }
+.choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.choices button { font: 600 0.8rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: var(--user-ink); cursor: pointer;
+  background: var(--user); border: 1px solid rgba(217, 102, 31, 0.45); border-radius: 999px; padding: 6px 14px; }
+.choices button:hover { border-color: var(--navy); }
 .md > :first-child { margin-top: 0; }
 .md > :last-child { margin-bottom: 0; }
 .md h1, .md h2, .md h3, .md h4 { color: var(--navy); font-size: 1em; margin: 1em 0 0.4em; text-transform: none; letter-spacing: 0; }
@@ -680,10 +684,10 @@ function sourcesHtml(src) {
   }).join("") + "</details>";
 }
 async function stream(url, payload, box) {
-  let text = "", status = "", sources = [], buf = "";
+  let text = "", status = "", sources = [], choices = [], buf = "";
   const draw = () => {
     box.innerHTML = `<div class="md">${md(text)}</div>` + (status ? `<div class="status">${esc(status)}</div>` : "")
-      + (sources.length ? sourcesHtml(sources) : "");
+      + (sources.length ? sourcesHtml(sources) : "") + choicesHtml(choices, payload.question);
     $("log").scrollTop = $("log").scrollHeight;
   };
   const r = await fetch(API + url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -700,6 +704,7 @@ async function stream(url, payload, box) {
       if (ev.replace !== undefined) { text = ev.replace; status = ""; }
       if (ev.status !== undefined) status = ev.status;
       if (ev.sources) sources = ev.sources;
+      if (ev.choices) choices = ev.choices;
       if (ev.error) throw new Error(ev.error);
       draw();
     }
@@ -707,6 +712,21 @@ async function stream(url, payload, box) {
   status = ""; draw();
   return text;
 }
+// A deal asked in Guidelines mode with no program picked: the server asks which way to go.
+const CHOICES = { pick: "Pick a program", all: "Review all" };
+const choicesHtml = (list, q) => list.length ? `<div class="choices">${list.map(c =>
+  `<button type="button" data-act="${c}" data-q="${esc(q)}">${CHOICES[c]}</button>`).join("")}</div>` : "";
+$("log").addEventListener("click", e => {
+  const b = e.target.closest(".choices button");
+  if (!b || busy) return;
+  if (b.dataset.act === "all") return send(b.dataset.q, { scenario: true });
+  // Pick a program: question back in the box, picker opened; Enter sends it against the program picked.
+  $("q").value = b.dataset.q;
+  if (setting("side") === "hidden") setSetting("side", "");
+  const pick = document.querySelector(".picker-btn");
+  pick.scrollIntoView({ block: "nearest" });
+  setTimeout(() => pick.click());   // after this click reaches the picker's "click outside closes it" listener
+});
 function setBusy(b) {
   busy = b;
   $("send").disabled = b;
@@ -762,11 +782,13 @@ async function openChat(id) {
   renderSidebar();
   loadChats();
 }
-$("ask").addEventListener("submit", async e => {
+$("ask").addEventListener("submit", e => {
   e.preventDefault();
-  const question = $("q").value.trim();
+  send($("q").value.trim());
+});
+async function send(question, over = {}) {
   if (!question || busy) return;
-  const { program, scenario, choice } = mode();
+  const { program, choice } = mode(), scenario = over.scenario ?? mode().scenario;
   $("q").value = ""; $("q").style.height = "";
   addMsg("user", esc(question));
   const box = addMsg("bot", `<div class="status">Thinking…</div>`);
@@ -783,7 +805,7 @@ $("ask").addEventListener("submit", async e => {
   }
   setBusy(false);
   $("q").focus();
-});
+}
 $("q").addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("ask").requestSubmit(); }
 });

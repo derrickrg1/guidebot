@@ -18,7 +18,8 @@ Statement Analyst at Revolution Funding (Nations Direct Mortgage). Started in a 
 Python does the lookup and math (`matrix\_lookup.py`).
 * LTV numbers are blocked for any document not approved on the Verify Documents page.
 * A number for a specific deal only comes from the matrix lookup (`looks_like_deal` routes it there whatever
-the toggles say). A program whose overlay rules aren't approved stops at the matrix cell, no final number.
+the toggles say). In Guidelines mode with no program picked, a deal gets "Pick a program" / "Review all"
+buttons instead (`choices` event; Review all resends it in Scenario mode). A program whose overlay rules aren't approved stops at the matrix cell, no final number.
 * Chat runs on the Claude API (Derrick chose this 2026-11-12, replacing "Ollama only"). Questions and guideline
 text go to Anthropic; embeddings and the qwen3 fallback stay local. Otherwise free/open tools only.
 * Sandbox phase on his personal machine and personal Anthropic account. Real borrower data never goes in here.

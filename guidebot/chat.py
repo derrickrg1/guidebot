@@ -240,7 +240,8 @@ def _compare(question, history, progs, all_programs, model) -> str:
     for prog in progs:
         pdocs = program_docs(prog, all_programs)[0]
         mats = library.matrices(pdocs)
-        if mats:
+        # A Conventional sheet approved before conv_matrix has no table at all: list it as needing a re-read
+        if mats or SECTIONS["Conventional"](prog):
             data.append({"program": prog, "mats": mats,
                          "docs_text": "\n\n".join(library.render(d) for d in pdocs),
                          "rules": overlay_rules.for_program(prog, pdocs)})
@@ -354,6 +355,13 @@ def respond(question: str, history: list[dict], choice: str = "",
     # deal runs against every program, same as Deal check mode; a family runs against its members.
     deal = looks_like_deal(asked, history)
     skipped = ""
+
+    if deal and not mode_scenario and not choice:
+        # Guidelines mode, no program picked: ask before running every matrix (Derrick, 2026-11-12)
+        where = f"all {section} programs" if section else "all programs"
+        yield {"replace": f"That looks like a specific deal. Pick a program for its matrix, or review {where} "
+                          "side by side.", "choices": ["pick", "all"]}
+        return
 
     if mode_scenario or deal:
         if (not choice or members) and not gov:
