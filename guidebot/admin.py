@@ -5,16 +5,14 @@ approves on its own. Same checks as the Streamlit page: header problems and Revo
 approval, and overlay rules need an approved source document with every quote found word for word.
 """
 import io
-import threading
 
 import pandas as pd
 
 from guidebot import crosscheck, library, overlay_rules
-from guidebot.extract_pdf import page_image
+from guidebot.extract_pdf import PDFIUM_LOCK, page_image
 from guidebot.matrix_lookup import header_problems
 
 ADMIN_EMAILS = {"derrick.garcia.r@gmail.com"}
-_render_lock = threading.Lock()
 
 
 def allowed(headers) -> bool:
@@ -96,7 +94,7 @@ def page_png(program: str, file: str, page: int) -> bytes | None:
     buf = io.BytesIO()
     # PDFium isn't thread-safe. The page asks for every image at once, and parallel renders failed with
     # "Data format error" and then took the whole server down, so they run one at a time.
-    with _render_lock:
+    with PDFIUM_LOCK:
         page_image(str(path), page).save(buf, format="PNG")
     return buf.getvalue()
 

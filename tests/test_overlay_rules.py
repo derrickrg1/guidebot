@@ -280,15 +280,15 @@ def test_section_narrows_programs(monkeypatch):
     monkeypatch.setattr(chat.library, "programs", lambda: progs)
     seen = {}
 
-    def broad(question, history, all_programs, model):
-        seen["progs"] = sorted(all_programs)
+    def broad(question, history, all_programs, model, section=""):
+        seen["progs"], seen["section"] = sorted(all_programs), section
         yield {"text": "ok"}
         return "ok", []
 
     monkeypatch.setattr(chat, "_broad_answer", broad)
     monkeypatch.setattr(chat, "looks_like_deal", lambda q, h: False)
     list(chat.respond("reserves?", [], section="FHA"))
-    assert seen["progs"] == ["FHA"]
+    assert seen["progs"] == ["FHA"] and seen["section"] == "FHA"   # the section's agency guides come along
     list(chat.respond("reserves?", [], section="NonQM"))
     assert seen["progs"] == ["Express 1099", chat.SHARED]
     assert list(chat.respond("reserves?", [], section="Conventional")) == [

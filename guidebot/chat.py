@@ -5,7 +5,7 @@ All LTV guards live in answer.py, so both UIs get the same rules.
 """
 import re
 
-from guidebot import config, gov_matrix, library, overlay_rules
+from guidebot import agency, config, gov_matrix, library, overlay_rules
 from guidebot.answer import (broad_messages, compare_programs, comparison_md, filter_to_cited, full_doc_messages,
                              full_section_messages, looks_like_deal, said_scenario, scenario_answer, search_messages)
 from guidebot.llm import stream_chat
@@ -89,8 +89,59 @@ def programs_info() -> list[dict]:
 
 
 def find_pdf(fname: str):
-    return next((p for paths in library.programs().values() for p in paths
+    return next((p for paths in [*library.programs().values(), agency.files()] for p in paths
                  if p.name == fname and p.suffix.lower() == ".pdf"), None)
+
+
+def _agency_section(choice: str, section: str) -> str:
+    """FHA, VA or Conventional when the chat is about one of them: its agency guides are the general guideline."""
+    return next((s for s in agency.SECTIONS if section == s or (choice and SECTIONS[s](choice))), "")
+
+
+def _agency_hits(question: str, sec: str, k: int = 6, k_letters: int = 3) -> list[dict]:
+    """The agency guide pages that best match the question, each headed with its date and review status. The
+    handbook and the letters/circulars each get their own share: a letter that's all about one topic outranked
+    every handbook page on it, and the handbook's own rule went missing (FHA minimum score, 2026-11-12)."""
+    if not sec:
+        return []
+    try:
+        pool = retriever().search(question, k=40, programs=[f"{sec} Agency"])
+    except Exception:
+        return []   # no index yet
+    letter = lambda h: re.search(r"Mortgagee Letter|Circular", h["file"]) is not None
+    found = [h for h in pool if not letter(h)][:k] + [h for h in pool if letter(h)][:k_letters]
+    out = []
+    for h in found:
+        rec = agency.info(h["file"])
+        head = f"[GENERAL GUIDELINE, agency guide: {agency.label(rec) if rec else h['file']}]"
+        # The index holds one page per chunk, and a handbook rule often runs onto the next page (HUD's MDCS
+        # definition on p. 176, its standard on p. 177), so a handbook page brings the following one along.
+        n = int(re.sub(r"\D", "", h.get("loc", "")) or 0)
+        nxt = "" if letter(h) or not n else agency.page_text(h["file"], n + 1).strip()
+        more = f"\n=== {h['file']} | p. {n + 1} ===\n{nxt}" if nxt else ""
+        out.append({**h, "text": f"{head}\n{h['text']}{more}", "agency": True, "page": n})
+    return out
+
+
+def _agency_block(hits: list[dict]) -> str:
+    return ("\n\n##### GENERAL GUIDELINE: AGENCY GUIDES (most relevant pages) #####\n\n"
+            + "\n\n".join(h["text"] for h in hits)) if hits else ""
+
+
+def _agency_note(answer: str, hits: list[dict]) -> tuple[str, list[dict]]:
+    """The agency pages the answer cited, and a line naming any of their guides that haven't been reviewed yet."""
+    def used(h):
+        pages = cited_pages([{"role": "assistant", "content": answer}], h["file"])
+        return h["file"] in answer and (not pages or not h.get("page") or {h["page"], h["page"] + 1} & set(pages))
+    cited = [h for h in hits if h.get("agency") and used(h)]
+    pending = {}
+    for h in cited:
+        rec = agency.info(h["file"])
+        if rec and not rec.get("reviewed"):
+            pending[rec.get("title") or h["file"]] = rec.get("downloaded", "")
+    note = ("\n\n_" + "; ".join(f"{t} was updated here {d}" for t, d in pending.items())
+            + (". It hasn't" if len(pending) == 1 else ". They haven't") + " been reviewed yet._") if pending else ""
+    return note, cited
 
 
 def _sources(hits: list[dict]) -> list[dict]:
@@ -120,17 +171,20 @@ def _compare(question, history, progs, all_programs, model) -> str:
 
 
 def _program_answer(question, history, prog, docs, model):
-    """A guideline answer from one program: the whole program if it fits, else a search of it. Returns (answer, hits)."""
+    """A guideline answer from one program: the whole program if it fits, else a search of it. FHA, VA and
+    Conventional sheets also get the matching pages of their agency guides. Returns (answer, hits)."""
     ltv_ok = all(d["status"] == "verified" for d in docs)
     docs_text = "\n\n".join(library.render(d) for d in docs)
+    gov = _agency_hits(question, _agency_section(prog, ""))
     if len(docs_text) <= config.FULL_DOC_MAX_CHARS:
         yield {"status": f"Reading {prog}…"}
-        answer = yield from _stream(full_doc_messages(question, docs_text, history, ltv_ok=ltv_ok, model=model), model)
-        return answer, []
+        answer = yield from _stream(full_doc_messages(question, docs_text + _agency_block(gov), history,
+                                                      ltv_ok=ltv_ok, model=model), model)
+        return answer, gov
     yield {"status": f"Searching {prog}…"}
     found = retriever().search(question, programs=[prog] + ([SHARED] if prog in NONQM else []))
-    answer = yield from _stream(search_messages(question, found, history), model)
-    return answer, filter_to_cited(answer, found, model)
+    answer = yield from _stream(search_messages(question, found + gov, history), model)
+    return answer, filter_to_cited(answer, found, model) + gov
 
 
 def _route(question, history, gpath, model):
@@ -138,7 +192,7 @@ def _route(question, history, gpath, model):
     return route_and_load(question, gpath, gpath.name, model, keep_pages=cited_pages(history, gpath.name))
 
 
-def _broad_answer(question, history, all_programs, model):
+def _broad_answer(question, history, all_programs, model, section=""):
     """A guideline question with no program picked. It used to read only the shared NonQM guide, so anything that
     lives on a program sheet (Ignite DSCR's 660 minimum for first time investors) came back "couldn't find it".
     Now every program sheet is read whole; guides too long for that (FHA, VA, 2nds) are searched, and the shared
@@ -170,16 +224,18 @@ def _broad_answer(question, history, all_programs, model):
         # that rule even when the router picked other sections (cash out for reserves lives under assets, p. 47,
         # while the router sent only §6.2 Reserves). Its best-matching pages are added unless already routed.
         routed_text = "\n".join(extra)
-        found += [h for h in retriever().search(question, k=4, programs=[SHARED])
-                  if h["text"].strip()[:200] not in routed_text]
+        if SHARED in all_programs:   # the NonQM tab only; the FHA tab was getting NonQM guide pages
+            found += [h for h in retriever().search(question, k=4, programs=[SHARED])
+                      if h["text"].strip()[:200] not in routed_text]
     except Exception:
         pass   # no index yet: the sheets and routed shared guide still answer
-    extra += [h["text"] for h in found]
+    gov = _agency_hits(question, _agency_section("", section))
+    extra += [h["text"] for h in found + gov]
     yield {"status": f"Reading {len(sheets)} program sheets…"}
     answer = yield from _stream(broad_messages(question, "\n\n".join(sheets), "\n\n".join(extra), history, model), model)
     if found:
         hits += filter_to_cited(answer, found, model)
-    return answer, hits
+    return answer, hits + gov
 
 
 def respond(question: str, history: list[dict], choice: str = "",
@@ -262,7 +318,7 @@ def respond(question: str, history: list[dict], choice: str = "",
         answer, hits = yield from _program_answer(question, history, choice, docs, model)
 
     if not answer and not choice:
-        answer, hits = yield from _broad_answer(question, history, all_programs, model)
+        answer, hits = yield from _broad_answer(question, history, all_programs, model, section)
 
     if not answer:
         routed = None
@@ -283,17 +339,23 @@ def respond(question: str, history: list[dict], choice: str = "",
             yield {"status": "Searching guidelines…"}
             progs = list(dict.fromkeys(([choice] if choice else []) + [SHARED]))
             found = retriever().search(question, programs=progs)
-            if not found:
+            gov = _agency_hits(question, _agency_section(choice, section))
+            if not found and not gov:
                 answer = "Nothing indexed yet. Hit Update index first."
                 yield {"replace": answer}
             else:
-                answer = yield from _stream(search_messages(question, found, history), model)
-                hits = filter_to_cited(answer, found, model)
+                answer = yield from _stream(search_messages(question, found + gov, history), model)
+                hits = filter_to_cited(answer, found, model) + gov
 
     if not answer and docs:
         docs_text = "\n\n".join(library.render(d) for d in docs)
         ltv_ok = all(d["status"] == "verified" for d in docs)
         answer = yield from _stream(full_doc_messages(question, docs_text, history, ltv_ok=ltv_ok, model=model), model)
 
+    # agency pages only count as sources when the answer cited them; unreviewed guides get a line saying so
+    note, cited = _agency_note(answer, hits)
+    hits = [h for h in hits if not h.get("agency")] + cited
+    if note:
+        yield {"text": note}
     if hits:
         yield {"sources": _sources(hits)}

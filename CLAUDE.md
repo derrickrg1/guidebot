@@ -50,7 +50,24 @@ messages via `--ts`; sizes inside messages are in em), chat width, program color
 * Admin console: `/admin` (`ui/admin.html`, `guidebot/admin.py`) replaces the Streamlit Verify page: doc
 statuses, PDF page beside editable matrix/text, re-read, approve docs and overlay rules. Only his Gmail via
 Cloudflare Access, or direct from this PC. Claude never clicks Approve. Tabs: Documents, Chats (every user's
-chats, read only), Index (Update index, admin only now).
+chats, read only), Index (Update index, admin only now), Updates (agency guide changes, below). Claude never
+clicks Mark reviewed either.
+* Agency guides (`guidebot/agency.py`, files in `agency/`, git-ignored): the general guideline under NDM's FHA,
+VA and Conventional sheets. HUD 4000.1 + single family Mortgagee Letters from this year and last; VA Pamphlet
+26-7 (moved to KnowVA, pulled one chapter at a time from its public JSON API and printed to PDF with headless
+Edge; only the copy in force today) + active VA Circulars; Fannie Mae Selling Guide. The server checks weekly
+(thread started in `server.main`, first look 10 min after start, then hourly for a week-old `last_check`); the
+admin Updates tab has Check now. New/changed files: old copy to `archive/agency/<date>/`, text re-read
+(pypdfium2 under `PDFIUM_LOCK`), a write-up of lines added/removed (running headers ignored), index updated
+inside the server (indexer `_lock`). Files the agency stops listing are archived. Answers use new text right
+away; cited unreviewed guides get a "hasn't been reviewed yet" line from Python. A Mortgagee Letter or Circular
+newer than the handbook wins over it; NDM's sheet wins over all (`RULES`). Fannie blocks automated downloads
+(the classifier stopped a workaround, rightly): the check only posts a notice, Derrick saves the PDF into
+`agency/Conventional/Fannie Mae/` and the next check reads it. Indexed as program "<Section> Agency".
+`chat._agency_hits` takes 6 handbook pages and 3 letter/circular pages separately (ML 2026-11 crowded the
+handbook out and the 500 MDCS floor went missing), and each handbook page brings the next one along (that rule
+starts on p. 176, the standard is on p. 177). A newer letter is flagged "Newer agency guidance (supersedes
+handbook)", never "Overlay". First load 2026-11-12: 127 files, 2,551 pages (4000.1 Update 18 is 1,872).
 * Chat history: `guidebot/history.py`, SQLite at `data/chats.db` (git-ignored), keyed to the Cloudflare Access
 email ("local" on this PC). The server saves each turn after the answer finishes; people see only their own.
 * Search index (ChromaDB in `db/`): update it only through the admin Index tab, never from a second process
@@ -100,7 +117,7 @@ so the bot no longer calls its own earlier citation wrong.
 
 ## Current status
 
-* 127 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 137 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked

@@ -2,6 +2,7 @@
 and matrices rebuilt as real grids (headers combined, merged cells filled down)."""
 import itertools
 import re
+import threading
 
 import pandas as pd
 import pdfplumber
@@ -676,6 +677,10 @@ def parse_page(page) -> dict:
 def extract_document(path) -> list[dict]:
     with pdfplumber.open(path) as pdf:
         return [parse_page(p) for p in pdf.pages]
+
+
+# PDFium isn't thread-safe: page images (admin) and agency guide text (agency.py) both take this lock.
+PDFIUM_LOCK = threading.Lock()
 
 
 def page_image(path, page_number: int, resolution: int = 110):

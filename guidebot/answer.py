@@ -35,6 +35,13 @@ RULES = """Rules:
   looser, or a different number), the sheet wins. Flag it as "**Overlay (supersedes general guideline):**" with the
   sheet's rule and citation, then give the general guideline's rule it replaces with its citation, so the reader
   sees both. Only call it that when the general guideline you have actually says something different.
+- For FHA, VA and Conventional the general guideline is the agency's own guide, in pages headed "GENERAL
+  GUIDELINE, agency guide": HUD Handbook 4000.1 and Mortgagee Letters (FHA), VA Pamphlet 26-7 and VA Circulars
+  (VA), the Fannie Mae Selling Guide (Conventional). Each header gives the document's date. Where a Mortgagee
+  Letter or Circular is dated after the handbook and says something different, the letter wins: flag it as
+  "**Newer agency guidance (supersedes handbook):**" and cite both. "Overlay" means NDM's own rules only, never an
+  agency letter. NDM's own sheet still wins over all of them (it's the overlay). Only some agency pages are loaded, so if
+  they don't cover the question, say you didn't find it in the pages you have, not that the agency is silent.
 - Lead with a direct one-sentence answer to the exact case asked. For a yes/no question, check every condition
   and restriction BEFORE writing the first word. If any rule excludes the case asked (wrong occupancy, purpose,
   property type, loan amount, borrower type), the answer is **No**, and the first sentence names the rule that

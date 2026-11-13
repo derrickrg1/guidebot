@@ -125,6 +125,20 @@ label.toggle { display: flex; gap: 8px; align-items: center; font-size: 0.85rem;
 .msg.bot { container-type: inline-size; }
 @container (max-width: 520px) { .md li.row { grid-template-columns: 1fr; } .md li.row > * { grid-column: 1 !important; grid-row: auto !important; } }
 .md table { width: auto; font-size: 0.88rem; }
+/* Updates tab: one card per change to an agency guide */
+.badge { display: inline-block; min-width: 16px; padding: 0 5px; margin-left: 4px; border-radius: 999px; background: var(--accent);
+  color: #fff; font: 600 0.62rem/1.5 Inter, sans-serif; vertical-align: 0.1em; }
+.upd { border-left: 3px solid var(--accent); } .upd.done { border-left-color: var(--rule); opacity: 0.75; }
+.upd .head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.upd .head h2 { flex: 1; margin: 0; min-width: 240px; }
+.kind { font: 600 0.66rem "Barlow Condensed", sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: var(--warn); }
+.lines { font-size: 0.8rem; margin: 6px 0 0; padding: 0; list-style: none; max-height: 320px; overflow-y: auto; }
+.lines li { padding: 3px 0 3px 8px; border-top: 1px solid var(--rule); }
+.lines li.add { border-left: 2px solid var(--ok); } .lines li.del { border-left: 2px solid var(--bad); color: var(--steel); text-decoration: line-through; }
+.lines a { color: var(--mist); font-size: 0.72rem; margin-right: 6px; }
+details summary { cursor: pointer; color: var(--steel); font-size: 0.82rem; margin-top: 8px; }
+.src { font-size: 0.78rem; padding: 7px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); }
+.src b { display: block; font-size: 0.8rem; }
 @media (max-width: 900px) {
   body { flex-direction: column; } aside { width: auto; max-height: 40vh; } .page { grid-template-columns: 1fr; }
   main { padding: 20px 16px; }
@@ -139,6 +153,7 @@ label.toggle { display: flex; gap: 8px; align-items: center; font-size: 0.85rem;
     <button type="button" data-tab="docs" class="on">Documents</button>
     <button type="button" data-tab="chats">Chats</button>
     <button type="button" data-tab="index">Index</button>
+    <button type="button" data-tab="updates">Updates<span class="badge" id="upd-count" hidden></span></button>
   </nav>
   <div id="side"><div class="muted">Loading…</div></div>
 </aside>
@@ -160,6 +175,7 @@ function showTab(t) {
   if (t === "docs") { current ? render() : setMain(`<div class="empty">${EMPTY.docs}</div>`); loadList(); }
   if (t === "chats") { chatOpen = null; setMain(`<div class="empty">${EMPTY.chats}</div>`); loadChats(); }
   if (t === "index") indexTab();
+  if (t === "updates") updatesTab();
 }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 const setMain = html => { document.getElementById("main").innerHTML = html; };
@@ -227,6 +243,88 @@ async function runIndex() {
   } catch (e) { out.innerHTML = `<div class="note bad">${esc(e.message)}</div>`; }
   btn.disabled = false;
 }
+// ---------- updates: agency guides (HUD, VA, Fannie) checked weekly by the server ----------
+const ago = t => t ? new Date(t * 1000).toLocaleString() : "never";
+async function agencyState() {
+  const r = await fetch("/admin/api/agency");
+  if (!r.ok) return null;
+  const a = await r.json(), badge = document.getElementById("upd-count");
+  badge.textContent = a.open; badge.hidden = !a.open;
+  return a;
+}
+const pdfLink = (file, page) => `/pdf/${encodeURIComponent(file.split("/").pop())}${page ? "#page=" + page : ""}`;
+function updateCard(u) {
+  const d = u.diff, name = u.file.split("/").pop();
+  const what = u.kind === "new" ? `Added, ${u.pages} pages` : u.kind === "removed" ? "No longer listed by the agency, moved to the archive"
+    : d ? `${d.added} lines added, ${d.removed} removed, on ${d.pages.length} page${d.pages.length === 1 ? "" : "s"}` : "Changed";
+  const lines = d ? [...d.added_lines.map(([p, l]) => `<li class="add"><a href="${pdfLink(u.file, p)}" target="_blank">p. ${p}</a>${esc(l)}</li>`),
+                     ...d.removed_lines.map(([p, l]) => `<li class="del"><a>old p. ${p}</a>${esc(l)}</li>`)] : [];
+  return `<div class="panel upd${u.reviewed ? " done" : ""}"><div class="head"><span class="kind">${esc(u.kind)}</span>
+      <h2>${esc(u.title)}</h2><span class="muted">${esc(u.date)}</span></div>
+    <div class="sub" style="margin:6px 0 0;font-size:0.9rem">${esc(what)}${u.kind !== "removed" ? ` · <a href="${pdfLink(u.file)}" target="_blank">${esc(name)}</a>` : ""}</div>
+    ${lines.length ? `<details${u.reviewed ? "" : " open"}><summary>What changed${d.added + d.removed > lines.length ? ` (first ${lines.length} lines)` : ""}</summary>
+      <ul class="lines">${lines.join("")}</ul></details>` : ""}
+    ${u.reviewed ? `<div class="muted" style="margin-top:8px">Reviewed</div>` : `<div class="row" style="margin-top:10px">
+      <button class="act ghost" data-review="${esc(u.id)}">Mark reviewed</button></div>`}</div>`;
+}
+async function updatesTab() {
+  const a = await agencyState();
+  if (tab !== "updates") return;
+  if (!a) { document.getElementById("side").innerHTML = `<div class="note bad">Admin only.</div>`; return; }
+  document.getElementById("side").innerHTML = `<div class="muted">The agency guides under NDM's FHA, VA and Conventional
+      sheets. The server checks them once a week and answers from new text right away, marked "not yet reviewed".</div>` +
+    a.sources.map(s => `<div class="src"><b>${esc(s.name)}</b>${s.files} file${s.files === 1 ? "" : "s"} · checked ${esc(ago(s.checked))}
+      ${s.manual ? `<div class="muted">Download by hand (Fannie blocks automated downloads)</div>` : ""}
+      ${s.error ? `<div class="note bad">${esc(s.error)}</div>` : ""}</div>`).join("");
+  const open = a.updates.filter(u => !u.reviewed), done = a.updates.filter(u => u.reviewed);
+  setMain(`<h1>Agency guide updates</h1><div class="sub">Last checked ${esc(ago(a.last_check))}.
+      ${a.open ? `${a.open} to review.` : "Nothing to review."}</div>
+    <div class="panel"><div class="row"><button class="act" id="agency-check" ${a.running ? "disabled" : ""}>${a.running ? "Checking…" : "Check now"}</button>
+      ${a.open > 1 ? `<button class="act ghost" id="review-all">Mark all ${a.open} reviewed</button>` : ""}</div>
+      <div id="agency-log" class="md" style="margin-top:12px"></div></div>
+    ${a.notices.map(n => `<div class="note warn">New <b>${esc(n.title)}</b> published ${esc(n.version)}.
+      <a href="${esc(n.url)}" target="_blank" rel="noopener">Download it</a> and save it in
+      <code>agency/${esc(n.folder)}/</code> (replace the old one). The next check reads it.</div>`).join("")}
+    ${open.map(updateCard).join("")}
+    ${done.length ? `<details><summary>${done.length} reviewed</summary>${done.slice(0, 40).map(updateCard).join("")}</details>` : ""}`);
+  document.getElementById("agency-check").onclick = runAgencyCheck;
+  const all = document.getElementById("review-all");
+  if (all) all.onclick = async () => {
+    if (!confirm(`Mark all ${a.open} updates reviewed? Answers stop saying "not yet reviewed" for these guides.`)) return;
+    const res = await post("/admin/api/agency/reviewed", {id: "*"});
+    if (res.error) alert(res.error); else updatesTab();
+  };
+  document.querySelectorAll("[data-review]").forEach(b => b.onclick = async () => {
+    b.disabled = true;
+    const res = await post("/admin/api/agency/reviewed", {id: b.dataset.review});
+    if (res.error) { alert(res.error); b.disabled = false; } else updatesTab();
+  });
+}
+async function runAgencyCheck() {
+  const btn = document.getElementById("agency-check"), out = document.getElementById("agency-log");
+  btn.disabled = true; btn.textContent = "Checking…";
+  out.innerHTML = `<div class="muted">Checking HUD, VA and Fannie Mae… a big download can take a while.</div>`;
+  try {
+    const r = await fetch("/admin/api/agency/check", {method: "POST", headers: {"Content-Type": "application/json", "X-Admin": "1"}, body: "{}"});
+    if (!r.ok) throw new Error(r.status === 403 ? "Admin only." : `Error ${r.status}`);
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "", last = "";
+    for (;;) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream: true});
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const ev = JSON.parse(buf.slice(0, nl)); buf = buf.slice(nl + 1);
+        if (ev.error) throw new Error(ev.error);
+        if (ev.status) out.innerHTML = `<div class="muted">${esc(ev.status)}</div>`;
+        if (ev.replace) last = ev.replace;
+      }
+    }
+    if (tab === "updates") { await updatesTab(); document.getElementById("agency-log").innerHTML = md(last); }
+  } catch (e) { out.innerHTML = `<div class="note bad">${esc(e.message)}</div>`; btn.disabled = false; btn.textContent = "Check now"; }
+}
+
 let current = null;   // {program, file, fresh, data}
 
 function docDot(d) {
@@ -371,6 +469,7 @@ async function approveRules() {
 }
 
 showTab("docs");
+agencyState();
 </script>
 </body>
 </html>

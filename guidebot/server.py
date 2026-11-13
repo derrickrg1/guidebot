@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from guidebot import admin, chat, config, history
+from guidebot import admin, agency, chat, config, history
 
 PORT = 8600
 PAGE = config.ROOT / "ui" / "guidebot.html"
@@ -85,6 +85,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, _page(ADMIN_PAGE), "text/html; charset=utf-8")
         if path == "/admin/api/overview":
             return self._json({"programs": admin.overview()})
+        if path == "/admin/api/agency":
+            return self._json(agency.overview())
         if path == "/admin/api/chats":
             return self._json({"chats": history.list_chats(None, limit=500)})
         if path == "/admin/api/chat":
@@ -150,6 +152,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(admin.approve_rules(prog, file))
             if path == "/admin/api/index":
                 return self._stream(_reindex())
+            if path == "/admin/api/agency/check":
+                return self._stream(_agency_check())
+            if path == "/admin/api/agency/reviewed":
+                return self._json(agency.mark_reviewed(str(body.get("id") or "")))
             return self._json({"error": "not found"}, 404)
 
         if path == "/api/chat":
@@ -185,18 +191,15 @@ def _saving(events, chat_id, email, question, program, mode):
     history.save_turn(chat_id, email, question, text, program, mode, sources)
 
 
-def _reindex():
-    """Updates the search index, streaming each line of its log as it happens."""
+def _logged(job):
+    """Runs job(log) on its own thread, yielding each log line as a status event. Returns the lines."""
     import queue
     import threading
-
-    from guidebot.ingest.indexer import sync_index
     lines, done = queue.Queue(), object()
 
     def work():
         try:
-            sync_index(log=lambda m: lines.put(str(m)))
-            chat.reset_retriever()
+            job(lambda m: lines.put(str(m)))
             lines.put(done)
         except Exception as e:
             lines.put(e)
@@ -207,13 +210,31 @@ def _reindex():
             raise item
         log.append(item)
         yield {"status": item}
+    return log
+
+
+def _reindex():
+    """Updates the search index, streaming each line of its log as it happens."""
+    from guidebot.ingest.indexer import sync_index
+
+    def job(log):
+        sync_index(log=log)
+        chat.reset_retriever()
+    log = yield from _logged(job)
     log = [line for line in log if "exact copy of" not in line]   # the Ignite duplicates, skipped every run
     summary = "\n".join(f"- {line}" for line in log)
     yield {"replace": f"Index up to date.\n\n{summary}" if log else "Index up to date. Nothing had changed."}
 
 
+def _agency_check():
+    """Checks the agency guides now (the weekly check, run by hand), streaming its log."""
+    log = yield from _logged(lambda log: agency.check(log=log, on_index=chat.reset_retriever))
+    yield {"replace": "\n".join(f"- {line}" for line in log)}
+
+
 def main():
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    agency.start_scheduler(on_index=chat.reset_retriever, log=lambda m: print(m, flush=True))
     print(f"Guidebot running at http://localhost:{PORT}  (Ctrl+C to stop)")
     try:
         server.serve_forever()
