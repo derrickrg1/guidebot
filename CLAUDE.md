@@ -81,7 +81,9 @@ Model race: `python -m tools.compare_models <model> ...`.
 ## Layout
 
 * `docs/<Program>/` source PDFs. Folder name = program. Folders mirror how NDM lists products:
-Conventional; FHA, VA (Government); Express 1099 / 2nd / Bank Statements / DSCR / Full Doc / P\&L (renamed from
+Conventional (one folder per sheet since 2026-11-12: `Conventional Fannie Mae`, `Conventional HomeReady`, ... grouped Fannie Mae /
+Freddie Mac in the picker); FHA (`FHA Standard`, `FHA Streamline`), VA (`VA Standard`, `VA Cash-Out`, `VA IRRRL`). Approvals moved
+with the files. A FHA/VA deal with no program picked runs every sheet in the tab through `gov_matrix`; Express 1099 / 2nd / Bank Statements / DSCR / Full Doc / P\&L (renamed from
 "NonQM ..." 2026-11-12, approvals moved with them; `NonQM Shared` keeps its name),
 Ignite 1099 / Bank Statements / Express DSCR / Full Doc / P\&L.
 * `guidebot/extract\_pdf.py` PDF to clean pages. `parse\_matrix` rebuilds NDM matrices: compacts pdfplumber's
@@ -153,7 +155,7 @@ shown (funding fee, 203(h), AZ/UT). "96.5%, 100%³" headlines 96.5 (100% is the 
 rows say NA (no LTV limit). Stops at the matrix: the sheets' credit/property pages aren't applied. All five match
 the site's HTML tables (`site_grids.gov_check`). The approved JSONs were saved before this, with no table, so
 Derrick needs to Re-read and approve each; until then the VA/FHA tabs say so instead of giving a number.
-* Express 2nd (Express 8.15.2026, Premier 3.2.2026) parses as text only, no LTV grid yet. Conventional still empty (only "Old" PDFs exist, currency unconfirmed).
+* Express 2nd (Express 8.15.2026, Premier 3.2.2026) parses as text only, no LTV grid yet.
 * NonQM Shared guidelines PDF changed since it was approved: needs a re-check.
 
 ## Open questions to confirm with underwriting (flagged in answers, not guessed)

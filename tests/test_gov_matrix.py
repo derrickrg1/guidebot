@@ -10,8 +10,8 @@ from guidebot import config, crosscheck, gov_matrix, library, site_grids
 from guidebot.answer import RawScenario
 from guidebot.extract_pdf import extract_document
 
-GOV_PDFS = ["VA/VA Standard Matrix.pdf", "VA/VA Cash-Out Matrix.pdf", "VA/VA IRRRL Matrix.pdf",
-            "FHA/FHA Standard Matrix.pdf", "FHA/FHA Streamline Matrix.pdf"]
+GOV_PDFS = ["VA Standard/VA Standard Matrix.pdf", "VA Cash-Out/VA Cash-Out Matrix.pdf", "VA IRRRL/VA IRRRL Matrix.pdf",
+            "FHA Standard/FHA Standard Matrix.pdf", "FHA Streamline/FHA Streamline Matrix.pdf"]
 have_pdfs = pytest.mark.skipif(not all((config.DOCS_DIR / p).exists() for p in GOV_PDFS), reason="FHA/VA PDFs not in docs/")
 
 
@@ -39,7 +39,7 @@ def _first_matrix(rel):
 def test_va_standard_rows_placed_by_position():
     # "Cash-Out 550" and "$832,750" come out of pdfplumber as separate rows under a merged 90.0%; the merged
     # "Purchase" covers three FICO rows
-    df = _first_matrix("VA/VA Standard Matrix.pdf")
+    df = _first_matrix("VA Standard/VA Standard Matrix.pdf")
     assert df.attrs["kind"] == "gov" and df.attrs["title"] == "VA Standard Matrix · Primary Residence"
     got = df[["Loan Purpose", "Minimum FICO", "Maximum Loan Amount", "Max LTV"]].values.tolist()
     assert got == VA
@@ -48,12 +48,12 @@ def test_va_standard_rows_placed_by_position():
 
 @have_pdfs
 def test_fha_standard_and_va_cash_out_columns():
-    fha = _first_matrix("FHA/FHA Standard Matrix.pdf")
+    fha = _first_matrix("FHA Standard/FHA Standard Matrix.pdf")
     assert "Maximum Loan Amount" not in fha.columns and "Minimum Loan Amount" in fha.columns
     assert fha["Max LTV"].tolist() == ["96.5%, 100%³", "90.0%", "97.75%², 100%³", "90.0%", "80.0%"]
     assert fha["Loan Purpose"].tolist() == ["Purchase", "Purchase", "No Cash-Out", "No Cash-Out", "Cash-Out"]
     assert [n[:2] for n in gov_matrix.notes_md(fha.attrs["notes"])] == ["1:", "2:", "3:"]
-    co = _first_matrix("VA/VA Cash-Out Matrix.pdf")
+    co = _first_matrix("VA Cash-Out/VA Cash-Out Matrix.pdf")
     assert co[["Minimum FICO", "Max DTI", "AUS"]].values.tolist()[3] == ["700³", "50%³", "Manual UW"]
     assert co["Max LTV"].tolist()[-1] == "95%" and len(co) == 8
 

@@ -179,7 +179,7 @@ def check(doc: dict, repo: Path | None = None) -> list[dict] | None:
     path = doc.get("path")
     if not path:
         return None
-    if path.parent.name in GOV_SOURCES:
+    if _gov_key(path):
         return gov_check(doc, repo)
     site = site_tables(path.parent.name, path.name, repo)
     if site is None:
@@ -235,12 +235,18 @@ def gov_compare(mine: pd.DataFrame, site: list[dict[str, str]]) -> list[str]:
     return diffs
 
 
+def _gov_key(path: Path) -> str:
+    """ "VA" for docs/VA Standard/..., "FHA" for docs/FHA Streamline/...: one folder per sheet, one site section."""
+    first = path.parent.name.split()[0] if path.parent.name else ""
+    return first if first in GOV_SOURCES else ""
+
+
 def gov_check(doc: dict, repo: Path | None = None) -> list[dict] | None:
     mats = [m for p in doc["pages"] for m in p["matrices"]]
-    site = gov_table(doc["path"].parent.name, doc["path"].name, repo)
+    site = gov_table(_gov_key(doc["path"]), doc["path"].name, repo)
     if site is None:
         return None
-    src = next(e[1] for e in GOV_SOURCES[doc["path"].parent.name] if e[0] in doc["path"].name.lower())
+    src = next(e[1] for e in GOV_SOURCES[_gov_key(doc["path"])] if e[0] in doc["path"].name.lower())
     if len(mats) != 1:
         return [{"status": "mismatch", "source": src, "diffs": [f"Parsed {len(mats)} tables, expected 1"]}
                 for _ in mats]

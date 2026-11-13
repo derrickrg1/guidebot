@@ -110,9 +110,9 @@ def test_grid_by_position_fills_merged_cells_and_splits_group_headers():
     ]
 
 
-@pytest.mark.skipif(not (config.DOCS_DIR / "FHA/FHA Standard Matrix.pdf").exists(), reason="FHA PDF not in docs/")
+@pytest.mark.skipif(not (config.DOCS_DIR / "FHA Standard/FHA Standard Matrix.pdf").exists(), reason="FHA PDF not in docs/")
 def test_fha_grid_keeps_footnotes_off_the_numbers():
-    text = extract_document(config.DOCS_DIR / "FHA/FHA Standard Matrix.pdf")[0]["text"]
+    text = extract_document(config.DOCS_DIR / "FHA Standard/FHA Standard Matrix.pdf")[0]["text"]
     # "5801" in the raw PDF is FICO 580 with footnote 1; $75,000 is one cell merged down every row
     assert "| Purchase | 580¹ | 1 – 4 Units³, Manufactured | 96.5%, 100%³ | $75,000 |" in text
     assert "| Cash-Out | 550 | 1 – 4 Units³, Manufactured | 80.0% | $75,000 |" in text

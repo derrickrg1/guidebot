@@ -8,8 +8,8 @@ import pytest
 from guidebot import agency, answer, chat, config
 from guidebot.ingest import indexer
 
-PDF_A = config.DOCS_DIR / "FHA" / "FHA Standard Matrix.pdf"
-PDF_B = config.DOCS_DIR / "VA" / "VA Standard Matrix.pdf"
+PDF_A = config.DOCS_DIR / "FHA Standard" / "FHA Standard Matrix.pdf"
+PDF_B = config.DOCS_DIR / "VA Standard" / "VA Standard Matrix.pdf"
 have_pdfs = pytest.mark.skipif(not (PDF_A.exists() and PDF_B.exists()), reason="sample PDFs not in docs/")
 
 

@@ -120,7 +120,6 @@ select option { background: #131c1e; }
 .chat-item .x { opacity: 0; border: 0; background: none; color: var(--mist); cursor: pointer; padding: 0 2px; font-size: 1rem; line-height: 1; }
 .chat-item:hover .x { opacity: 1; }
 .chat-item .x:hover { color: var(--bad); }
-.docs { font-size: 0.78rem; color: var(--steel); display: flex; flex-direction: column; gap: 3px; word-break: break-word; }
 .note { font-size: 0.78rem; padding: 8px 10px; border-radius: 6px; background: var(--warn-bg); color: var(--warn); }
 .row { display: flex; gap: 8px; }
 .btn {
@@ -363,7 +362,6 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
     </button>
     <div class="picker-menu" role="listbox" hidden></div>
   </div>
-  <div id="docs" class="docs"></div>
   <div id="docnote" class="note" hidden>Some docs unverified. LTV numbers blocked until they're approved.</div>
   <hr>
   <button class="newchat" id="newchat" type="button">
@@ -427,7 +425,6 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
 <script src="viewer.js"></script>
 <script>
 const API = location.protocol === "file:" ? "http://localhost:8600" : "";
-const ICON = { verified: "✅", unverified: "⚠️", changed: "🔄" };
 const $ = id => document.getElementById(id);
 let programs = [], history = [], busy = false;
 
@@ -475,8 +472,6 @@ function renderSidebar() {
   store.set("mode", m); store.set("program", choice);
   document.querySelectorAll("#sections button").forEach(b => b.setAttribute("aria-selected", b.dataset.sec === section));
   const p = programs.find(x => x.name === choice);
-  $("docs").innerHTML = p ? p.docs.map(d => `<span>${ICON[d.status] || ""} ${esc(d.file)}${d.shared ? " (shared)" : ""}</span>`).join("")
-    + p.duplicates.map(([a]) => `<span>↳ skipping ${esc(a)} (duplicate)</span>`).join("") : "";
   $("docnote").hidden = !(p && p.docs.some(d => d.status !== "verified"));
 }
 // The section tabs. Same split as chat.SECTIONS on the server, which narrows the answer to these programs.
@@ -487,8 +482,8 @@ const SECTIONS = {
   VA: p => /^va\b/i.test(p.name),
 };
 let section = SECTIONS[store.get("asknick.section")] ? store.get("asknick.section") : "NonQM";
-// NonQM opens with the Express + Ignite picks (p.family), then Express and Ignite on their own. A section with
-// one program (FHA, VA, Conventional) just picks it.
+// NonQM opens with the Express + Ignite picks (p.family), then Express and Ignite on their own. Conventional groups
+// by agency. A section with one program just picks it.
 function fillPrograms(keep) {
   const sel = $("program"), list = programs.filter(SECTIONS[section]);
   const opts = ps => ps.map(p => `<option>${esc(p.name)}</option>`).join("");
@@ -496,6 +491,10 @@ function fillPrograms(keep) {
     sel.innerHTML = `<option value="">All NonQM programs</option>` + [
       ["Express + Ignite", p => !!p.family], ["Express", p => /^express\b/i.test(p.name)], ["Ignite", p => /^ignite\b/i.test(p.name)],
     ].map(([label, test]) => `<optgroup label="${label}">${opts(list.filter(test))}</optgroup>`).join("");
+  } else if (section === "Conventional" && list.length > 1) {
+    const freddie = p => /freddie|home possible|homeone|refi possible/i.test(p.name);
+    sel.innerHTML = `<option value="">All Conventional programs</option>` + [["Fannie Mae", p => !freddie(p)], ["Freddie Mac", freddie]]
+      .map(([label, test]) => `<optgroup label="${label}">${opts(list.filter(test))}</optgroup>`).join("");
   } else if (list.length === 1) {
     sel.innerHTML = opts(list);
   } else {

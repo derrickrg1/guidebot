@@ -295,6 +295,9 @@ def respond(question: str, history: list[dict], choice: str = "",
         return
 
     docs = program_docs(choice, all_programs)[0] if choice and not members else []
+    # FHA and VA are one program per sheet, but their eligibility rows are all read by gov_matrix: with none
+    # picked, a deal runs against every sheet in the tab together.
+    gov = section in ("FHA", "VA") and not choice or choice and (SECTIONS["FHA"](choice) or SECTIONS["VA"](choice))
     answer, hits = "", []
 
     # A number for a specific deal only ever comes from the matrix lookup. With Scenario off, the guideline
@@ -304,7 +307,7 @@ def respond(question: str, history: list[dict], choice: str = "",
     skipped = ""
 
     if mode_scenario or deal:
-        if not choice or members:
+        if (not choice or members) and not gov:
             yield {"status": f"Checking {' and '.join(members)}…" if members else "Checking all programs…"}
             try:
                 answer = _compare(asked, history, members or user_programs, all_programs, model)
@@ -312,11 +315,12 @@ def respond(question: str, history: list[dict], choice: str = "",
             except Exception as e:
                 skipped = str(e)
                 yield {"status": f"Comparison skipped: {e}"}
-        elif docs and (SECTIONS["FHA"](choice) or SECTIONS["VA"](choice)):
+        elif gov:
+            docs = docs or [d for p in user_programs for d in program_docs(p, all_programs)[0]]
             # FHA/VA eligibility rows: Python only, start to finish
             mats = library.matrices(docs)
             answer = (gov_matrix.answer(said_scenario(asked, history), asked, mats) if mats else
-                      f"The approved copies of the {choice} matrices have no LTV table in them yet. On the admin page, "
+                      f"The approved copies of the {choice or section} matrices have no LTV table in them yet. On the admin page, "
                       "open each one, hit **Re-read the PDF**, check the table against the page, and approve it.")
             yield {"replace": answer}
         elif docs:
