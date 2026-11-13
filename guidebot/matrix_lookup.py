@@ -20,7 +20,7 @@ def parse_range(label: str):
     s = label.replace("–", "-").strip()
     nums = [to_number(x) for x in re.findall(r"\$?[\d,]+(?:\.\d+)?", s)]
     if s.startswith(("<", "≤", "<=")) and nums:
-        return None, nums[0], True
+        return None, nums[0], not s.startswith(("≤", "<="))   # only a bare "<" leaves the edge in question
     if (s.startswith((">", "≥", ">=")) or s.endswith("+")) and nums:
         return nums[0], None, False
     if len(nums) == 2:

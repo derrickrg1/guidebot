@@ -4,8 +4,9 @@ respond() yields events: {"status": str}, {"text": chunk}, {"replace": full_text
 All LTV guards live in answer.py, so both UIs get the same rules.
 """
 import re
+from pathlib import Path
 
-from guidebot import agency, config, conv_matrix, gov_matrix, library, ltv_overview, overlay_rules
+from guidebot import agency, calc_chat, config, conv_matrix, gov_matrix, library, loan_limits, ltv_overview, overlay_rules
 from guidebot.answer import (broad_messages, compare_programs, comparison_md, filter_to_cited, full_doc_messages,
                              full_section_messages, asks_rule, looks_like_deal, said_scenario, scenario_answer, search_messages)
 from guidebot.llm import stream_chat
@@ -145,6 +146,9 @@ def _agency_hits(question: str, sec: str, k: int = 6, k_letters: int = 3, folder
         return []   # no index yet
     if folder:   # one agency's guide only: a Freddie program never gets Fannie's rules
         pool = [h for h in pool if (agency.info(h["file"]) or {}).get("rel", "").startswith(folder + "/")][:40]
+    if config.RERANK:   # GPU cross-encoder: the page that states the rule ranks first 50/60 vs 45/60 (search_eval)
+        from guidebot import rerank
+        pool = [pool[i] for i in rerank.order(question, [h["text"] for h in pool])]
     letter = lambda h: re.search(r"Mortgagee Letter|Circular", h["file"]) is not None
     books = sorted((h for h in pool if not letter(h)), key=lambda h: agency.off_topic(h["text"]))   # stable
     found = books[:k] + [h for h in pool if letter(h)][:k_letters]
@@ -275,6 +279,34 @@ def _agency_note(answer: str, hits: list[dict]) -> tuple[str, list[dict]]:
     return note, cited
 
 
+_CITED_FILE = re.compile(r"\(([^()]*?\.pdf)\s*,\s*([^()]*?\bp\.\s*\d[^()]*)\)")
+
+
+def checked_line(answer: str, all_programs: dict) -> str:
+    """"Checked: Ignite DSCR sheet p. 2 · NonQM Shared guide p. 41 · HUD Handbook 4000.1 p. 177", from the answer's
+    own citations, so the reader sees which sheet, which general guide and which agency text it stands on."""
+    owner = {Path(p).name: prog for prog, paths in all_programs.items() for p in paths}
+    seen: dict = {}
+    for m in _CITED_FILE.finditer(answer):
+        file = re.sub(r"^(also|see|and|plus|per|via)\s+", "", m[1].strip(), flags=re.I)
+        for pg in re.findall(r"p\.\s*(\d+)", m[2]):
+            seen.setdefault(file, [])
+            if int(pg) not in seen[file]:
+                seen[file].append(int(pg))
+    parts = []
+    for file, pages in seen.items():
+        rec = agency.info(file)
+        if rec:
+            name = (rec.get("title") or file) + ("" if rec.get("reviewed") else " (not reviewed yet)")
+        elif file in owner:
+            prog = owner[file]
+            name = f"{prog} {'general guide' if prog == SHARED else 'sheet'}"
+        else:
+            continue
+        parts.append(f"{name} p. {', '.join(map(str, sorted(pages)))}")
+    return f"\n\n*Checked: {' · '.join(parts)}*" if parts else ""
+
+
 def _sources(hits: list[dict]) -> list[dict]:
     keep = ("file", "loc", "section", "section_title", "program")
     return [{**{k: h.get(k, "") for k in keep}, "text": (h.get("text") or "")[:600]} for h in hits]
@@ -389,8 +421,8 @@ def named_programs(question: str, programs: list[str]) -> list[str]:
 
 
 def respond(question: str, history: list[dict], choice: str = "",
-            mode_program: bool = False, mode_scenario: bool = False, section: str = ""):
-    model = config.CHAT_MODEL
+            mode_program: bool = False, mode_scenario: bool = False, section: str = "", model: str = ""):
+    model = model or config.CHAT_MODEL
     all_programs = library.programs()
     asked = question
     question = expand_terms(question)   # "NOD" -> also "Notice of Default", for routing, search and the answer
@@ -491,6 +523,14 @@ def respond(question: str, history: list[dict], choice: str = "",
                 answer = over
                 yield {"replace": answer}
 
+    if not answer and not deal and (calc := calc_chat.answer(asked, model)):
+        answer = calc   # DSCR, buydown, IRRRL, streamline: the model reads the numbers, Python does the math
+        yield {"replace": answer}
+
+    if not answer and not deal and (limits := loan_limits.answer(asked)):
+        answer = limits   # "conforming limit in LA County?": FHFA's file, read by Python
+        yield {"replace": answer}
+
     if mode_program and members and not answer:
         # Each program answers from its own guidelines, one after the other under its own heading.
         parts = []
@@ -551,5 +591,7 @@ def respond(question: str, history: list[dict], choice: str = "",
     hits = [h for h in hits if not h.get("agency")] + cited
     if note:
         yield {"text": note}
+    if not deal and (line := checked_line(answer, library.programs())):
+        yield {"text": line}
     if hits:
         yield {"sources": _sources(hits)}

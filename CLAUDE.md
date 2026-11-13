@@ -40,8 +40,38 @@ text go to Anthropic; embeddings and the qwen3 fallback stay local. Otherwise fr
 * Models (`guidebot/llm.py`, picked in `config.py`): `claude-sonnet-5-5` (Sonnet, Haiku and Opus all scored 22/22 in the race; Sonnet was fastest) when `ANTHROPIC_API_KEY` is in `.env`
 (git-ignored; key lives in the AskNick workspace of his Claude Console, 90-day expiry), else `qwen3:14b`.
 If Claude is down or the key is bad, answers fall back to qwen3. `GUIDEBOT_MODEL` / `GUIDEBOT_EFFORT` in `.env`
-override. `nomic-embed-text` (embeddings, Ollama).
+override. `nomic-embed-text` (embeddings, Ollama). The fallback answer starts with a visible "Claude is unavailable
+right now" line (`FALLBACK_SHOWN`); "credit balance is too low" counts as down (`_down`). On 2026-11-13 the account
+was out of credits, so every answer was qwen3 until Derrick tops it up.
 * pdfplumber, pandas, ChromaDB + BM25 (hybrid search), Streamlit UI.
+* GPU (RTX 5070 Ti, 16 GB): torch cu128 in `.venv` (Docling's install swapped it to CPU once; reinstall cu128 with
+`--force-reinstall --no-deps` if `torch.cuda.is_available()` is False). Reranker `guidebot/rerank.py`
+(BAAI/bge-reranker-v2-m3, fp16, about 0.7 s per 40 pages) reorders the agency handbook pool; `GUIDEBOT_RERANK=0` turns
+it off (tests run with it off). Search eval (`tools/search_eval.py`, 60 gold cases in `tools/search_cases.py`): best
+hit is gold nomic 45, bge-m3 47, qwen3-embedding:4b 48, any of them + reranker 50; gold in top 3 is 56-58 for all.
+Kept nomic (no reindex) plus the reranker; section headers skipped, recall was already 60/60.
+* Calculators (`guidebot/calculators.py`): the site's DSCR, VA IRRRL (NTB, recoupment, seasoning), FHA Streamline
+(NTB, seasoning, max loan) and buydown math ported to Python, cross-checked against the site's JS through node in
+`tests/test_calculators.py`. `guidebot/calc_chat.py` answers "DSCR on $3,200 rent..." questions: the model only reads
+the numbers, regexes fill what it drops, any number not in the question is thrown out, Python does the math, and a
+missing input gets asked for, never guessed.
+* Loan limits (`guidebot/loan_limits.py`, data in `limits/`: FHFA county xlsx + ZIP to county csv). Conventional
+deals with a county or ZIP get a county limit check (over it is "Not eligible", the sheet's jumbo/high balance
+column otherwise). NDM's sheets already use early 2027 limits ($845,000 baseline); FHFA 2027 comes out late
+November, so drop `fhfa_2027.xlsx` into `limits/` then. The sheet's number wins in baseline counties. FHA gets the
+national floor/ceiling only (HUD's county file wasn't downloadable).
+* Answers that aren't deals end with "*Checked: ...*" naming every sheet/guide page cited (`chat.checked_line`).
+* "This is wrong" button under each answer saves to `feedback` in `data/chats.db` (admin Feedback tab);
+`tools/stress_bank.py` turns each report into a stress case (`fb-N`). Every answer also writes a trace row
+(question, model, fallback, seconds) via `history.save_trace`.
+* Audits (read only): `tools/page_audit.py` (approved vs fresh read, image-only pages; `data/audit/pages.md`),
+`tools/docling_check.py` (Docling as a third reader of every grid; `data/audit/docling.md`, 1 of 1,569 cells
+differs, the Express 1099 cell below), `tools/chip_check.py` (Playwright clicks every chip with the viewer's own
+code; 93.9% land on a marked line), `tests/test_properties.py` (Hypothesis: FICO/loan monotonic, no bracket gaps).
+`tools/stress_run.py --model X --out Y` plus `tools/stress_check.py a b` compares models;
+`tools/stress_grade.py` has Opus grade a run (needs credits). The server only honors a test `model` from this PC.
+* Nightly: scheduled task "AskNick nightly" (Derrick registers it, command in the script's header) runs `scripts/nightly.ps1` at 2 AM (tests, page audit, Docling, stress
+check, chip check), report in `data/nightly/<date>.md`. The paid stress run only with `GUIDEBOT_NIGHTLY_STRESS=1`.
 * Main UI: `ui/guidebot.html` served by `python -m guidebot.server` on 127.0.0.1:8600. A Windows scheduled
 task "Guidebot server" runs `scripts/run_server.ps1` at login, which relaunches the server if it ever exits
 (log in `%LOCALAPPDATA%\guidebot\server.log`, with restart markers). To restart by hand, kill the python
@@ -137,7 +167,7 @@ so the bot no longer calls its own earlier citation wrong.
 
 ## Current status
 
-* 172 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 246 tests passing (48 are Hypothesis property runs). Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked
@@ -157,6 +187,8 @@ grids (`../site/tools/matrices/build_*.py`, matched by PDF hash) answer only whe
 A mismatch blocks numbers and approval. Every Express/Ignite grid matches except (2026-11-12):
   * Express 1099 row $2,000,001-$3,000,000 / 700, Primary Cash Out: NDM PDF (printed 7/31/2026, "Adding AR") says
     65%, the site's copy of the 3.2.2026 sheet says 60%. Waiting on Derrick (`KNOWN_SITE_DIFFS` in tests).
+    The approved JSON also says 60% (the bot answers 60%), while a fresh pdfplumber read and Docling both read 65%
+    from the PDF (2026-11-13). If the PDF is right, Re-read the PDF and re-approve Express 1099.
   * Express DSCR Units+: the approved JSON was mangled (FICO is the merged cell there, the parser used to fill loan
     amount instead). Parser fixed (`_fill_lead`); Derrick needs to "Re-read the PDF" and re-approve.
   The site's Express "originals" are Revo-branded copies, not NDM's files, so the site is a check, never the source.
@@ -206,8 +238,9 @@ separate 5% reduction. Confirm interpretation.
 ## Next steps
 
 1. Derrick re-verifies the flagged docs and verifies the new ones, then tests scenarios with overlays.
-2. Port the site's calculators (`../site/assets/dscr.js`, `va-irrrl.js`, `fha-streamline.js`, `buydown.js`) to
-Python so DSCR picks the right DSCR tier/matrix and IRRRL/streamline answers are computed, not generated.
+2. Calculators are ported (`calculators.py`). Still to do: have a DSCR deal pick its DSCR tier/matrix from the
+computed ratio. Once credits are back: Sonnet vs Opus stress baseline, Opus grader, then route hard question types
+to Opus if it wins.
 3. Use the site's `pdf\_rows.py` to keep green NDM-overlay and yellow recent-update highlights from FHA/VA sheets.
 4. LTV grid for 2nds (doc-type columns), with a test, or a vision fallback.
 5. Optional: Express vs Ignite comparison sheets and the Loan Setup SOP as programs; a scenario form.

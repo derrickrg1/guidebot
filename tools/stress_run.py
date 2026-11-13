@@ -1,6 +1,6 @@
 """Runs tools/stress_bank.py's questions through the running server (127.0.0.1:8600) and saves each answer.
 
-    .venv\\Scripts\\python.exe -m tools.stress_run [id-prefix ...]
+    .venv\\Scripts\\python.exe -m tools.stress_run [--model claude-opus-5-5] [--out opus] [id-prefix ...]
 
 No chat id is sent, so nothing lands in anyone's chat history. Results: data/stress/answers.jsonl (one line per
 case; a re-run replaces the cases it ran). Then tools/stress_check.py grades them.
@@ -14,13 +14,16 @@ from pathlib import Path
 
 from tools.stress_bank import bank
 
-OUT = Path(__file__).resolve().parents[1] / "data" / "stress" / "answers.jsonl"
+STRESS = Path(__file__).resolve().parents[1] / "data" / "stress"
+OUT = STRESS / "answers.jsonl"
+MODEL = ""
 URL = "http://127.0.0.1:8600/api/chat"
 
 
 def ask(case: dict) -> dict:
     body = {"question": case["q"], "history": case.get("history") or [], "program": case["program"],
-            "section": case["section"], "mode_program": bool(case["program"]), "mode_scenario": case["mode"] == "deal"}
+            "section": case["section"], "mode_program": bool(case["program"]), "mode_scenario": case["mode"] == "deal",
+            **({"model": MODEL} if MODEL else {})}
     req = urllib.request.Request(URL, json.dumps(body).encode(), {"Content-Type": "application/json"})
     text, sources, choices, statuses, t0 = "", [], [], [], time.time()
     try:
@@ -59,4 +62,11 @@ def main(prefixes: list[str]):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    args = sys.argv[1:]
+    while args and args[0] in ("--model", "--out"):
+        flag, value, args = args[0], args[1], args[2:]
+        if flag == "--model":
+            MODEL = value
+        else:
+            OUT = STRESS / f"{value}.jsonl"
+    main(args)

@@ -215,6 +215,9 @@ h1 { margin: 0; color: var(--navy); font-weight: 600; }
 .choices button { font: 600 0.8rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: var(--user-ink); cursor: pointer;
   background: var(--user); border: 1px solid rgba(217, 102, 31, 0.45); border-radius: 999px; padding: 6px 14px; }
 .choices button:hover { border-color: var(--navy); }
+.wrong { margin-top: 8px; text-align: right; font: 0.75rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: var(--mist); }
+.wrong button { font: inherit; color: inherit; background: none; border: 0; padding: 2px 0; cursor: pointer; text-decoration: underline dotted; }
+.wrong button:hover { color: var(--navy); }
 .md > :first-child { margin-top: 0; }
 .md > :last-child { margin-bottom: 0; }
 .md h1, .md h2, .md h3, .md h4 { color: var(--navy); font-size: 1em; margin: 1em 0 0.4em; text-transform: none; letter-spacing: 0; }
@@ -727,6 +730,23 @@ $("log").addEventListener("click", e => {
   pick.scrollIntoView({ block: "nearest" });
   setTimeout(() => pick.click());   // after this click reaches the picker's "click outside closes it" listener
 });
+// "This is wrong": the note goes to Derrick (admin Feedback tab), and each report becomes a stress test case.
+function addWrong(box, question, answer) {
+  const d = document.createElement("div");
+  d.className = "wrong";
+  d.innerHTML = `<button type="button">This is wrong</button>`;
+  d.querySelector("button").onclick = async () => {
+    const note = prompt("What's wrong with this answer? (What should it say, or where's the rule?)");
+    if (!note || !note.trim()) return;
+    try {
+      const r = await fetch(API + "/api/feedback", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, answer, note, chat_id: chatId, program: mode().choice, section,
+                               mode: mode().scenario ? "scenario" : "guidelines" }) });
+      d.innerHTML = r.ok ? `<span>Thanks, sent to Derrick.</span>` : `<span>Couldn't send that. Try again?</span>`;
+    } catch { d.innerHTML = `<span>Couldn't send that. Try again?</span>`; }
+  };
+  box.appendChild(d);
+}
 function setBusy(b) {
   busy = b;
   $("send").disabled = b;
@@ -775,9 +795,11 @@ async function openChat(id) {
     : Object.keys(SECTIONS).find(k => programs.some(p => p.name === c.program && SECTIONS[k](p)));
   if (owner) setSection(owner, SECTIONS[c.program] ? "" : c.program);
   $("log").innerHTML = "";
+  let asked = "";
   for (const m of c.messages) {
-    if (m.role === "user") addMsg("user", esc(m.content));
-    else addMsg("bot", `<div class="md">${md(m.content)}</div>` + (m.sources.length ? sourcesHtml(m.sources) : ""));
+    if (m.role === "user") { asked = m.content; addMsg("user", esc(m.content)); }
+    else addWrong(addMsg("bot", `<div class="md">${md(m.content)}</div>` + (m.sources.length ? sourcesHtml(m.sources) : "")),
+                  asked, m.content);
   }
   renderSidebar();
   loadChats();
@@ -798,6 +820,7 @@ async function send(question, over = {}) {
     const answer = await stream("/api/chat", { question, history, program: choice, mode_program: program,
                                                mode_scenario: scenario, section, chat_id: chatId }, box);
     history.push({ role: "user", content: question }, { role: "assistant", content: answer });
+    addWrong(box, question, answer);
     loadChats();
   } catch (err) {
     box.innerHTML = `<div class="err">Something went wrong: ${esc(err.message)}</div>`;

@@ -152,6 +152,7 @@ details summary { cursor: pointer; color: var(--steel); font-size: 0.82rem; marg
   <nav class="tabs" role="tablist">
     <button type="button" data-tab="docs" class="on">Documents</button>
     <button type="button" data-tab="chats">Chats</button>
+    <button type="button" data-tab="feedback">Feedback</button>
     <button type="button" data-tab="index">Index</button>
     <button type="button" data-tab="updates">Updates<span class="badge" id="upd-count" hidden></span></button>
   </nav>
@@ -176,9 +177,27 @@ function showTab(t) {
   if (t === "chats") { chatOpen = null; setMain(`<div class="empty">${EMPTY.chats}</div>`); loadChats(); }
   if (t === "index") indexTab();
   if (t === "updates") updatesTab();
+  if (t === "feedback") feedbackTab();
 }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 const setMain = html => { document.getElementById("main").innerHTML = html; };
+
+// ---------- feedback: "This is wrong" reports, newest first. Each one is also a stress test case. ----------
+async function feedbackTab() {
+  const r = await fetch("/admin/api/feedback");
+  const side = document.getElementById("side");
+  if (!r.ok) { side.innerHTML = `<div class="note bad">Admin only.</div>`; return; }
+  const {feedback} = await r.json();
+  side.innerHTML = `<div class="muted">${feedback.length} report${feedback.length === 1 ? "" : "s"}. Each one runs in the
+    stress test (tools.stress_run fb-), so once it's fixed it stays fixed.</div>`;
+  setMain(feedback.length ? `<h1>Feedback</h1>` + feedback.map(f => `<div class="panel" style="margin-bottom:14px">
+      <div class="sub">${esc(f.email === "local" ? "This PC" : f.email)} · ${new Date(f.ts * 1000).toLocaleString()} ·
+        ${esc(f.mode === "scenario" ? "Scenario" : "Guidelines")} · ${esc(f.program || f.section || "All programs")} · fb-${f.id}</div>
+      <div class="msg user">${esc(f.question)}</div>
+      <div class="note bad"><strong>What's wrong:</strong> ${esc(f.note)}</div>
+      <details><summary>The answer they got</summary><div class="msg bot md">${md(f.answer)}</div></details></div>`).join("")
+    : `<div class="empty">No reports yet. People see a "This is wrong" link under every answer.</div>`);
+}
 
 // ---------- chats: everyone's, newest first, grouped by person ----------
 async function loadChats() {

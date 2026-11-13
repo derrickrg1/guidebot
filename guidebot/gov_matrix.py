@@ -264,9 +264,10 @@ def answer(raw, question: str, mats: list[dict]) -> str:
     if not raw.occupancy:
         lines += ["", "- Occupancy not given. These matrices cover: " + "; ".join(
             f"{m['file']}: {m['df'].attrs.get('title', '').split(' · ')[-1]}" for m in mats)]
-    if any(m["df"].attrs.get("title", "").startswith("FHA") and "Maximum Loan Amount" not in m["df"].columns
-           for m, _ in found):
-        lines += ["", "- FHA county loan limits apply. This matrix has no loan amount tiers, so check the county limit."]
+    if any(m["df"].attrs.get("title", "").startswith("FHA") for m, _ in found) and raw.loan_amount:
+        from guidebot import loan_limits
+        units = int(raw.units) if getattr(raw, "units", None) else 1
+        lines += ["", "**FHA county loan limit**"] + [f"- {x}" for x in loan_limits.fha_lines(question, raw.loan_amount, units)]
     for m in {id(m): m for m, _ in found}.values():
         notes = notes_md(m["df"].attrs.get("notes", ""))
         if notes:

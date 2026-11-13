@@ -213,6 +213,8 @@ def check(r: dict) -> list[str]:
     if "[ERROR]" in a:
         probs.append("server error: " + a[a.find("[ERROR]"):][:160])
     got = route_of(r)
+    if e.get("report"):
+        probs.append(f"reported wrong: {e['report'][:200]} (stress_grade checks the new answer)")
     if e.get("route") and got != e["route"]:
         probs.append(f"route {got}, expected {e['route']}")
     for rx in e.get("must", []):
@@ -244,26 +246,53 @@ def check(r: dict) -> list[str]:
     return probs
 
 
-def main():
-    rows = [json.loads(l) for l in ANS.read_text(encoding="utf-8").splitlines() if l.strip()]
-    out, bad = [], 0
-    for r in rows:
-        probs = check(r)
-        bad += bool(probs)
-        out.append((r, probs))
-    lines = [f"# Stress run: {len(rows)} answers, {bad} with problems", ""]
+KINDS = [("errors", "server error"), ("feedback cases", "reported wrong"), ("route", "route "), ("deal read", "read "), ("matrix cell", ("cell ", "no number",
+          "no matrix cell", "expected ", "FICO row", "column ", "gave a number", "should be ineligible")),
+         ("expected wording", ("missing /", "has /")), ("bad citation", "cites "), ("quote off page", "quote not on"),
+         ("number off page", "number "), ("no citation", "guideline answer with no"), ("chip", ("deal number with no",
+         "matrix row isn't"))]
+
+
+def scores(out: list) -> dict:
+    """One line of numbers per run, so two models (or before/after a change) compare at a glance."""
+    secs = sorted(r.get("secs", 0) for r, _ in out)
+    s = {"answers": len(out), "clean": sum(not p for _, p in out),
+         "avg secs": round(sum(secs) / max(len(secs), 1), 1), "p90 secs": secs[int(len(secs) * .9)] if secs else 0}
+    for kind, start in KINDS:
+        s[kind] = sum(p.startswith(start) for _, probs in out for p in probs)
+    return s
+
+
+def grade(name: str = "") -> dict:
+    ans = ANS.with_name(f"{name}.jsonl") if name else ANS
+    report = REPORT.with_name(f"report-{name}.md") if name else REPORT
+    rows = [json.loads(l) for l in ans.read_text(encoding="utf-8").splitlines() if l.strip()]
+    out = [(r, check(r)) for r in rows]
+    bad = sum(bool(p) for _, p in out)
+    lines = [f"# Stress run{' ' + name if name else ''}: {len(rows)} answers, {bad} with problems", ""]
     for r, probs in out:
         if probs:
             lines += [f"## {r['id']} ({r['section']}{' / ' + r['program'] if r['program'] else ''}, {r['mode']})",
                       f"**Q:** {r['q']}", ""] + [f"- {p}" for p in probs] + ["", "<details><summary>answer</summary>",
                                                                              "", r["answer"], "", "</details>", ""]
-    REPORT.write_text("\n".join(lines), encoding="utf-8")
+    report.write_text("\n".join(lines), encoding="utf-8")
     sys.stdout.reconfigure(encoding="utf-8")
     print(lines[0])
-    for r, probs in out:
-        for p in probs:
-            print(f"{r['id']}: {p}")
+    if not name:
+        for r, probs in out:
+            for p in probs:
+                print(f"{r['id']}: {p}")
+    return scores(out)
+
+
+def main(names: list[str]):
+    table = {n or "answers": grade(n) for n in (names or [""])}
+    if len(table) > 1:
+        cols = list(table)
+        print("\n| | " + " | ".join(cols) + " |\n|---|" + "---|" * len(cols))
+        for k in next(iter(table.values())):
+            print(f"| {k} | " + " | ".join(str(table[c][k]) for c in cols) + " |")
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:])

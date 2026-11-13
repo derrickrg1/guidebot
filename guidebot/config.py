@@ -32,6 +32,7 @@ EMBED_MODEL = "nomic-embed-text"
 EMBED_DOC_PREFIX = "search_document: "    # nomic needs these, set both to "" for other embed models
 EMBED_QUERY_PREFIX = "search_query: "
 CHAT_OPTIONS = {"temperature": 0.1, "num_ctx": 16384}
+RERANK = os.environ.get("GUIDEBOT_RERANK", "1") != "0"   # guidebot/rerank.py on the GPU; off when torch isn't there
 
 CHUNK_CHARS = 1200
 CHUNK_OVERLAP = 200

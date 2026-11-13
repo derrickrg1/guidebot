@@ -280,6 +280,14 @@ def footnotes(notes: str) -> list[str]:
     return out
 
 
+def _county(question: str, loan: int, units: int, m: dict) -> dict:
+    """The deal's county (named or by ZIP) against FHFA's county limits, with the sheet's own limits winning
+    where NDM runs ahead of FHFA (loan_limits.conforming_check)."""
+    from guidebot import loan_limits
+    lim = (m["df"].attrs.get("limits") or {}).get(str(units))
+    return loan_limits.conforming_check(question, loan, units, lim)
+
+
 def is_conv(mats: list[dict]) -> bool:
     return bool(conv_mats(mats))
 
@@ -324,9 +332,12 @@ def result(raw, question: str, mats: list[dict]) -> dict:
     if not best:
         return {"eligible": False, "error": "; ".join(dict.fromkeys(why))}
     m, res = best
+    county = _county(question, raw.loan_amount, units, m)
+    if county["over"]:
+        return {"eligible": False, "error": county["lines"][0]}
     note = ", ".join(x for x in (res["tier"], res["extra"]) if x)
     return {"eligible": True, "max_ltv": res["ltv"], "cell": res["cell"], "cite": cite(m, res), "trace": [m["file"]],
-            "overlays": [f"{note}. {still_check(m, res)}"]}
+            "overlays": [f"{note}. {still_check(m, res)}"] + county["lines"][:1]}
 
 
 def answer(raw, question: str, mats: list[dict]) -> str:
@@ -353,6 +364,10 @@ def answer(raw, question: str, mats: list[dict]) -> str:
         return "\n".join([f"**Not eligible on this matrix** ({deal})", ""]
                          + [f"- {m['file']}: {res['why']}" for m, res in misses])
     m, res = max(found, key=lambda x: x[1]["ltv"])
+    county = _county(question, raw.loan_amount, units, m)
+    if county["over"]:
+        return "\n".join([f"**Not eligible: over the county's conforming loan limit** ({deal})", ""]
+                         + [f"- {line}" for line in county["lines"]])
     r = res["row"]
     lines = [f"**Max LTV/CLTV: {res['ltv']:g}%** ({res['tier']}, matrix, before the sheet's other requirements)",
              "", f"*{deal}*", "",
@@ -371,6 +386,8 @@ def answer(raw, question: str, mats: list[dict]) -> str:
         others = [n for n in notes if n not in cited] if cited else []
         if others:
             lines += ["", "**Other footnotes on the sheet**"] + [f"- {n}" for n in others]
-    lines += ["", "- County loan limits can be lower than the sheet's maximums (FHFA, high-cost areas).",
-              "", f"*{still_check(m, res)}*"]
+    lines += ["", "**County loan limit**"] + [f"- {line}" for line in county["lines"] or [
+        f"Under the conforming limit in every county (${res['limit']:,.0f} max on the sheet for this column)."
+        if res["tier"] == "Conforming" else "Name the county or ZIP to check it against FHFA's county limit."]]
+    lines += ["", f"*{still_check(m, res)}*"]
     return "\n".join(lines)

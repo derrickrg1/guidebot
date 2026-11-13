@@ -30,6 +30,12 @@ def _db():
         CREATE TABLE IF NOT EXISTS messages (chat_id TEXT NOT NULL, n INTEGER NOT NULL, role TEXT NOT NULL,
             content TEXT NOT NULL, sources TEXT NOT NULL DEFAULT '[]', ts REAL NOT NULL, PRIMARY KEY (chat_id, n));
         CREATE INDEX IF NOT EXISTS chats_by_user ON chats (email, updated);
+        CREATE TABLE IF NOT EXISTS feedback (id INTEGER PRIMARY KEY, ts REAL NOT NULL, email TEXT NOT NULL,
+            chat_id TEXT NOT NULL DEFAULT '', question TEXT NOT NULL, answer TEXT NOT NULL, note TEXT NOT NULL,
+            program TEXT NOT NULL DEFAULT '', section TEXT NOT NULL DEFAULT '', mode TEXT NOT NULL DEFAULT '');
+        CREATE TABLE IF NOT EXISTS traces (ts REAL NOT NULL, email TEXT NOT NULL, chat_id TEXT NOT NULL,
+            question TEXT NOT NULL, program TEXT NOT NULL, mode TEXT NOT NULL, model TEXT NOT NULL, secs REAL NOT NULL,
+            fallback INTEGER NOT NULL, sources TEXT NOT NULL, answer_chars INTEGER NOT NULL);
     """)
     try:
         with con:
@@ -86,3 +92,36 @@ def delete_chat(chat_id: str, email: str) -> bool:
         con.execute("DELETE FROM messages WHERE chat_id = ?", (chat_id,))
         con.execute("DELETE FROM chats WHERE id = ?", (chat_id,))
     return True
+
+
+def save_feedback(email: str, question: str, answer: str, note: str, chat_id: str = "", program: str = "",
+                  section: str = "", mode: str = "") -> int:
+    """A "This is wrong" report. tools/stress_bank.py turns each one into a test case, so a fixed mistake stays
+    fixed."""
+    with _db() as con:
+        cur = con.execute("INSERT INTO feedback (ts, email, chat_id, question, answer, note, program, section, mode) "
+                          "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                          (time.time(), email, chat_id[:64], question[:4000], answer[:40000], note[:2000],
+                           program[:200], section[:40], mode[:20]))
+        return cur.lastrowid
+
+
+def list_feedback(limit: int = 500) -> list[dict]:
+    with _db() as con:
+        return [dict(r) for r in con.execute("SELECT * FROM feedback ORDER BY ts DESC LIMIT ?", (limit,))]
+
+
+def save_trace(email: str, chat_id: str, question: str, program: str, mode: str, model: str, secs: float,
+               fallback: bool, sources: list, answer_chars: int):
+    """What each answer read and how long it took, so a bad answer can be traced back to its sources."""
+    slim = [{k: s.get(k) for k in ("file", "loc", "program", "section") if s.get(k)} for s in sources or []]
+    with _db() as con:
+        con.execute("INSERT INTO traces VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (time.time(), email, chat_id, question[:4000], program, mode, model, round(secs, 2),
+                     int(fallback), json.dumps(slim), answer_chars))
+
+
+def recent_traces(limit: int = 200) -> list[dict]:
+    with _db() as con:
+        return [{**dict(r), "sources": json.loads(r["sources"])}
+                for r in con.execute("SELECT * FROM traces ORDER BY ts DESC LIMIT ?", (limit,))]

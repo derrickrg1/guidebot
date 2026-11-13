@@ -291,8 +291,22 @@ def gov_deals():
             for i, (s, p, q) in enumerate(rows)]
 
 
+def feedback():
+    """Every "This is wrong" report (admin Feedback tab) as a case: the question as asked, in the mode, tab and program
+    it was asked in. expect.report is what the person said was wrong; stress_grade.py checks a new answer against it."""
+    try:
+        from guidebot import history
+        rows = history.list_feedback()
+    except Exception:
+        return []
+    return [{"id": f"fb-{r['id']}", "section": r["section"], "program": r["program"],
+             "mode": "deal" if r["mode"] == "scenario" else "ask", "q": r["question"],
+             "expect": {"report": r["note"], "old_answer": r["answer"]}} for r in rows]
+
+
 def bank():
-    return conv_deals() + phrasing() + nonqm_deals() + routing() + nonqm_guide() + conv_guide() + gov_guide() + gov_deals()
+    return (conv_deals() + phrasing() + nonqm_deals() + routing() + nonqm_guide() + conv_guide() + gov_guide()
+            + gov_deals() + feedback())
 
 
 if __name__ == "__main__":

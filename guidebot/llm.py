@@ -7,6 +7,7 @@ import ollama
 from guidebot import config
 
 FALLBACK_BETA = "server-side-fallback-2026-07-01"   # a declined request reruns on another Claude model
+FALLBACK_SHOWN = "*Claude is unavailable right now, so the local backup model answered. Double-check this one.*\n\n"
 
 
 def embed_docs(texts: list[str]) -> list[list[float]]:
@@ -38,8 +39,10 @@ def _anthropic():
 def _down(e: Exception) -> bool:
     """Errors where answering from the local model beats no answer: no network, bad key, rate limit, outage."""
     import anthropic
+    if isinstance(e, anthropic.BadRequestError) and "credit balance" in str(e):
+        return True   # out of API credit (2026-11-12): every answer errored instead of falling back
     return isinstance(e, (anthropic.APIConnectionError, anthropic.AuthenticationError, anthropic.RateLimitError,
-                          anthropic.InternalServerError))
+                          anthropic.InternalServerError, anthropic.PermissionDeniedError))
 
 
 def _split(messages: list[dict]) -> tuple[str | list[dict], list[dict]]:
@@ -145,6 +148,7 @@ def stream_chat(messages: list[dict], model: str = config.CHAT_MODEL):
         if started or not _down(e):
             raise
         _fallback_note(e)
+        yield FALLBACK_SHOWN
         yield from _ollama_stream(messages, config.LOCAL_MODEL)
 
 

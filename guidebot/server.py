@@ -89,6 +89,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(agency.overview())
         if path == "/admin/api/chats":
             return self._json({"chats": history.list_chats(None, limit=500)})
+        if path == "/admin/api/feedback":
+            return self._json({"feedback": history.list_feedback()})
         if path == "/admin/api/chat":
             c = history.get_chat(query.get("id", [""])[0])
             return self._json(c) if c else self._json({"error": "not found"}, 404)
@@ -166,20 +168,44 @@ class Handler(BaseHTTPRequestHandler):
                      if m.get("role") in ("user", "assistant")]
             program = body.get("program") or ""
             section = body.get("section") if body.get("section") in chat.SECTIONS else ""
+            model = _test_model(self.headers, body)
             events = chat.respond(question, turns, program, bool(body.get("mode_program")), bool(body.get("mode_scenario")),
-                                  section=section)
+                                  section=section, model=model)
             # a chat across a whole section is saved under the section's name, so reopening it lands on that tab
             self._stream(_saving(events, str(body.get("chat_id") or "")[:64], history.user(self.headers), question,
-                                 program or section, "scenario" if body.get("mode_scenario") else "guidelines"))
+                                 program or section, "scenario" if body.get("mode_scenario") else "guidelines",
+                                 model or config.CHAT_MODEL))
+        elif path == "/api/feedback":
+            note = str(body.get("note") or "").strip()
+            if not note or not str(body.get("question") or "").strip():
+                return self._json({"error": "say what's wrong"}, 400)
+            fid = history.save_feedback(history.user(self.headers), str(body["question"]), str(body.get("answer") or ""),
+                                        note, str(body.get("chat_id") or ""), str(body.get("program") or ""),
+                                        str(body.get("section") or ""), str(body.get("mode") or ""))
+            self._json({"ok": True, "id": fid})
         elif path == "/api/chats/delete":
             self._json({"ok": history.delete_chat(str(body.get("id") or ""), history.user(self.headers))})
         else:
             self._json({"error": "not found"}, 404)
 
 
-def _saving(events, chat_id, email, question, program, mode):
-    """Passes the answer's events through, then saves the finished turn to that person's chat history."""
-    text, sources = "", []
+TEST_MODELS = {"claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", config.LOCAL_MODEL}
+
+
+def _test_model(headers, body) -> str:
+    """Stress runs from this PC can pick the model ("model" in the body). Anyone through the tunnel gets the
+    server's model, whatever they send."""
+    model = str(body.get("model") or "")
+    local = history.user(headers) == "local" and admin.allowed(headers)
+    return model if local and model in TEST_MODELS else ""
+
+
+def _saving(events, chat_id, email, question, program, mode, model=""):
+    """Passes the answer's events through, then saves the finished turn to that person's chat history, and a
+    trace of every answer (stress runs included) for working out why one went wrong."""
+    import time
+    from guidebot.llm import FALLBACK_SHOWN
+    text, sources, t0 = "", [], time.time()
     for ev in events:
         if "text" in ev:
             text += ev["text"]
@@ -189,6 +215,11 @@ def _saving(events, chat_id, email, question, program, mode):
             sources = ev["sources"]
         yield ev
     history.save_turn(chat_id, email, question, text, program, mode, sources)
+    try:
+        history.save_trace(email, chat_id, question, program, mode, model, time.time() - t0,
+                           FALLBACK_SHOWN.strip() in text, sources, len(text))
+    except Exception as e:
+        sys.stderr.write(f"trace not saved: {e}\n")
 
 
 def _logged(job):
