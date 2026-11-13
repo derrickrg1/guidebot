@@ -46,8 +46,9 @@ citations vs 39), gpt-oss:20b 24, old qwen3:14b 22 (its 16K context cut the 20K-
 "84 months" for NonQM foreclosure). Deal race 56/56. Gemma QAT no faster; qwen3.8/3.6 27B dense, granite4:small-h and
 nemotron-3-nano too slow on 16 GB (147-593 s an answer) or wrong. About 70 s an answer, partly on the CPU. Kimi K3 /
 GLM / DeepSeek are cloud only on Ollama, not tried. `GUIDEBOT_MODEL` / `GUIDEBOT_EFFORT` in `.env`
-override. `nomic-embed-text` (embeddings, Ollama). The fallback answer starts with a visible "Answered by the backup model" line, once per
-answer, never naming Claude (`FALLBACK_SHOWN`); "credit balance is too low" counts as down (`_down`). On 2026-11-13 the account
+override. `nomic-embed-text` (embeddings, Ollama). When the fallback answers, the chat shows nothing about it: the server strips
+`FALLBACK_SHOWN` and sends `{"fallback": true}`, and the bottom-left label reads "Model: backup (Claude unavailable)" (not
+shown on a phone). The page shows only the progress line until an answer is done, then the whole answer at once; "credit balance is too low" counts as down (`_down`). On 2026-11-13 the account
 was out of credits, so every answer was the local model until Derrick tops it up.
 * pdfplumber, pandas, ChromaDB + BM25 (hybrid search), Streamlit UI.
 * GPU (RTX 5070 Ti, 16 GB): torch cu128 in `.venv` (Docling's install swapped it to CPU once; reinstall cu128 with
