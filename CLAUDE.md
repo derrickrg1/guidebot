@@ -48,8 +48,13 @@ nemotron-3-nano too slow on 16 GB (147-593 s an answer) or wrong. About 70 s an 
 GLM / DeepSeek are cloud only on Ollama, not tried. `GUIDEBOT_MODEL` / `GUIDEBOT_EFFORT` in `.env`
 override. `nomic-embed-text` (embeddings, Ollama). When the fallback answers, the chat shows nothing about it: the server strips
 `FALLBACK_SHOWN` and sends `{"fallback": true}`, and the bottom-left label reads "Model: backup (Claude unavailable)" (not
-shown on a phone). The page shows only the progress line until an answer is done, then the whole answer at once; "credit balance is too low" counts as down (`_down`). On 2026-11-13 the account
-was out of credits, so every answer was the local model until Derrick tops it up.
+shown on a phone). The page shows only the progress line until an answer is done, then the whole answer at once; "credit balance is too low" counts as down (`_down`).
+* Credits out (`guidebot/claude_status.py`, state in `data/claude_status.json`): the first "credit balance" error
+marks Claude off and every answer goes straight to the local model, no more failed call first. The server re-checks
+with a tiny call at 9 AM, 12 PM and 3 PM (`watch` thread), or admin's "Check now" (sidebar card). The API has no
+balance endpoint, so the card's "I added credit" takes the Console's figure and each answer's token cost counts it down
+(`PRICES`); the chat label shows that estimate to admin only, and "Model: local backup (Claude credits out)" to all.
+Out of credit since 2026-11-13.
 * pdfplumber, pandas, ChromaDB + BM25 (hybrid search), Streamlit UI.
 * GPU (RTX 5070 Ti, 16 GB): torch cu128 in `.venv` (Docling's install swapped it to CPU once; reinstall cu128 with
 `--force-reinstall --no-deps` if `torch.cuda.is_available()` is False). Reranker `guidebot/rerank.py`
@@ -103,7 +108,8 @@ messages via `--ts`; sizes inside messages are in em), chat width, program color
 an SVG grain; flat translucent answer cards; the sidebar casts a shadow over the chat; section tabs centered.
 * Admin console: `/admin` (`ui/admin.html`, `guidebot/admin.py`) replaces the Streamlit Verify page: doc
 statuses, PDF page beside editable matrix/text, re-read, approve docs and overlay rules. Only his Gmail via
-Cloudflare Access, or direct from this PC. Claude never clicks Approve. Tabs: Documents, Chats (every user's
+Cloudflare Access, or direct from this PC. Claude never clicks Approve. Documents list folds by section
+(NonQM Express/Ignite/Shared, Conventional Fannie/Freddie, FHA, VA) with a filter and "Needs you" on top. Tabs: Documents, Chats (every user's
 chats, read only), Index (Update index, admin only now), Updates (agency guide changes, below). Claude never
 clicks Mark reviewed either.
 * Agency guides (`guidebot/agency.py`, files in `agency/`, git-ignored): the general guideline under NDM's FHA,
@@ -174,7 +180,7 @@ so the bot no longer calls its own earlier citation wrong.
 
 ## Current status
 
-* 246 tests passing (48 are Hypothesis property runs). Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 250 tests passing (48 are Hypothesis property runs). Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked

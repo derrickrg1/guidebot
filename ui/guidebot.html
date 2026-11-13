@@ -527,7 +527,7 @@ async function loadPrograms() {
     const r = await fetch(API + "/api/programs");
     const data = await r.json();
     programs = data.programs;
-    MODEL_NAME = data.model; showModel(false);
+    MODEL_NAME = data.model; CLAUDE = data.claude; showModel(false);
     const who = data.user && data.user !== "local" ? data.user : "This PC";
     $("acct-name").textContent = who; $("acct-name").title = who;
     $("acct-av").textContent = who === "This PC" ? "·" : who[0];
@@ -688,11 +688,25 @@ function sourcesHtml(src) {
   }).join("") + "</details>";
 }
 // Bottom left says which model answered last; the chat itself never names it.
-let MODEL_NAME = "";
+// When Claude's credit runs out the server stops calling it and answers locally until a 9/12/3 check (or
+// admin's Check now) gets through; the label says so. The credit figure is an estimate, shown to admin only.
+let MODEL_NAME = "", CLAUDE = null;
+const nice = m => m.replace(/^claude-(\w+)-(\d+)-(\d+)$/, (_, n, a, b) => `Claude ${n[0].toUpperCase() + n.slice(1)} ${a}.${b}`);
 const showModel = backup => {
-  $("model").textContent = backup ? "Model: backup (Claude unavailable)" : "Model: " + MODEL_NAME;
-  $("model").classList.toggle("backup", backup);
+  const out = CLAUDE && CLAUDE.out;
+  let t = "Model: " + nice(MODEL_NAME);
+  if (out) t = "Model: local backup (Claude credits out)";
+  else if (backup) t = "Model: backup (Claude unavailable)";
+  else if (CLAUDE && CLAUDE.balance != null) t += ` · ~$${CLAUDE.balance.toFixed(2)} credit`;
+  $("model").textContent = t;
+  $("model").title = CLAUDE && CLAUDE.balance != null ? "Estimated: the amount entered in admin less each answer's cost" : "";
+  $("model").classList.toggle("backup", !!(backup || out));
 };
+const refreshModel = async backup => {
+  try { CLAUDE = (await (await fetch(API + "/api/status")).json()).claude; } catch (e) {}
+  showModel(backup);
+};
+setInterval(() => refreshModel($("model").classList.contains("backup") && !(CLAUDE && CLAUDE.out)), 300000);
 // Notes older saved answers carried in their text, from before the note moved bottom left.
 const OLD_NOTES = /^\*(Claude is unavailable right now, so the local backup model answered|Answered by the backup model)\. Double-check this one\.\*\s*$/gm;
 const clean = t => t.replace(OLD_NOTES, "");
@@ -725,7 +739,7 @@ async function stream(url, payload, box) {
       if (ev.status) draw();
     }
   }
-  done = true; showModel(backup); draw();
+  done = true; refreshModel(backup); draw();
   return clean(text);
 }
 // A deal asked in Guidelines mode with no program picked: the server asks which way to go.

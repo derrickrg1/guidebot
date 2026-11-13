@@ -4,7 +4,7 @@ import sys
 
 import ollama
 
-from guidebot import config
+from guidebot import claude_status, config
 
 FALLBACK_BETA = "server-side-fallback-2026-07-01"   # a declined request reruns on another Claude model
 FALLBACK_SHOWN = "*Answered by the backup model. Double-check this one.*\n\n"
@@ -70,13 +70,16 @@ def _claude_args(model: str, messages: list[dict]) -> dict:
 def _claude_stream(messages: list[dict], model: str):
     with _anthropic().beta.messages.stream(**_claude_args(model, messages)) as stream:
         yield from stream.text_stream
-        if stream.get_final_message().stop_reason == "refusal":
+        final = stream.get_final_message()
+        claude_status.spend(model, final.usage)
+        if final.stop_reason == "refusal":
             yield "\n\n*Claude declined to answer this one.*"
 
 
 def _claude_json(system: str, user: str, schema, model: str):
     args = _claude_args(model, [{"role": "system", "content": system}, {"role": "user", "content": user}])
     resp = _anthropic().beta.messages.parse(**args, output_format=schema)
+    claude_status.spend(model, resp.usage)
     if resp.parsed_output is None:
         raise ValueError(f"Claude returned no {schema.__name__} (stop reason: {resp.stop_reason})")
     return resp.parsed_output
@@ -84,6 +87,8 @@ def _claude_json(system: str, user: str, schema, model: str):
 
 def _fallback_note(e: Exception):
     sys.stderr.write(f"Claude unavailable ({type(e).__name__}: {e}); answering with {config.LOCAL_MODEL}\n")
+    if claude_status.is_credit_error(e):
+        claude_status.mark_out(str(e))   # stop calling Claude until the 9/12/3 check or admin's Check now
 
 
 # ---------- Ollama ----------
@@ -139,6 +144,10 @@ def stream_chat(messages: list[dict], model: str = config.CHAT_MODEL):
     if not _is_claude(model):
         yield from _ollama_stream(messages, model)
         return
+    if claude_status.out():
+        yield FALLBACK_SHOWN   # chat.respond turns this into the bottom-left "backup" label
+        yield from _ollama_stream(messages, config.LOCAL_MODEL)
+        return
     started = False
     try:
         for chunk in _claude_stream(messages, model):
@@ -154,8 +163,8 @@ def stream_chat(messages: list[dict], model: str = config.CHAT_MODEL):
 
 def ask_json(system: str, user: str, schema, model: str = config.CHAT_MODEL, retries: int = 2):
     """Structured output: the reply must match the pydantic schema."""
-    if not _is_claude(model):
-        return _ollama_json(system, user, schema, model, retries)
+    if not _is_claude(model) or claude_status.out():
+        return _ollama_json(system, user, schema, model if not _is_claude(model) else config.LOCAL_MODEL, retries)
     try:
         return _claude_json(system, user, schema, model)
     except Exception as e:

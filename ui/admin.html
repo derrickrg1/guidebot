@@ -28,7 +28,7 @@ html, body { margin: 0; height: 100%; }
 body { background: transparent; color: var(--ink); display: flex;
   font: 14px/1.5 Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
 aside { width: 300px; flex: none; background: var(--side); backdrop-filter: blur(18px); border-right: 1px solid var(--rule);
-  padding: 20px 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+  padding: 20px 16px; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; gap: 14px; }
 .brand { color: var(--gold); display: flex; align-items: center; gap: 12px; text-decoration: none; }
 .brand img { width: 52px; height: 52px; margin: -10px -4px -2px -6px; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.5)); }
 .brand .mark { display: block; font: 500 1.35rem/1 "Bodoni Moda", Didot, serif; letter-spacing: 0.04em; }
@@ -139,6 +139,33 @@ label.toggle { display: flex; gap: 8px; align-items: center; font-size: 0.85rem;
 details summary { cursor: pointer; color: var(--steel); font-size: 0.82rem; margin-top: 8px; }
 .src { font-size: 0.78rem; padding: 7px 10px; border: 1px solid var(--rule); border-radius: 8px; background: var(--card); }
 .src b { display: block; font-size: 0.8rem; }
+/* Documents list: folding sections, compact rows */
+.filter { width: 100%; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--rule); background: var(--card);
+  color: var(--ink); font: inherit; font-size: 0.8rem; }
+.filter:focus { outline: none; border-color: var(--accent); }
+.summary { font-size: 0.75rem; color: var(--mist); margin-top: -4px; }
+.summary .warn { color: var(--warn); } .summary .bad { color: var(--bad); }
+.sec-box { border: 1px solid var(--rule); border-radius: 10px; background: rgba(0, 0, 0, 0.18); padding: 4px 6px; }
+.sec-box.needs { border-color: rgba(226, 184, 102, 0.4); padding: 8px 6px 4px; }
+.sec-box.needs .label { color: var(--warn); margin: 0 4px 6px; display: block; }
+.sec-box summary { display: flex; align-items: center; gap: 8px; padding: 6px 4px; margin: 0; list-style: none;
+  font: 600 0.78rem Lato, "Segoe UI", Arial, sans-serif; letter-spacing: 0.14em; text-transform: uppercase; color: var(--steel); }
+.sec-box summary::-webkit-details-marker { display: none; }
+.sec-box summary::before { content: "▸"; color: var(--mist); font-size: 0.7rem; transition: transform 0.15s; }
+.sec-box[open] summary::before { transform: rotate(90deg); }
+.sec-box summary span:first-of-type { flex: 1; }
+.sec-box .count { font-size: 0.7rem; color: var(--mist); letter-spacing: 0; }
+.grp { font-size: 0.66rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--mist); margin: 8px 6px 3px; }
+.doc.slim { padding: 4px 8px; margin-bottom: 2px; border-color: transparent; background: none; font-size: 0.8rem; }
+.doc.slim:hover { background: rgba(255, 255, 255, 0.04); border-color: var(--rule); }
+.doc.slim.on { border-color: var(--accent); background: rgba(217, 102, 31, 0.08); }
+.tag { font-size: 0.62rem; padding: 0 6px; border-radius: 999px; border: 1px solid var(--rule); color: var(--warn); }
+.tag.ok { color: var(--mist); }
+.claude { margin-top: auto; flex: none; }
+.claude b .dot { display: inline-block; margin-right: 6px; vertical-align: 1px; }
+.claude > div { margin-top: 4px; font-size: 0.78rem; }
+.warn-text { color: var(--warn); }
+button.act.small { padding: 5px 12px; font-size: 0.75rem; }
 @media (max-width: 900px) {
   body { flex-direction: column; } aside { width: auto; max-height: 40vh; } .page { grid-template-columns: 1fr; }
   main { padding: 20px 16px; }
@@ -157,6 +184,7 @@ details summary { cursor: pointer; color: var(--steel); font-size: 0.82rem; marg
     <button type="button" data-tab="updates">Updates<span class="badge" id="upd-count" hidden></span></button>
   </nav>
   <div id="side"><div class="muted">Loading…</div></div>
+  <div id="claude-card" class="src claude"></div>
 </aside>
 <main id="main"></main>
 <script src="/md.js"></script>
@@ -352,23 +380,79 @@ function docDot(d) {
   return "ok";
 }
 
-const LEGEND = `<div class="legend">
-  <span><i class="dot ok"></i>Approved</span><span><i class="dot warn"></i>Needs you (not approved, changed)</span>
-  <span><i class="dot bad"></i>Approved but blocked (problems)</span></div>`;
+// Documents grouped the way the chat's tabs are: NonQM (Express / Ignite / Shared), Conventional (Fannie / Freddie),
+// FHA, VA. Each section folds; anything that needs you is listed first and opens its section.
+const FREDDIE = ["Freddie Mac", "Home Possible", "Home Possible VLIP", "HomeOne", "Refi Possible"];
+function place(program) {
+  if (program.startsWith("Conventional ")) {
+    const name = program.slice(13);
+    return ["Conventional", FREDDIE.includes(name) ? "Freddie Mac" : "Fannie Mae", name];
+  }
+  for (const s of ["FHA", "VA"]) if (program.startsWith(s + " ")) return [s, "", program.slice(s.length + 1)];
+  const [fam, ...rest] = program.split(" ");
+  if (fam === "Express" || fam === "Ignite") return ["NonQM", fam, rest.join(" ")];
+  return ["NonQM", "Shared", program.replace(/^NonQM /, "")];
+}
+const SECTION_ORDER = ["NonQM", "Conventional", "FHA", "VA"];
+const DOT_WORD = {ok: "Approved", warn: "Needs you", bad: "Blocked"};
+const openSecs = (() => { try { return JSON.parse(localStorage.getItem("asknick.admin.open") || "[]"); } catch (e) { return []; } })();
+const saveOpen = () => { try { localStorage.setItem("asknick.admin.open", JSON.stringify(openSecs)); } catch (e) {} };
+let docFilter = "";
 
-async function loadList() {
-  const r = await fetch("/admin/api/overview");
-  if (tab !== "docs") return;
+function docRow(p, d, label) {
+  const on = current && current.program === p.program && current.file === d.file;
+  return `<button class="doc slim${on ? " on" : ""}" data-program="${esc(p.program)}" data-file="${esc(d.file)}"
+      title="${esc(p.program)}: ${esc(d.file)} (${DOT_WORD[docDot(d)]})">
+    <i class="dot ${docDot(d)}"></i><span class="name">${esc(label)}</span>
+    ${d.rules ? `<span class="tag${d.rules.status === "approved" ? " ok" : ""}">rules</span>` : ""}</button>`;
+}
+
+let overview = null;
+async function loadList(cached) {
   const box = document.getElementById("side");
-  if (!r.ok) { box.innerHTML = `<div class="note bad">Admin only.</div>`; return; }
-  const {programs} = await r.json();
-  box.innerHTML = LEGEND + programs.map(p => `<div class="prog"><span class="label">${esc(p.program)}</span>` +
-    p.docs.map(d => `<button class="doc${current && current.program === p.program && current.file === d.file ? " on" : ""}"
-      data-program="${esc(p.program)}" data-file="${esc(d.file)}" title="${esc(d.file)}">
-      <i class="dot ${docDot(d)}"></i><span class="name">${esc(d.file)}</span>
-      ${d.rules ? `<span class="muted">${d.rules.status === "approved" ? "rules ✓" : "rules"}</span>` : ""}</button>`).join("") +
-    `</div>`).join("");
+  if (!cached || !overview) {
+    const r = await fetch("/admin/api/overview");
+    if (tab !== "docs") return;
+    if (!r.ok) { box.innerHTML = `<div class="note bad">Admin only.</div>`; return; }
+    overview = (await r.json()).programs;
+  }
+  const programs = overview;
+  const rows = [];   // one per document: section, group, label
+  programs.forEach(p => {
+    const [sec, group, name] = place(p.program);
+    p.docs.forEach(d => rows.push({p, d, sec, group,
+      label: p.docs.length > 1 ? `${name} · ${d.file.replace(/\.pdf$/i, "").replace(/[-_]/g, " ")}` : name}));
+  });
+  const f = docFilter.toLowerCase();
+  const shown = rows.filter(x => !f || `${x.p.program} ${x.d.file}`.toLowerCase().includes(f));
+  const need = shown.filter(x => docDot(x.d) !== "ok");
+  const counts = {ok: 0, warn: 0, bad: 0};
+  rows.forEach(x => counts[docDot(x.d)]++);
+  let html = `<input id="doc-filter" class="filter" placeholder="Filter documents" value="${esc(docFilter)}">
+    <div class="summary">${counts.ok} approved${counts.warn ? ` · <b class="warn">${counts.warn} need you</b>` : ""}${counts.bad ? ` · <b class="bad">${counts.bad} blocked</b>` : ""}</div>`;
+  if (need.length) html += `<div class="sec-box needs"><div class="label">Needs you</div>${need.map(x => docRow(x.p, x.d, `${x.sec} · ${x.label}`)).join("")}</div>`;
+  for (const sec of SECTION_ORDER) {
+    const list = shown.filter(x => x.sec === sec);
+    if (!list.length) continue;
+    const bad = list.filter(x => docDot(x.d) !== "ok").length;
+    const isOpen = f || openSecs.includes(sec) || list.some(x => current && current.program === x.p.program);
+    const groups = [...new Set(list.map(x => x.group))];
+    html += `<details class="sec-box" data-sec="${sec}"${isOpen ? " open" : ""}><summary><span>${sec}</span>
+        <span class="count">${list.length}</span>${bad ? `<i class="dot warn"></i>` : `<i class="dot ok"></i>`}</summary>` +
+      groups.map(g => (g ? `<div class="grp">${esc(g)}</div>` : "") +
+        list.filter(x => x.group === g).map(x => docRow(x.p, x.d, x.label)).join("")).join("") + `</details>`;
+  }
+  box.innerHTML = html;
   box.querySelectorAll(".doc").forEach(b => b.onclick = () => openDoc(b.dataset.program, b.dataset.file, false));
+  box.querySelectorAll("details.sec-box").forEach(d => d.ontoggle = () => {
+    const i = openSecs.indexOf(d.dataset.sec);
+    if (d.open && i < 0) openSecs.push(d.dataset.sec);
+    if (!d.open && i >= 0) openSecs.splice(i, 1);
+    saveOpen();
+  });
+  const input = document.getElementById("doc-filter");
+  input.oninput = () => { docFilter = input.value; loadList(true).then(() => {
+    const again = document.getElementById("doc-filter"); again.focus(); again.setSelectionRange(docFilter.length, docFilter.length); }); };
 }
 
 async function openDoc(program, file, fresh) {
@@ -487,8 +571,42 @@ async function approveRules() {
   openDoc(d.program, d.file, false);
 }
 
+// ---------- Claude credit: out means every answer comes from the local model until a check gets through ----------
+const hour = t => new Date(t * 1000).toLocaleString([], {weekday: "short", hour: "numeric", minute: "2-digit"});
+async function claudeCard() {
+  const box = document.getElementById("claude-card");
+  const r = await fetch("/admin/api/claude");
+  if (!r.ok) { box.hidden = true; return; }
+  const c = await r.json();
+  const name = c.model.replace(/^claude-(\w+)-(\d+)-(\d+)$/, (_, n, a, b) => `Claude ${n[0].toUpperCase() + n.slice(1)} ${a}.${b}`);
+  box.innerHTML = `<b><i class="dot ${c.out ? "warn" : "ok"}"></i>${esc(name)}</b>
+    ${c.out ? `<div class="warn-text">Credits out since ${esc(hour(c.since))}. Answers come from the local model (${esc(c.local)}).</div>
+      <div class="muted">Next automatic check ${esc(hour(c.next_check))} (checks 9 AM, 12 PM, 3 PM).</div>`
+      : `<div>${c.balance != null ? `About <b>$${c.balance.toFixed(2)}</b> credit left` : "Credit left: not set"}</div>`}
+    <div class="muted">${c.balance != null || c.spent ? `Estimate: amount you entered less each answer's cost ($${c.spent.toFixed(2)} spent so far).` : "Enter what you added so the estimate can count down."}
+      ${c.last_check ? `<br>Last check ${esc(hour(c.last_check))}: ${esc(c.last_result)}` : ""}</div>
+    <div class="row" style="margin-top:8px"><button class="act small" id="claude-check">Check now</button>
+      <button class="act ghost small" id="claude-added">I added credit</button></div>`;
+  document.getElementById("claude-check").onclick = async e => {
+    e.target.disabled = true; e.target.textContent = "Checking…";
+    const res = await post("/admin/api/claude/check", {});
+    if (res.error) alert(res.error);
+    claudeCard();
+  };
+  document.getElementById("claude-added").onclick = async () => {
+    const v = prompt("How much credit does the Claude Console show now? (dollars)");
+    if (v === null) return;
+    const amount = parseFloat(v.replace(/[$,\s]/g, ""));
+    if (!(amount >= 0)) return alert("That isn't a dollar amount.");
+    await post("/admin/api/claude/balance", {amount});
+    await post("/admin/api/claude/check", {});   // and turn Claude back on if the credit went through
+    claudeCard();
+  };
+}
+
 showTab("docs");
 agencyState();
+claudeCard();
 </script>
 </body>
 </html>

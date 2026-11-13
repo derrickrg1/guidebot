@@ -5,11 +5,12 @@ Standard library only. Listens on 127.0.0.1, so nothing outside this PC can reac
 import json
 import re
 import sys
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from guidebot import admin, agency, chat, config, history
+from guidebot import admin, agency, chat, claude_status, config, history
 
 PORT = 8600
 PAGE = config.ROOT / "ui" / "guidebot.html"
@@ -91,6 +92,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"chats": history.list_chats(None, limit=500)})
         if path == "/admin/api/feedback":
             return self._json({"feedback": history.list_feedback()})
+        if path == "/admin/api/claude":
+            return self._json(claude_status.summary())
         if path == "/admin/api/chat":
             c = history.get_chat(query.get("id", [""])[0])
             return self._json(c) if c else self._json({"error": "not found"}, 404)
@@ -121,7 +124,9 @@ class Handler(BaseHTTPRequestHandler):
             self._json(c) if c else self._json({"error": "not found"}, 404)
         elif path == "/api/programs":
             self._json({"programs": chat.programs_info(), "model": config.CHAT_MODEL,
-                        "user": history.user(self.headers)})   # shown on the settings button
+                        "user": history.user(self.headers), "claude": _claude(self.headers)})   # shown on the settings button
+        elif path == "/api/status":
+            self._json({"model": config.CHAT_MODEL, "claude": _claude(self.headers)})   # bottom-left label
         elif path.startswith("/pdf/"):
             pdf = chat.find_pdf(Path(path[5:]).name)
             if pdf:
@@ -156,6 +161,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._stream(_reindex())
             if path == "/admin/api/agency/check":
                 return self._stream(_agency_check())
+            if path == "/admin/api/claude/check":
+                return self._json(claude_status.check())
+            if path == "/admin/api/claude/balance":
+                try:
+                    return self._json(claude_status.set_balance(float(body.get("amount"))))
+                except (TypeError, ValueError):
+                    return self._json({"error": "amount must be a number"}, 400)
             if path == "/admin/api/agency/reviewed":
                 return self._json(agency.mark_reviewed(str(body.get("id") or "")))
             return self._json({"error": "not found"}, 404)
@@ -263,8 +275,17 @@ def _agency_check():
     yield {"replace": "\n".join(f"- {line}" for line in log)}
 
 
+def _claude(headers) -> dict | None:
+    """Claude on or off for the chat page's label; the balance estimate only for admin."""
+    if not config.CHAT_MODEL.startswith("claude"):
+        return None
+    s = claude_status.summary()
+    return {"out": s["out"], "local": s["local"], **({"balance": s["balance"]} if admin.allowed(headers) else {})}
+
+
 def main():
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    threading.Thread(target=claude_status.watch, daemon=True).start()   # 9 AM, 12 PM, 3 PM: Claude back yet?
     agency.start_scheduler(on_index=chat.reset_retriever, log=lambda m: print(m, flush=True))
     print(f"Guidebot running at http://localhost:{PORT}  (Ctrl+C to stop)")
     try:
