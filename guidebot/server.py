@@ -204,9 +204,9 @@ def _saving(events, chat_id, email, question, program, mode, model=""):
     """Passes the answer's events through, then saves the finished turn to that person's chat history, and a
     trace of every answer (stress runs included) for working out why one went wrong."""
     import time
-    from guidebot.llm import FALLBACK_SHOWN
-    text, sources, t0 = "", [], time.time()
+    text, sources, t0, fallback = "", [], time.time(), False
     for ev in events:
+        fallback = fallback or bool(ev.get("fallback"))
         if "text" in ev:
             text += ev["text"]
         if "replace" in ev:
@@ -217,7 +217,7 @@ def _saving(events, chat_id, email, question, program, mode, model=""):
     history.save_turn(chat_id, email, question, text, program, mode, sources)
     try:
         history.save_trace(email, chat_id, question, program, mode, model, time.time() - t0,
-                           FALLBACK_SHOWN.strip() in text, sources, len(text))
+                           fallback, sources, len(text))
     except Exception as e:
         sys.stderr.write(f"trace not saved: {e}\n")
 

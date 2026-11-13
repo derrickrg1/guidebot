@@ -127,6 +127,7 @@ select option { background: #131c1e; }
 .btn:hover { border-color: var(--gold); }
 .btn:disabled { opacity: 0.5; cursor: default; }
 .foot { margin-top: auto; font-size: 0.7rem; color: var(--mist); display: flex; flex-direction: column; gap: 8px; }
+#model.backup { color: #e0a060; }
 /* Account row, bottom left like Claude's: who you are plus the settings menu (text size, width, colors). */
 .acct { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 1px solid var(--rule);
   border-radius: 10px; background: rgba(255, 255, 255, 0.03); color: var(--ink); cursor: pointer; text-align: left;
@@ -526,7 +527,7 @@ async function loadPrograms() {
     const r = await fetch(API + "/api/programs");
     const data = await r.json();
     programs = data.programs;
-    $("model").textContent = "Model: " + data.model;
+    MODEL_NAME = data.model; showModel(false);
     const who = data.user && data.user !== "local" ? data.user : "This PC";
     $("acct-name").textContent = who; $("acct-name").title = who;
     $("acct-av").textContent = who === "This PC" ? "·" : who[0];
@@ -686,11 +687,22 @@ function sourcesHtml(src) {
     return `<div class="srcitem">${head}${link}${body ? `<blockquote>${esc(body)}${s.text.length >= 600 ? "…" : ""}</blockquote>` : ""}</div>`;
   }).join("") + "</details>";
 }
+// Bottom left says which model answered last; the chat itself never names it.
+let MODEL_NAME = "";
+const showModel = backup => {
+  $("model").textContent = backup ? "Model: backup (Claude unavailable)" : "Model: " + MODEL_NAME;
+  $("model").classList.toggle("backup", backup);
+};
+// Notes older saved answers carried in their text, from before the note moved bottom left.
+const OLD_NOTES = /^\*(Claude is unavailable right now, so the local backup model answered|Answered by the backup model)\. Double-check this one\.\*\s*$/gm;
+const clean = t => t.replace(OLD_NOTES, "");
 async function stream(url, payload, box) {
-  let text = "", status = "", sources = [], choices = [], buf = "";
+  let text = "", status = "Thinking…", sources = [], choices = [], buf = "", done = false, backup = false;
+  // Only the progress line shows while the answer is written; the whole answer appears at once when it's done.
   const draw = () => {
-    box.innerHTML = `<div class="md">${md(text)}</div>` + (status ? `<div class="status">${esc(status)}</div>` : "")
-      + (sources.length ? sourcesHtml(sources) : "") + choicesHtml(choices, payload.question);
+    box.innerHTML = done
+      ? `<div class="md">${md(clean(text))}</div>` + (sources.length ? sourcesHtml(sources) : "") + choicesHtml(choices, payload.question)
+      : `<div class="status">${esc(status)}</div>`;
     $("log").scrollTop = $("log").scrollHeight;
   };
   const r = await fetch(API + url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -703,17 +715,18 @@ async function stream(url, payload, box) {
     let nl;
     while ((nl = buf.indexOf("\n")) >= 0) {
       const ev = JSON.parse(buf.slice(0, nl)); buf = buf.slice(nl + 1);
-      if (ev.text !== undefined) { text += ev.text; status = ""; }
-      if (ev.replace !== undefined) { text = ev.replace; status = ""; }
-      if (ev.status !== undefined) status = ev.status;
+      if (ev.text !== undefined) text += ev.text;
+      if (ev.replace !== undefined) text = ev.replace;
+      if (ev.status) status = ev.status;
       if (ev.sources) sources = ev.sources;
       if (ev.choices) choices = ev.choices;
+      if (ev.fallback) backup = true;
       if (ev.error) throw new Error(ev.error);
-      draw();
+      if (ev.status) draw();
     }
   }
-  status = ""; draw();
-  return text;
+  done = true; showModel(backup); draw();
+  return clean(text);
 }
 // A deal asked in Guidelines mode with no program picked: the server asks which way to go.
 const CHOICES = { pick: "Pick a program", all: "Review all" };
@@ -798,8 +811,8 @@ async function openChat(id) {
   let asked = "";
   for (const m of c.messages) {
     if (m.role === "user") { asked = m.content; addMsg("user", esc(m.content)); }
-    else addWrong(addMsg("bot", `<div class="md">${md(m.content)}</div>` + (m.sources.length ? sourcesHtml(m.sources) : "")),
-                  asked, m.content);
+    else addWrong(addMsg("bot", `<div class="md">${md(clean(m.content))}</div>` + (m.sources.length ? sourcesHtml(m.sources) : "")),
+                  asked, clean(m.content));
   }
   renderSidebar();
   loadChats();

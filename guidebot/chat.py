@@ -274,8 +274,8 @@ def _agency_note(answer: str, hits: list[dict]) -> tuple[str, list[dict]]:
         rec = agency.info(h["file"])
         if rec and not rec.get("reviewed"):
             pending[rec.get("title") or h["file"]] = rec.get("downloaded", "")
-    note = ("\n\n_" + "; ".join(f"{t} was updated here {d}" for t, d in pending.items())
-            + (". It hasn't" if len(pending) == 1 else ". They haven't") + " been reviewed yet._") if pending else ""
+    note = ("\n\n*" + "; ".join(f"{t} was updated here {d}" for t, d in pending.items())
+            + (". It hasn't" if len(pending) == 1 else ". They haven't") + " been reviewed yet.*") if pending else ""
     return note, cited
 
 
@@ -422,15 +422,20 @@ def named_programs(question: str, programs: list[str]) -> list[str]:
 
 def respond(question: str, history: list[dict], choice: str = "",
             mode_program: bool = False, mode_scenario: bool = False, section: str = "", model: str = ""):
-    """The answer's events. The backup model's note shows once, not once per program in a side by side answer."""
+    """The answer's events. When the backup model answered, its note comes out of the answer text and goes out
+    once as {"fallback": True}: the page shows it bottom left, never in the chat (Derrick, 2026-11-13)."""
     from guidebot.llm import FALLBACK_SHOWN
     noted = False
     for ev in _respond(question, history, choice, mode_program, mode_scenario, section, model):
-        if FALLBACK_SHOWN in ev.get("text", ""):
-            if noted:
-                ev = {**ev, "text": ev["text"].replace(FALLBACK_SHOWN, "")}
+        hit = False
+        for key in ("text", "replace"):
+            if FALLBACK_SHOWN in ev.get(key, ""):
+                ev, hit = {**ev, key: ev[key].replace(FALLBACK_SHOWN, "")}, True
+        if hit and not noted:
             noted = True
-        yield ev
+            yield {"fallback": True}
+        if ev.get("text") != "" or len(ev) > 1:
+            yield ev
 
 
 def _respond(question: str, history: list[dict], choice: str = "",
