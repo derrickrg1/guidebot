@@ -322,6 +322,18 @@ def _broad_answer(question, history, all_programs, model, section=""):
     return answer, hits + gov
 
 
+def named_programs(question: str, programs: list[str]) -> list[str]:
+    """Programs the question names, spaces and hyphens ignored ("Home Ready" is HomeReady). A name inside a
+    longer one that also matched gives way (Home Possible to Home Possible VLIP, Express DSCR to Ignite Express
+    DSCR). FHA and VA are left out: "VA cash-out" is a loan purpose too, and those tabs run every sheet anyway."""
+    flat = lambda t: re.sub(r"[\s\-_]+", "", t.lower())
+    q = flat(question)
+    hits = {p: flat(re.sub(r"^Conventional ", "", p)) for p in programs
+            if not (SECTIONS["FHA"](p) or SECTIONS["VA"](p))}
+    hits = {p: n for p, n in hits.items() if len(n) > 3 and n in q}
+    return [p for p, n in hits.items() if not any(n != o and n in o for o in hits.values())]
+
+
 def respond(question: str, history: list[dict], choice: str = "",
             mode_program: bool = False, mode_scenario: bool = False, section: str = ""):
     model = config.CHAT_MODEL
@@ -342,6 +354,13 @@ def respond(question: str, history: list[dict], choice: str = "",
         yield {"replace": f"No {section} programs are loaded yet."}
         return
 
+    # "Freddie Mac: 700 FICO, $1.4M purchase..." with All picked: the deal runs on the program it names.
+    named = named_programs(asked, user_programs) if not choice and looks_like_deal(asked, history) else []
+    if len(named) == 1:
+        choice = named[0]
+    elif named:
+        members = named
+
     docs = program_docs(choice, all_programs)[0] if choice and not members else []
     # FHA and VA are one program per sheet, but their eligibility rows are all read by gov_matrix: with none
     # picked, a deal runs against every sheet in the tab together.
@@ -356,7 +375,7 @@ def respond(question: str, history: list[dict], choice: str = "",
     deal = looks_like_deal(asked, history)
     skipped = ""
 
-    if deal and not mode_scenario and not choice:
+    if deal and not mode_scenario and not choice and not named:
         # Guidelines mode, no program picked: ask before running every matrix (Derrick, 2026-11-12)
         where = f"all {section} programs" if section else "all programs"
         yield {"replace": f"That looks like a specific deal. Pick a program for its matrix, or review {where} "

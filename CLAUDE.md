@@ -19,7 +19,9 @@ Python does the lookup and math (`matrix\_lookup.py`).
 * LTV numbers are blocked for any document not approved on the Verify Documents page.
 * A number for a specific deal only comes from the matrix lookup (`looks_like_deal` routes it there whatever
 the toggles say). In Guidelines mode with no program picked, a deal gets "Pick a program" / "Review all"
-buttons instead (`choices` event; Review all resends it in Scenario mode). A program whose overlay rules aren't approved stops at the matrix cell, no final number.
+buttons instead (`choices` event; Review all resends it in Scenario mode). A deal that names a program
+("Freddie Mac: 700 FICO...") runs on that one with All picked; two named are compared (`chat.named_programs`,
+not FHA/VA). A program whose overlay rules aren't approved stops at the matrix cell, no final number.
 * Chat runs on the Claude API (Derrick chose this 2026-11-12, replacing "Ollama only"). Questions and guideline
 text go to Anthropic; embeddings and the qwen3 fallback stay local. Otherwise free/open tools only.
 * Sandbox phase on his personal machine and personal Anthropic account. Real borrower data never goes in here.
@@ -126,7 +128,7 @@ so the bot no longer calls its own earlier citation wrong.
 
 ## Current status
 
-* 157 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 158 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked

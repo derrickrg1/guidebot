@@ -317,3 +317,22 @@ def test_each_conventional_program_gets_its_own_agency_guide():
     assert chat.agency_folder("Conventional Home Possible") == "Conventional/Freddie Mac"
     assert chat.agency_folder("Conventional HomeReady") == "Conventional/Fannie Mae"
     assert chat.agency_folder("FHA Standard") == ""
+
+
+def test_deal_runs_on_the_program_it_names(monkeypatch):
+    """All programs picked, but the question says "Freddie Mac:": only Freddie Mac's matrix is read."""
+    progs = {"Conventional Fannie Mae": [], "Conventional Freddie Mac": [], "Conventional Home Possible": [],
+             "Conventional Home Possible VLIP": []}
+    monkeypatch.setattr(chat.library, "programs", lambda: progs)
+    monkeypatch.setattr(chat, "program_docs", lambda c, a: ([{"status": "verified", "prog": c}], []))
+    seen = []
+    monkeypatch.setattr(chat.library, "matrices", lambda d: seen.append(d[0]["prog"]) or [])
+    events = list(chat.respond("Freddie Mac: 700 FICO, $1.4M purchase, primary, triplex", [], "",
+                               mode_scenario=True, section="Conventional"))
+    assert seen == ["Conventional Freddie Mac"] and "no LTV table" in events[-1]["replace"]
+    assert chat.named_programs("home possible vlip, 700 FICO", list(progs)) == ["Conventional Home Possible VLIP"]
+    # two named: just those two side by side, even in Guidelines mode
+    monkeypatch.setattr(chat, "_compare", lambda q, h, progs, *a: "compared " + ", ".join(progs))
+    events = list(chat.respond("Fannie Mae vs Freddie Mac, 700 FICO, $500k purchase, primary", [], "",
+                               section="Conventional"))
+    assert events[-1]["replace"] == "compared Conventional Fannie Mae, Conventional Freddie Mac"
