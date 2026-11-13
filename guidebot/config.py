@@ -24,14 +24,18 @@ _load_env(ROOT / ".env")
 
 # Chat runs on Claude when an API key is set, else on the local model. GUIDEBOT_MODEL in .env overrides both.
 # Either way Python does every lookup and all the math; the model only reads questions and guidelines.
-LOCAL_MODEL = "qwen3:14b"
+# Backup when Claude is down: won the 2026-11-13 race (tools/backup_race.py, data/stress/backup.md) on 37 guideline
+# questions, 33 right vs qwen3:14b's 22, fewest uncited numbers. Section-wide prompts run 20K-41K tokens, so it gets
+# 64K of context (qwen3:14b had 16K and answered from a cut-off prompt).
+LOCAL_MODEL = "gemma4:26b"
+LOCAL_CTX = 65536
 CLAUDE_MODEL = "claude-sonnet-5-5"   # 22/22 in the race, same as Opus, faster and cheaper
 CLAUDE_EFFORT = os.environ.get("GUIDEBOT_EFFORT", "medium")
 CHAT_MODEL = os.environ.get("GUIDEBOT_MODEL") or (CLAUDE_MODEL if os.environ.get("ANTHROPIC_API_KEY") else LOCAL_MODEL)
 EMBED_MODEL = "nomic-embed-text"
 EMBED_DOC_PREFIX = "search_document: "    # nomic needs these, set both to "" for other embed models
 EMBED_QUERY_PREFIX = "search_query: "
-CHAT_OPTIONS = {"temperature": 0.1, "num_ctx": 16384}
+CHAT_OPTIONS = {"temperature": 0.1, "num_ctx": LOCAL_CTX}
 RERANK = os.environ.get("GUIDEBOT_RERANK", "1") != "0"   # guidebot/rerank.py on the GPU; off when torch isn't there
 
 CHUNK_CHARS = 1200

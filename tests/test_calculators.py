@@ -168,3 +168,13 @@ def test_python_fills_numbers_the_model_dropped(q, want):
 def test_missing_numbers_get_asked_for_not_guessed():
     out = calc_chat._dscr(calc_chat.CalcInputs(kind="dscr", monthly_rent=3000))
     assert "loan amount" in out and "note rate" in out and "DSCR:" not in out
+
+
+def test_model_misreads_get_corrected_from_the_text(monkeypatch):
+    # gemma4:26b (2026-11-13) said interest only and turned $350/month taxes into $4,200
+    bad = calc_chat.CalcInputs(kind="dscr", monthly_rent=3200, loan_amount=400000, interest_only=True, taxes=4200,
+                               insurance=1440)
+    monkeypatch.setattr(calc_chat, "ask_json", lambda *a, **k: bad)
+    out = calc_chat.answer("DSCR on $3,200 monthly rent, $400,000 loan at 7.5%, taxes $350 and insurance $120 a month?",
+                           "x")
+    assert out.startswith("**DSCR: 0.98**") and "Interest only" not in out

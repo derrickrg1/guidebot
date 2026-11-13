@@ -32,17 +32,23 @@ approved grids in Python (rows that fit the stated occupancy/purpose/units/DSCR,
 matching sheet footnotes first). It used to dead-end in "switch to Scenario mode". With no table to show (FHA/VA
 today) the guideline answer runs as before.
 * Chat runs on the Claude API (Derrick chose this 2026-11-12, replacing "Ollama only"). Questions and guideline
-text go to Anthropic; embeddings and the qwen3 fallback stay local. Otherwise free/open tools only.
+text go to Anthropic; embeddings and the local fallback stay local. Otherwise free/open tools only.
 * Sandbox phase on his personal machine and personal Anthropic account. Real borrower data never goes in here.
 
 ## Stack
 
 * Models (`guidebot/llm.py`, picked in `config.py`): `claude-sonnet-5-5` (Sonnet, Haiku and Opus all scored 22/22 in the race; Sonnet was fastest) when `ANTHROPIC_API_KEY` is in `.env`
-(git-ignored; key lives in the AskNick workspace of his Claude Console, 90-day expiry), else `qwen3:14b`.
-If Claude is down or the key is bad, answers fall back to qwen3. `GUIDEBOT_MODEL` / `GUIDEBOT_EFFORT` in `.env`
+(git-ignored; key lives in the AskNick workspace of his Claude Console, 90-day expiry), else `gemma4:26b`.
+If Claude is down or the key is bad, answers fall back to `gemma4:26b` at 64K context (`LOCAL_MODEL`, `LOCAL_CTX`).
+Picked 2026-11-13 by `tools/backup_race.py` (answer keys from Sonnet's checked run in `tools/backup_keys.py`, report
+`data/stress/backup.md`): on 37 guideline questions gemma4 33 right, qwen3.6:35b-a3b 33 (but 71 dead/ungrounded
+citations vs 39), gpt-oss:20b 24, old qwen3:14b 22 (its 16K context cut the 20K-41K section-wide prompts; it said
+"84 months" for NonQM foreclosure). Deal race 56/56. Gemma QAT no faster; qwen3.8/3.6 27B dense, granite4:small-h and
+nemotron-3-nano too slow on 16 GB (147-593 s an answer) or wrong. About 70 s an answer, partly on the CPU. Kimi K3 /
+GLM / DeepSeek are cloud only on Ollama, not tried. `GUIDEBOT_MODEL` / `GUIDEBOT_EFFORT` in `.env`
 override. `nomic-embed-text` (embeddings, Ollama). The fallback answer starts with a visible "Claude is unavailable
 right now" line (`FALLBACK_SHOWN`); "credit balance is too low" counts as down (`_down`). On 2026-11-13 the account
-was out of credits, so every answer was qwen3 until Derrick tops it up.
+was out of credits, so every answer was the local model until Derrick tops it up.
 * pdfplumber, pandas, ChromaDB + BM25 (hybrid search), Streamlit UI.
 * GPU (RTX 5070 Ti, 16 GB): torch cu128 in `.venv` (Docling's install swapped it to CPU once; reinstall cu128 with
 `--force-reinstall --no-deps` if `torch.cuda.is_available()` is False). Reranker `guidebot/rerank.py`

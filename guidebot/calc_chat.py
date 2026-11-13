@@ -141,7 +141,7 @@ def _fill(inp: CalcInputs, text: str) -> CalcInputs:
         data["years"] = float(m[1])
     if data["buydown"] is None and (m := re.search(r"\b(3-2-1|2-1|1-1|1-0)\b", text)):
         data["buydown"] = m[1]
-    data["interest_only"] = data["interest_only"] or bool(re.search(r"interest[- ]only|\bI/?O\b", text))
+    data["interest_only"] = bool(re.search(r"interest[- ]only|\bI/?O\b", text))   # gemma4 said IO when nobody did
     return CalcInputs(**data)
 
 
@@ -283,6 +283,6 @@ def answer(question: str, model: str) -> str | None:
         read = ask_json(SYSTEM, f"Question: {question}", CalcInputs, model)
     except Exception:
         read = CalcInputs(kind=kind)
-    inp = _checked(_fill(read, question), question)
+    inp = _checked(_fill(_checked(read, question), question), question)   # a number it changed gets read again from the text
     return {"dscr": lambda: _dscr(inp), "buydown": lambda: _buydown(inp),
             "va_irrrl": lambda: _irrrl(inp, question), "fha_streamline": lambda: _streamline(inp, question)}[kind]()
