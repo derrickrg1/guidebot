@@ -570,6 +570,21 @@ def _respond(question: str, history: list[dict], choice: str = "",
     if mode_program and docs and not answer:
         answer, hits = yield from _program_answer(question, history, choice, docs, model)
 
+    # "Are non-warrantable condos allowed on Ignite Bank Statements?" with no program picked read all 10 NonQM
+    # sheets (2026-11-13). A guideline question naming its programs answers from those, each under its heading.
+    named = named_programs(asked, user_programs) if not answer and not choice and not deal else []
+    if 1 <= len(named) <= 3:
+        parts = []
+        for i, prog in enumerate(named):
+            head = ("\n\n" if i else "") + f"## {prog}\n\n" if len(named) > 1 else ""
+            if head:
+                yield {"text": head}
+            ask = f"{question}\n\n(Answer for {prog}.)" if len(named) > 1 else question
+            part, found = yield from _program_answer(ask, history, prog, program_docs(prog, all_programs)[0], model)
+            parts.append(head + part)
+            hits += found
+        answer = "".join(parts)
+
     if not answer and not choice:
         answer, hits = yield from _broad_answer(question, history, all_programs, model, section)
 

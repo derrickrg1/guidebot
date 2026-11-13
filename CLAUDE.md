@@ -21,7 +21,7 @@ Python does the lookup and math (`matrix\_lookup.py`).
 the toggles say). In Guidelines mode with no program picked, a deal gets "Pick a program" / "Review all"
 buttons instead (`choices` event; Review all resends it in Scenario mode). A deal that names a program
 ("Freddie Mac: 700 FICO...") runs on that one with All picked; two named are compared (`chat.named_programs`,
-not FHA/VA). With an Express + Ignite pair picked, a question naming one of the two answers that one only. A program whose overlay rules aren't approved stops at the matrix cell, no final number.
+not FHA/VA). With an Express + Ignite pair picked, a question naming one of the two answers that one only. A guideline question with no program picked that names 1-3 programs ("...on Ignite Bank Statements?") answers from those only, each under its heading; it used to read every sheet in the tab. A program whose overlay rules aren't approved stops at the matrix cell, no final number.
 * A rule question that names a purpose ("Are temporary buydowns allowed on a cash-out refi?") is not a deal
 (`asks_rule`), even in Scenario mode. A message stating 3 of FICO/amount/occupancy/purpose is a new deal and
 borrows nothing from history (`said_scenario`, `fresh`). The deal reader tells loan from price/value
@@ -180,7 +180,7 @@ so the bot no longer calls its own earlier citation wrong.
 
 ## Current status
 
-* 250 tests passing (48 are Hypothesis property runs). Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 253 tests passing (48 are Hypothesis property runs). Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked
