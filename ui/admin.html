@@ -166,6 +166,19 @@ details summary { cursor: pointer; color: var(--steel); font-size: 0.82rem; marg
 .claude > div { margin-top: 4px; font-size: 0.78rem; }
 .warn-text { color: var(--warn); }
 button.act.small { padding: 5px 12px; font-size: 0.75rem; }
+/* Overview */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.tile { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px 16px; border-radius: 12px;
+  border: 1px solid var(--rule); background: var(--card); color: var(--ink); font: inherit; }
+.tile[data-go] { cursor: pointer; } .tile[data-go]:hover { border-color: var(--accent); }
+.tile .big { font: 700 1.6rem/1.1 Lato, "Segoe UI", Arial, sans-serif; }
+.tile.ok .big { color: var(--ok); } .tile.warn .big { color: var(--warn); }
+.board { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; align-items: start; }
+.board .panel { margin-bottom: 0; padding: 12px 10px; }
+.board h2 { padding: 0 6px; }
+.home-btn { align-self: flex-start; }
+.fb-line { padding: 8px 0; border-top: 1px solid var(--rule); font-size: 0.85rem; }
+.fb-line:first-of-type { border-top: 0; }
 @media (max-width: 900px) {
   body { flex-direction: column; } aside { width: auto; max-height: 40vh; } .page { grid-template-columns: 1fr; }
   main { padding: 20px 16px; }
@@ -201,7 +214,7 @@ function showTab(t) {
   tab = t;
   document.querySelectorAll(".tabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === t));
   document.getElementById("side").innerHTML = `<div class="muted">Loading…</div>`;
-  if (t === "docs") { current ? render() : setMain(`<div class="empty">${EMPTY.docs}</div>`); loadList(); }
+  if (t === "docs") { current ? render() : home(); loadList(); }
   if (t === "chats") { chatOpen = null; setMain(`<div class="empty">${EMPTY.chats}</div>`); loadChats(); }
   if (t === "index") indexTab();
   if (t === "updates") updatesTab();
@@ -428,7 +441,8 @@ async function loadList(cached) {
   const need = shown.filter(x => docDot(x.d) !== "ok");
   const counts = {ok: 0, warn: 0, bad: 0};
   rows.forEach(x => counts[docDot(x.d)]++);
-  let html = `<input id="doc-filter" class="filter" placeholder="Filter documents" value="${esc(docFilter)}">
+  let html = `${current ? `<button class="act ghost small home-btn" id="go-home">← Overview</button>` : ""}
+    <input id="doc-filter" class="filter" placeholder="Filter documents" value="${esc(docFilter)}">
     <div class="summary">${counts.ok} approved${counts.warn ? ` · <b class="warn">${counts.warn} need you</b>` : ""}${counts.bad ? ` · <b class="bad">${counts.bad} blocked</b>` : ""}</div>`;
   if (need.length) html += `<div class="sec-box needs"><div class="label">Needs you</div>${need.map(x => docRow(x.p, x.d, `${x.sec} · ${x.label}`)).join("")}</div>`;
   for (const sec of SECTION_ORDER) {
@@ -444,6 +458,8 @@ async function loadList(cached) {
   }
   box.innerHTML = html;
   box.querySelectorAll(".doc").forEach(b => b.onclick = () => openDoc(b.dataset.program, b.dataset.file, false));
+  const back = document.getElementById("go-home");
+  if (back) back.onclick = () => { current = null; home(); loadList(true); };
   box.querySelectorAll("details.sec-box").forEach(d => d.ontoggle = () => {
     const i = openSecs.indexOf(d.dataset.sec);
     if (d.open && i < 0) openSecs.push(d.dataset.sec);
@@ -453,6 +469,47 @@ async function loadList(cached) {
   const input = document.getElementById("doc-filter");
   input.oninput = () => { docFilter = input.value; loadList(true).then(() => {
     const again = document.getElementById("doc-filter"); again.focus(); again.setSelectionRange(docFilter.length, docFilter.length); }); };
+}
+
+// ---------- overview: what the right side shows with no document open ----------
+const getJson = async url => { try { const r = await fetch(url); return r.ok ? await r.json() : null; } catch (e) { return null; } };
+async function home() {
+  setMain(`<div class="empty">Loading…</div>`);
+  const [ov, claude, ag, fb, ch] = await Promise.all([getJson("/admin/api/overview"), getJson("/admin/api/claude"),
+    getJson("/admin/api/agency"), getJson("/admin/api/feedback"), getJson("/admin/api/chats")]);
+  if (tab !== "docs" || current) return;
+  if (ov) overview = ov.programs;
+  const rows = [];
+  (overview || []).forEach(p => { const [sec, group, name] = place(p.program);
+    p.docs.forEach(d => rows.push({p, d, sec, group, name: p.docs.length > 1 ? `${name} · ${d.file.replace(/\.pdf$/i, "")}` : name})); });
+  const need = rows.filter(x => docDot(x.d) !== "ok");
+  const name = claude ? claude.model.replace(/^claude-(\w+)-(\d+)-(\d+)$/, (_, n, a, b) => `Claude ${n[0].toUpperCase() + n.slice(1)} ${a}.${b}`) : "";
+  const tile = (title, big, sub, cls, go) => `<button class="tile ${cls || ""}"${go ? ` data-go="${go}"` : ""}>
+    <span class="label">${title}</span><span class="big">${big}</span><span class="muted">${sub}</span></button>`;
+  const people = new Set((ch ? ch.chats : []).map(c => c.email)).size;
+  const week = (ch ? ch.chats : []).filter(c => c.updated > Date.now() / 1000 - 7 * 86400).length;
+  setMain(`<h1>Overview</h1><div class="sub">Everything at a glance. Pick a document on the left to check it against the PDF.</div>
+    <div class="tiles">
+      ${tile("Documents", `${rows.length - need.length}/${rows.length}`, need.length ? `${need.length} need you` : "all approved", need.length ? "warn" : "ok")}
+      ${claude ? tile("Claude", claude.out ? "Out" : claude.balance != null ? `~$${claude.balance.toFixed(2)}` : "On",
+          claude.out ? `local model answering · next check ${esc(hour(claude.next_check))}` : `${esc(name)} · $${claude.spent.toFixed(2)} spent`, claude.out ? "warn" : "ok") : ""}
+      ${ag ? tile("Agency updates", ag.open, ag.open ? "to review" : "nothing new", ag.open ? "warn" : "ok", "updates") : ""}
+      ${fb ? tile("Feedback", fb.feedback.length, "“This is wrong” reports", fb.feedback.length ? "warn" : "ok", "feedback") : ""}
+      ${ch ? tile("Chats", ch.chats.length, `${people} ${people === 1 ? "person" : "people"} · ${week} this week`, "", "chats") : ""}
+    </div>
+    ${need.length ? `<div class="panel"><h2>Needs you</h2>${need.map(x => `<button class="doc slim" data-program="${esc(x.p.program)}" data-file="${esc(x.d.file)}">
+      <i class="dot ${docDot(x.d)}"></i><span class="name">${esc(x.sec)} · ${esc(x.name)}</span></button>`).join("")}</div>` : ""}
+    <div class="board">${SECTION_ORDER.map(sec => { const list = rows.filter(x => x.sec === sec);
+      return `<div class="panel col"><h2>${sec} <span class="muted">${list.length}</span></h2>` +
+        [...new Set(list.map(x => x.group))].map(g => (g ? `<div class="grp">${esc(g)}</div>` : "") +
+          list.filter(x => x.group === g).map(x => `<button class="doc slim" data-program="${esc(x.p.program)}" data-file="${esc(x.d.file)}" title="${esc(x.d.file)}">
+            <i class="dot ${docDot(x.d)}"></i><span class="name">${esc(x.name)}</span>
+            ${x.d.rules ? `<span class="tag${x.d.rules.status === "approved" ? " ok" : ""}">rules</span>` : ""}</button>`).join("")).join("") + `</div>`; }).join("")}</div>
+    ${fb && fb.feedback.length ? `<div class="panel"><h2>Latest feedback</h2>${fb.feedback.slice(0, 3).map(f => `<div class="fb-line">
+      <span class="muted">${new Date(f.ts * 1000).toLocaleDateString()} · ${esc(f.email === "local" ? "This PC" : f.email)}</span>
+      <div>${esc(f.question)}</div><div class="warn-text">${esc(f.note)}</div></div>`).join("")}</div>` : ""}`);
+  document.querySelectorAll("#main .doc").forEach(b => b.onclick = () => openDoc(b.dataset.program, b.dataset.file, false));
+  document.querySelectorAll("#main [data-go]").forEach(b => b.onclick = () => showTab(b.dataset.go));
 }
 
 async function openDoc(program, file, fresh) {

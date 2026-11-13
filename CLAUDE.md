@@ -109,7 +109,7 @@ an SVG grain; flat translucent answer cards; the sidebar casts a shadow over the
 * Admin console: `/admin` (`ui/admin.html`, `guidebot/admin.py`) replaces the Streamlit Verify page: doc
 statuses, PDF page beside editable matrix/text, re-read, approve docs and overlay rules. Only his Gmail via
 Cloudflare Access, or direct from this PC. Claude never clicks Approve. Documents list folds by section
-(NonQM Express/Ignite/Shared, Conventional Fannie/Freddie, FHA, VA) with a filter and "Needs you" on top. Tabs: Documents, Chats (every user's
+(NonQM Express/Ignite/Shared, Conventional Fannie/Freddie, FHA, VA) with a filter and "Needs you" on top. With no document open the right side is an Overview (tiles for docs, Claude, agency updates, feedback, chats; every program by section). Tabs: Documents, Chats (every user's
 chats, read only), Index (Update index, admin only now), Updates (agency guide changes, below). Claude never
 clicks Mark reviewed either.
 * Agency guides (`guidebot/agency.py`, files in `agency/`, git-ignored): the general guideline under NDM's FHA,
