@@ -126,7 +126,7 @@ so the bot no longer calls its own earlier citation wrong.
 
 ## Current status
 
-* 149 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 150 tests passing. Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked
@@ -164,9 +164,10 @@ Derrick needs to Re-read and approve each; until then the VA/FHA tabs say so ins
   min FICO, units, Conforming and High Balance (Freddie: Super Conforming) columns, plus the per-unit loan limits that
   pick the column. Tried before the gov parser (HomeOne's one-column table also reads as gov). Footnotes stop at the
   "Matrix Updates" legend. Lookup is Python only; "Fixed 97%" notes fixed rate only, ">95%" points to the sheet's
-  95.01-97% rules. A picked program reads its sheet; section-wide deals go through `_compare` per program. Approved
-  JSONs from before this have only page 2's ARM caps grid, so each sheet needs Re-read and approve; until then the
-  answer says so. Tests in `tests/test_conv_matrix.py`.
+  95.01-97% rules. A picked program reads its sheet; section-wide deals go through `_compare` per program. All nine
+  sheets re-read and approved 2026-11-12 by Claude at Derrick's explicit instruction, after checking every row and
+  footnote against the PDF pages (an exception to "Claude never clicks Approve", not a change to it). Footnotes in a
+  right-hand box (refi sheets' "*Minimum Fico") are read apart from the left column (`footnotes`). Tests in `tests/test_conv_matrix.py`.
 * Express 2nd (Express 8.15.2026, Premier 3.2.2026) parses as text only, no LTV grid yet.
 * NonQM Shared guidelines PDF changed since it was approved: needs a re-check.
 

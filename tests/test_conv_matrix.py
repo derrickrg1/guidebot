@@ -95,3 +95,14 @@ def test_ltv_cells():
     assert conv_matrix.ltv_of("95% 1, 2")[:2] == (95.0, ["1", "2"])
     assert conv_matrix.ltv_of("Fixed 97%/105%¹,²") == (97.0, ["1", "2"], "fixed rate only; 105% TLTV")
     assert conv_matrix.ltv_of("NA")[0] is None
+
+
+@have_pdfs
+def test_footnotes_read_like_the_sheet():
+    ready = conv_matrix.conv_mats(_mats("Conventional HomeReady/Home-Ready-Matrix.pdf"))[0]["df"]
+    assert "3: ARM Max LTV 1 Unit is 95%" in conv_matrix.footnotes(ready.attrs["notes"])   # not a new footnote 1
+    refi = conv_matrix.conv_mats(_mats("Conventional Refi Possible/Freddie-Mac-Program-RefiPossible.pdf"))[0]["df"]
+    notes = conv_matrix.footnotes(refi.attrs["notes"])
+    # the "*Minimum Fico" box sits beside footnote 2's two lines on the page
+    assert "2: Loans with resubordinated Affordable Seconds max TLTV of 105%" in notes
+    assert notes[-1].startswith("*Minimum Fico requirements determined by LPA")

@@ -55,7 +55,7 @@ def parse_table(table) -> pd.DataFrame | None:
             rows.append(cells)
     full = lambda bb: bb[2] - bb[0] > 0.6 * (x1 - x0)
 
-    titles, notes, out, limits = [], [], [], {}
+    titles, notes, side, out, limits = [], [], [], [], {}
     occ, cols, high_label, carry, in_body, done = "", None, "", {}, False, False
     for cells in rows:
         texts = [t for _, t in cells]
@@ -99,9 +99,17 @@ def parse_table(table) -> pd.DataFrame | None:
             continue
         note = (texts[0].startswith("*") or re.match(rf"^[1-9{SUP}]\s*[A-Z]", texts[0])
                 and not re.match(r"^[1-4]\s*units?\b", texts[0], re.I) and (full(cells[0][0]) or len(texts[0]) > 25))
-        if note or notes:   # footnotes under the grid, up to the "Matrix Updates in Yellow" legend
-            if joined not in " ".join(notes):   # a wrapped line pdfplumber also hands over on its own
-                notes.append(joined)
+        if note or notes or side:   # footnotes under the grid, up to the "Matrix Updates in Yellow" legend
+            # The refi sheets put the "*Minimum Fico" note in a right-hand box beside footnote 2's two lines:
+            # read that box on its own so it doesn't land in the middle of footnote 2.
+            left = lambda bb: full(bb) or bb[0] + bb[2] < x0 + x1   # full width, or centered left of the middle
+            for bucket, part in ((notes, [t for (bb, t) in cells if left(bb)]),
+                                 (side, [t for (bb, t) in cells if not left(bb)])):
+                part = [t for i, t in enumerate(part) if not any(t in o for j, o in enumerate(part) if j != i
+                                                                 and len(o) > len(t))]
+                text = " ".join(part)
+                if text and text not in " ".join(notes + side):   # a wrapped line also handed over on its own
+                    bucket.append(text)
             in_body = False
             continue
         names = [_col_name(c["label"]) for c in cols]
@@ -130,7 +138,7 @@ def parse_table(table) -> pd.DataFrame | None:
     columns = [c for c in columns if any(c in r for r in out)]
     df = pd.DataFrame([[r.get(c, "") for c in columns] for r in out], columns=columns)
     df.attrs.update(kind="conv", title=" · ".join(titles[:2]), dims=["Occupancy", "Loan Purpose", "Units"],
-                    notes=" ".join(notes), limits={k: v for k, v in sorted(limits.items())},
+                    notes=" ".join(notes + side), limits={k: v for k, v in sorted(limits.items())},
                     high_label=re.sub(r"\s*Max.*", "", high_label, flags=re.I).strip())
     return df
 
@@ -226,6 +234,20 @@ def conv_mats(mats: list[dict]) -> list[dict]:
     return [m for m in mats if m["df"].attrs.get("kind") == "conv"]
 
 
+def footnotes(notes: str) -> list[str]:
+    """One line per footnote. "ARM Max LTV 1 Unit is 95%" reads like a new footnote 1 after footnote 3, so a number
+    that doesn't count up goes back on the line before it; the "*Minimum Fico" note gets its own line."""
+    out = []
+    for n in notes_md(notes):
+        for part in re.split(r"\s(?=\*\s*[A-Z])", n):
+            m = re.match(r"^(\d): (.*)", part)
+            if m and out and re.match(r"^\d:", out[-1]) and int(m[1]) <= int(out[-1][0]):
+                out[-1] += f" {m[1]} {m[2]}"
+            else:
+                out.append(part.strip())
+    return out
+
+
 def is_conv(mats: list[dict]) -> bool:
     return bool(conv_mats(mats))
 
@@ -303,13 +325,13 @@ def answer(raw, question: str, mats: list[dict]) -> str:
     lines = [f"**Max LTV/CLTV: {res['ltv']:g}%** ({res['tier']}, matrix, before the sheet's other requirements)",
              "", f"*{deal}*", "",
              "| Matrix | Row | Column | Cell | Conditions |", "|---|---|---|---|---|"]
-    row = ", ".join(x for x in (r["Occupancy"], r["Loan Purpose"], f"{r['Units']} unit(s)" if r["Units"][:1].isdigit()
+    row = ", ".join(x for x in (r["Occupancy"], r["Loan Purpose"], f"{r['Units']} unit(s)" if re.fullmatch(r"[\d-]+", r["Units"])
                                 else r["Units"], f"FICO {r['Minimum FICO']}+") if x)
     cond = "; ".join(x for x in (res["extra"], r.get("Max DTI") and f"max DTI {r['Max DTI']}",
                                  f"loan up to ${res['limit']:,.0f}") if x)
     lines.append(f"| {m['file']} p. {m['page']} | {row} | {res['tier']} | **{res['cell']}** | {cond} |")
     # "* Minimum Fico requirements determined by DU" sits beside footnote 2 on the refi sheets: its own line
-    notes = [x.strip() for n in notes_md(m["df"].attrs.get("notes", "")) for x in re.split(r"\s(?=\*\s*[A-Z])", n)]
+    notes = footnotes(m["df"].attrs.get("notes", ""))
     if notes:
         cited = [n for n in notes if n[:1] in res["marks"] and n[1:2] == ":"]
         lines += ["", f"**Footnotes on this cell ({', '.join(res['marks'])})**" if cited else "**Footnotes**"]
