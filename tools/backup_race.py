@@ -14,7 +14,7 @@ import sys
 import time
 from pathlib import Path
 
-from guidebot import chat, config
+from guidebot import chat, claude_status, config, usage
 from tools.backup_keys import KEYS, misses
 from tools.stress_bank import bank
 from tools.stress_check import check
@@ -29,6 +29,7 @@ def _file(model: str, ctx: int) -> Path:
 
 def ask(case: dict, model: str) -> dict:
     text, sources, choices, t0 = "", [], [], time.time()
+    usage.begin()
     try:
         for ev in chat.respond(case["q"], [], case["program"], bool(case["program"]), case["mode"] == "deal",
                                case["section"], model):
@@ -39,7 +40,9 @@ def ask(case: dict, model: str) -> dict:
                 text += f"\n[ERROR] {ev['error']}"
     except Exception as e:
         text += f"\n[ERROR] {type(e).__name__}: {e}"
-    return {**case, "answer": text, "sources": sources, "choices": choices, "secs": round(time.time() - t0, 1)}
+    run_ = usage.end() or {}
+    return {**case, "answer": text, "sources": sources, "choices": choices, "secs": round(time.time() - t0, 1),
+            "usd": run_.get("usd", 0), "engine": run_.get("engine")}
 
 
 def cases(only: int = 0) -> list[dict]:
@@ -51,26 +54,41 @@ def cases(only: int = 0) -> list[dict]:
     return out
 
 
+def _gemini(model: str):
+    """Race a Gemini model the way the server uses it: Claude marked down, so every call goes to Gemini."""
+    config.GEMINI_FALLBACK, config.GEMINI_MODEL = True, model
+    claude_status._status.update(at=time.time() + 10**9, claude={"ok": False, "out": True, "why": "race"})
+    return config.CHAT_MODEL
+
+
 def run(model: str, ctx: int, only: int = 0):
-    config.CHAT_OPTIONS["num_ctx"] = ctx
+    if model.startswith("gemini"):
+        name, model = model, _gemini(model)
+    else:
+        name = model
+        config.CHAT_OPTIONS["num_ctx"] = ctx
     cases_ = cases(only)
-    out = _file(model, ctx)
+    out = _file(name, ctx)
     done = {json.loads(l)["id"] for l in out.read_text(encoding="utf-8").splitlines() if l} if out.exists() else set()
     with out.open("a", encoding="utf-8") as f:
         for i, c in enumerate(cases_, 1):
             if c["id"] in done:
                 continue
             r = ask(c, model)
+            if name.startswith("gemini") and r["engine"] != "gemini":
+                print(f"{i}/{len(cases_)} {c['id']} fell back to {r['engine']}, not saved (run again for it)", flush=True)
+                continue
             f.write(json.dumps(r) + "\n")
             f.flush()
-            print(f"{i}/{len(cases_)} {c['id']} {r['secs']}s {'KEY MISS' if misses(c['id'], r['answer']) else ''}",
+            print(f"{i}/{len(cases_)} {c['id']} {r['secs']}s ${r['usd']:.3f} {r['engine']} "
+                  f"{'KEY MISS' if misses(c['id'], r['answer']) else ''}",
                   flush=True)
 
 
 def grade(only: int = 0):
     ids = {c["id"] for c in cases(only)}
-    lines = ["# Local backup race", "", "| Model (context) | Keys right | Grounding problems | Errors | Median s | Answers |",
-             "|---|---|---|---|---|---|"]
+    lines = ["# Local backup race", "", "| Model (context) | Keys right | Grounding problems | Errors | Median s | Total $ | Answers |",
+             "|---|---|---|---|---|---|---|"]
     detail = []
     for path in sorted(STRESS.glob("backup-*.jsonl")):
         rows = [r for r in map(json.loads, path.read_text(encoding="utf-8").splitlines()) if r["id"] in ids]
@@ -83,7 +101,7 @@ def grade(only: int = 0):
         errors = sum("[ERROR]" in r["answer"] for r in rows)
         name = path.stem.removeprefix("backup-")
         lines.append(f"| {name} | {len(keyed) - len(wrong)}/{len(keyed)} | {len(probs)} | {errors} | "
-                     f"{statistics.median(r['secs'] for r in rows):.0f} | {len(rows)} |")
+                     f"{statistics.median(r['secs'] for r in rows):.0f} | {sum(r.get('usd', 0) for r in rows):.2f} | {len(rows)} |")
         detail += ["", f"## {name}", ""] + [f"- {r['id']}: {'; '.join(m)}" for r, m in wrong] + \
                   [f"- {r['id']} (grounding): {p[:160]}" for r, p in probs]
     (STRESS / "backup.md").write_text("\n".join(lines + detail), encoding="utf-8")

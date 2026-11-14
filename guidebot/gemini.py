@@ -20,9 +20,12 @@ def _client():
     if config.GEMINI_KEY not in _clients:
         from google import genai
         from google.genai import types
-        # v1beta: preview models (gemini-3.1-pro-preview) aren't on v1
-        _clients[config.GEMINI_KEY] = genai.Client(api_key=config.GEMINI_KEY,
-                                                   http_options=types.HttpOptions(api_version="v1beta"))
+        # v1beta: preview models (gemini-3.1-pro-preview) aren't on v1. Retries: 3.8 Flash answered 503 "high demand"
+        # on 2026-11-14 and the answer fell all the way to gemma; a few retries (about 2+4+8 s) usually get through.
+        retry = types.HttpRetryOptions(attempts=4, initial_delay=2, max_delay=10,
+                                       http_status_codes=[408, 429, 500, 502, 503, 504])
+        _clients[config.GEMINI_KEY] = genai.Client(api_key=config.GEMINI_KEY, http_options=types.HttpOptions(
+            api_version="v1beta", retry_options=retry))
     return _clients[config.GEMINI_KEY]
 
 

@@ -73,6 +73,11 @@ shown on a phone). The page shows only the progress line until an answer is done
   * Tests: `tests/conftest.py` turns Gemini off, answers the status check "ok" without a call, and sends spend to a temp
   file. `tests/test_claude_status.py` runs the fallback with a fake Gemini client.
   * Out of Claude credit since 2026-11-13.
+  * The Gemini key is on the free tier (found 2026-11-14): Gemini 4 Argon/Carbon have a quota of 0 there, 4 Hydrogen
+    stops at 20 requests a day (an answer is several calls, so a handful of answers), 3.8 Flash answers 503 "high
+    demand". Past that the backup falls to gemma. Calls retry 408/429/5xx 4 times (`gemini._client`).
+    `tools/backup_race.py run gemini-<model> 0 37` races a Gemini model (answers that fell back aren't saved);
+    unfinished until billing is linked. Hydrogen's partial run: 5 of 6 keys right, about 45 s and $0.20 an answer.
 * pdfplumber, pandas, ChromaDB + BM25 (hybrid search), Streamlit UI.
 * GPU (RTX 5070 Ti, 16 GB): torch cu128 in `.venv` (Docling's install swapped it to CPU once; reinstall cu128 with
 `--force-reinstall --no-deps` if `torch.cuda.is_available()` is False). Reranker `guidebot/rerank.py`

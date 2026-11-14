@@ -20,6 +20,12 @@ PRICES = {   # $ per million tokens: input, output, 5-minute cache write, cache 
     "claude-haiku-5-5": {"in": 0.10, "out": 0.50, "write": 0.125, "read": 0.01},
     # Gemini caching is implicit, so no write price
     "gemini-3.5-flash": {"in": 1.50, "out": 9.00, "write": 0, "read": 0.15},
+    # 3.8 Flash and Gemini 4 at Google's list prices on 2026-11-14 (3.8 Flash promo to Dec 31, Gemini 4 to Nov 30, then
+    # double). Cache read at a tenth of input, Google's usual ratio, not checked on the page.
+    "gemini-3.8-flash": {"in": 0.75, "out": 3.75, "write": 0, "read": 0.075},
+    "gemini-4-hydrogen": {"in": 1.50, "out": 7.50, "write": 0, "read": 0.15},
+    "gemini-4-argon": {"in": 2.00, "out": 10.00, "write": 0, "read": 0.20},
+    "gemini-4-carbon": {"in": 2.00, "out": 10.00, "write": 0, "read": 0.20},
     "gemini-3.1-pro-preview": {"in": 2.00, "out": 12.00, "write": 0, "read": 0.20},
 }
 ENGINES = ("claude", "gemini", "local")
