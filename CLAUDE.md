@@ -49,12 +49,30 @@ GLM / DeepSeek are cloud only on Ollama, not tried. `GUIDEBOT_MODEL` / `GUIDEBOT
 override. `nomic-embed-text` (embeddings, Ollama). When the fallback answers, the chat shows nothing about it: the server strips
 `FALLBACK_SHOWN` and sends `{"fallback": true}`, and the bottom-left label reads "Model: backup (Claude unavailable)" (not
 shown on a phone). The page shows only the progress line until an answer is done, then the whole answer at once; "credit balance is too low" counts as down (`_down`).
-* Credits out (`guidebot/claude_status.py`, state in `data/claude_status.json`): the first "credit balance" error
-marks Claude off and every answer goes straight to the local model, no more failed call first. The server re-checks
-with a tiny call at 9 AM, 12 PM and 3 PM (`watch` thread), or admin's "Check now" (sidebar card). The API has no
-balance endpoint, so the card's "I added credit" takes the Console's figure and each answer's token cost counts it down
-(`PRICES`); the chat label shows that estimate to admin only, and "Model: local backup (Claude credits out)" to all.
-Out of credit since 2026-11-13.
+* Fallback order (2026-11-14, same pattern as AppraisAI): Claude, then Gemini (`guidebot/gemini.py`, google-genai SDK,
+  api_version v1beta, one cached client per key), then the local model. Gemini gets the same system prompt and
+  messages Claude gets; structured replies use response_mime_type application/json with the pydantic schema.
+  `gemini.stream` yields text only and returns its cost as the generator's return value. A Gemini failure before its
+  first chunk falls through to the local model.
+  * Env vars: `GEMINI_API_KEY` (in `.env`, never print or log it), `GUIDEBOT_GEMINI=0` turns Gemini off,
+    `GUIDEBOT_GEMINI_MODEL` (default `gemini-3.5-flash`).
+  * **Gemini must not get borrower data unless the key's Google project has billing linked (paid tier).** On the free
+    tier Google may use prompts to train its models. Sandbox phase: no borrower data goes in AskNick anyway.
+  * Status (`guidebot/claude_status.py`): a free `messages.count_tokens` call fails with the credit-balance error when
+    credits are out. Cached 5 minutes; any answer that falls back resets it (`stale`). While it says Claude is down,
+    answers start at Gemini with no failed Claude call first. Replaced the 9/12/3 re-checks and the hand-entered balance
+    estimate. Admin's "Check now" resets the cache.
+  * Model line (sidebar footer, polled from `/api/status` every 5 minutes and after each answer): "Model: Claude
+    Sonnet 5.5" when Claude answers; in orange (#e0a060) "Model: Gemini 3.5 Flash backup (Claude credits out)" or
+    "(Claude unavailable)", or "local backup" with Gemini off. Under it "This month: $X.XX · N runs" (everyone's for
+    admin, your own for others).
+  * Spend (`guidebot/usage.py`, `data/usage.jsonl`): one row per answer with the engine that answered (claude, gemini
+    or local, the furthest down the line any call went), model, tokens and dollars. No question or answer text. Prices
+    per million tokens in `PRICES` (gemini-3.5-flash $1.50 in / $9 out, gemini-3.1-pro-preview $2 / $12); Gemini's
+    thinking tokens bill as output. Python-only answers (deal lookups, calculators) aren't recorded.
+  * Tests: `tests/conftest.py` turns Gemini off, answers the status check "ok" without a call, and sends spend to a temp
+  file. `tests/test_claude_status.py` runs the fallback with a fake Gemini client.
+  * Out of Claude credit since 2026-11-13.
 * pdfplumber, pandas, ChromaDB + BM25 (hybrid search), Streamlit UI.
 * GPU (RTX 5070 Ti, 16 GB): torch cu128 in `.venv` (Docling's install swapped it to CPU once; reinstall cu128 with
 `--force-reinstall --no-deps` if `torch.cuda.is_available()` is False). Reranker `guidebot/rerank.py`
@@ -180,7 +198,7 @@ so the bot no longer calls its own earlier citation wrong.
 
 ## Current status
 
-* 253 tests passing (48 are Hypothesis property runs). Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 258 tests passing (48 are Hypothesis property runs). Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked

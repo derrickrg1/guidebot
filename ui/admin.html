@@ -483,7 +483,6 @@ async function home() {
   (overview || []).forEach(p => { const [sec, group, name] = place(p.program);
     p.docs.forEach(d => rows.push({p, d, sec, group, name: p.docs.length > 1 ? `${name} · ${d.file.replace(/\.pdf$/i, "")}` : name})); });
   const need = rows.filter(x => docDot(x.d) !== "ok");
-  const name = claude ? claude.model.replace(/^claude-(\w+)-(\d+)-(\d+)$/, (_, n, a, b) => `Claude ${n[0].toUpperCase() + n.slice(1)} ${a}.${b}`) : "";
   const tile = (title, big, sub, cls, go) => `<button class="tile ${cls || ""}"${go ? ` data-go="${go}"` : ""}>
     <span class="label">${title}</span><span class="big">${big}</span><span class="muted">${sub}</span></button>`;
   const people = new Set((ch ? ch.chats : []).map(c => c.email)).size;
@@ -491,8 +490,9 @@ async function home() {
   setMain(`<h1>Overview</h1><div class="sub">Everything at a glance. Pick a document on the left to check it against the PDF.</div>
     <div class="tiles">
       ${tile("Documents", `${rows.length - need.length}/${rows.length}`, need.length ? `${need.length} need you` : "all approved", need.length ? "warn" : "ok")}
-      ${claude ? tile("Claude", claude.out ? "Out" : claude.balance != null ? `~$${claude.balance.toFixed(2)}` : "On",
-          claude.out ? `local model answering · next check ${esc(hour(claude.next_check))}` : `${esc(name)} · $${claude.spent.toFixed(2)} spent`, claude.out ? "warn" : "ok") : ""}
+      ${claude ? tile("Claude", claude.claude.ok ? "On" : claude.claude.out ? "Out" : "Down",
+          `${claude.claude.ok ? esc(modelName(claude.model)) : esc(backupName(claude)) + " answering"} · $${claude.usage.month.usd.toFixed(2)} this month`,
+          claude.claude.ok ? "ok" : "warn") : ""}
       ${ag ? tile("Agency updates", ag.open, ag.open ? "to review" : "nothing new", ag.open ? "warn" : "ok", "updates") : ""}
       ${fb ? tile("Feedback", fb.feedback.length, "“This is wrong” reports", fb.feedback.length ? "warn" : "ok", "feedback") : ""}
       ${ch ? tile("Chats", ch.chats.length, `${people} ${people === 1 ? "person" : "people"} · ${week} this week`, "", "chats") : ""}
@@ -628,35 +628,26 @@ async function approveRules() {
   openDoc(d.program, d.file, false);
 }
 
-// ---------- Claude credit: out means every answer comes from the local model until a check gets through ----------
+// ---------- Claude status: checked with a free token count at most every 5 minutes (claude_status.py) ----------
 const hour = t => new Date(t * 1000).toLocaleString([], {weekday: "short", hour: "numeric", minute: "2-digit"});
+const modelName = m => (m || "")
+  .replace(/^claude-(\w+)-(\d+)-(\d+)$/, (_, n, a, b) => `Claude ${n[0].toUpperCase() + n.slice(1)} ${a}.${b}`)
+  .replace(/^gemini-([\d.]+)-(\w+)(-preview)?$/, (_, v, n, p) => `Gemini ${v} ${n[0].toUpperCase() + n.slice(1)}${p ? " Preview" : ""}`);
+const backupName = c => c.backup === "gemini" ? modelName(c.backup_model) : `the local model (${c.backup_model})`;
 async function claudeCard() {
   const box = document.getElementById("claude-card");
   const r = await fetch("/admin/api/claude");
   if (!r.ok) { box.hidden = true; return; }
-  const c = await r.json();
-  const name = c.model.replace(/^claude-(\w+)-(\d+)-(\d+)$/, (_, n, a, b) => `Claude ${n[0].toUpperCase() + n.slice(1)} ${a}.${b}`);
-  box.innerHTML = `<b><i class="dot ${c.out ? "warn" : "ok"}"></i>${esc(name)}</b>
-    ${c.out ? `<div class="warn-text">Credits out since ${esc(hour(c.since))}. Answers come from the local model (${esc(c.local)}).</div>
-      <div class="muted">Next automatic check ${esc(hour(c.next_check))} (checks 9 AM, 12 PM, 3 PM).</div>`
-      : `<div>${c.balance != null ? `About <b>$${c.balance.toFixed(2)}</b> credit left` : "Credit left: not set"}</div>`}
-    <div class="muted">${c.balance != null || c.spent ? `Estimate: amount you entered less each answer's cost ($${c.spent.toFixed(2)} spent so far).` : "Enter what you added so the estimate can count down."}
-      ${c.last_check ? `<br>Last check ${esc(hour(c.last_check))}: ${esc(c.last_result)}` : ""}</div>
-    <div class="row" style="margin-top:8px"><button class="act small" id="claude-check">Check now</button>
-      <button class="act ghost small" id="claude-added">I added credit</button></div>`;
+  const c = await r.json(), down = !c.claude.ok, m = c.usage.month;
+  box.innerHTML = `<b><i class="dot ${down ? "warn" : "ok"}"></i>${esc(modelName(c.model))}</b>
+    ${down ? `<div class="warn-text">${c.claude.out ? "Credits out" : `Unavailable (${esc(c.claude.why)})`}. Answers come from ${esc(backupName(c))}.</div>`
+      : `<div>Answering. Backup: ${esc(backupName(c))}.</div>`}
+    <div class="muted">This month: $${m.usd.toFixed(2)} · ${m.runs} run${m.runs === 1 ? "" : "s"}. Checked every 5 minutes.</div>
+    <div class="row" style="margin-top:8px"><button class="act small" id="claude-check">Check now</button></div>`;
   document.getElementById("claude-check").onclick = async e => {
     e.target.disabled = true; e.target.textContent = "Checking…";
     const res = await post("/admin/api/claude/check", {});
     if (res.error) alert(res.error);
-    claudeCard();
-  };
-  document.getElementById("claude-added").onclick = async () => {
-    const v = prompt("How much credit does the Claude Console show now? (dollars)");
-    if (v === null) return;
-    const amount = parseFloat(v.replace(/[$,\s]/g, ""));
-    if (!(amount >= 0)) return alert("That isn't a dollar amount.");
-    await post("/admin/api/claude/balance", {amount});
-    await post("/admin/api/claude/check", {});   // and turn Claude back on if the credit went through
     claudeCard();
   };
 }

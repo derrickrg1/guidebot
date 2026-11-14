@@ -5,12 +5,11 @@ Standard library only. Listens on 127.0.0.1, so nothing outside this PC can reac
 import json
 import re
 import sys
-import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from guidebot import admin, agency, chat, claude_status, config, history
+from guidebot import admin, agency, chat, claude_status, config, history, usage
 
 PORT = 8600
 PAGE = config.ROOT / "ui" / "guidebot.html"
@@ -93,7 +92,7 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/admin/api/feedback":
             return self._json({"feedback": history.list_feedback()})
         if path == "/admin/api/claude":
-            return self._json(claude_status.summary())
+            return self._json(_claude(self.headers))
         if path == "/admin/api/chat":
             c = history.get_chat(query.get("id", [""])[0])
             return self._json(c) if c else self._json({"error": "not found"}, 404)
@@ -162,12 +161,8 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/admin/api/agency/check":
                 return self._stream(_agency_check())
             if path == "/admin/api/claude/check":
-                return self._json(claude_status.check())
-            if path == "/admin/api/claude/balance":
-                try:
-                    return self._json(claude_status.set_balance(float(body.get("amount"))))
-                except (TypeError, ValueError):
-                    return self._json({"error": "amount must be a number"}, 400)
+                claude_status.stale()
+                return self._json(_claude(self.headers))
             if path == "/admin/api/agency/reviewed":
                 return self._json(agency.mark_reviewed(str(body.get("id") or "")))
             return self._json({"error": "not found"}, 404)
@@ -217,6 +212,7 @@ def _saving(events, chat_id, email, question, program, mode, model=""):
     trace of every answer (stress runs included) for working out why one went wrong."""
     import time
     text, sources, t0, fallback = "", [], time.time(), False
+    usage.begin()   # llm.py adds each model call's cost; recorded below with the engine that answered
     for ev in events:
         fallback = fallback or bool(ev.get("fallback"))
         if "text" in ev:
@@ -227,6 +223,9 @@ def _saving(events, chat_id, email, question, program, mode, model=""):
             sources = ev["sources"]
         yield ev
     history.save_turn(chat_id, email, question, text, program, mode, sources)
+    run = usage.end()
+    if run and run["calls"]:   # Python-only answers (deal lookups, calculators) call no model and cost nothing
+        usage.record(email, run)
     try:
         history.save_trace(email, chat_id, question, program, mode, model, time.time() - t0,
                            fallback, sources, len(text))
@@ -275,17 +274,15 @@ def _agency_check():
     yield {"replace": "\n".join(f"- {line}" for line in log)}
 
 
-def _claude(headers) -> dict | None:
-    """Claude on or off for the chat page's label; the balance estimate only for admin."""
-    if not config.CHAT_MODEL.startswith("claude"):
-        return None
-    s = claude_status.summary()
-    return {"out": s["out"], "local": s["local"], **({"balance": s["balance"]} if admin.allowed(headers) else {})}
+def _claude(headers) -> dict:
+    """The sidebar's model line: who answers right now (status cached 5 minutes) and this month's spend, everyone's
+    for admin, your own for anyone else."""
+    s = claude_status.status()
+    return s | {"usage": usage.summary(None if admin.allowed(headers) else history.user(headers))}
 
 
 def main():
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
-    threading.Thread(target=claude_status.watch, daemon=True).start()   # 9 AM, 12 PM, 3 PM: Claude back yet?
     agency.start_scheduler(on_index=chat.reset_retriever, log=lambda m: print(m, flush=True))
     print(f"Guidebot running at http://localhost:{PORT}  (Ctrl+C to stop)")
     try:

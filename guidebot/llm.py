@@ -4,7 +4,7 @@ import sys
 
 import ollama
 
-from guidebot import claude_status, config
+from guidebot import claude_status, config, gemini, usage
 
 FALLBACK_BETA = "server-side-fallback-2026-07-01"   # a declined request reruns on another Claude model
 FALLBACK_SHOWN = "*Answered by the backup model. Double-check this one.*\n\n"
@@ -74,7 +74,7 @@ def _claude_stream(messages: list[dict], model: str):
     with _anthropic().beta.messages.stream(**_claude_args(model, messages)) as stream:
         yield from stream.text_stream
         final = stream.get_final_message()
-        claude_status.spend(model, final.usage)
+        usage.add("claude", usage.cost(usage.claude_tokens(final.usage), final.model))
         if final.stop_reason == "refusal":
             yield "\n\n*Claude declined to answer this one.*"
 
@@ -82,16 +82,15 @@ def _claude_stream(messages: list[dict], model: str):
 def _claude_json(system: str, user: str, schema, model: str):
     args = _claude_args(model, [{"role": "system", "content": system}, {"role": "user", "content": user}])
     resp = _anthropic().beta.messages.parse(**args, output_format=schema)
-    claude_status.spend(model, resp.usage)
+    usage.add("claude", usage.cost(usage.claude_tokens(resp.usage), resp.model))
     if resp.parsed_output is None:
         raise ValueError(f"Claude returned no {schema.__name__} (stop reason: {resp.stop_reason})")
     return resp.parsed_output
 
 
 def _fallback_note(e: Exception):
-    sys.stderr.write(f"Claude unavailable ({type(e).__name__}: {e}); answering with {config.LOCAL_MODEL}\n")
-    if claude_status.is_credit_error(e):
-        claude_status.mark_out(str(e))   # stop calling Claude until the 9/12/3 check or admin's Check now
+    sys.stderr.write(f"Claude unavailable ({type(e).__name__}: {e}); answering with the backup\n")
+    claude_status.stale()   # the next status check sees it, and later answers skip Claude
 
 
 # ---------- Ollama ----------
@@ -150,14 +149,37 @@ def _ollama_json(system: str, user: str, schema, model: str, retries: int):
 
 
 # ---------- what the rest of guidebot calls ----------
+# Order: Claude, then Gemini (gemini.py), then the local model. While the status check (claude_status, at most 5
+# minutes old) says Claude can't answer, answers start at Gemini without a failed Claude call first.
+
+def _backup_stream(messages: list[dict]):
+    """Gemini if it's set up and answers, else the local model. A Gemini failure before its first chunk falls through."""
+    yield FALLBACK_SHOWN   # chat.respond turns this into {"fallback": True}; the sidebar's model line says who answered
+    if gemini.available():
+        chunks = gemini.stream(messages)
+        try:
+            first = next(chunks)   # the request goes out here: a failure now falls through to the local model
+        except StopIteration as done:   # an empty answer
+            usage.add("gemini", done.value)
+            return
+        except Exception as g:
+            sys.stderr.write(f"Gemini failed too ({type(g).__name__}: {g}); answering with {config.LOCAL_MODEL}\n")
+        else:
+            yield first
+            spent = yield from chunks
+            usage.add("gemini", spent)
+            return
+    usage.add("local")
+    yield from _ollama_stream(messages, config.LOCAL_MODEL)
+
 
 def stream_chat(messages: list[dict], model: str = config.CHAT_MODEL):
     if not _is_claude(model):
+        usage.add("local")
         yield from _ollama_stream(messages, model)
         return
     if claude_status.out():
-        yield FALLBACK_SHOWN   # chat.respond turns this into the bottom-left "backup" label
-        yield from _ollama_stream(messages, config.LOCAL_MODEL)
+        yield from _backup_stream(messages)
         return
     started = False
     try:
@@ -168,18 +190,32 @@ def stream_chat(messages: list[dict], model: str = config.CHAT_MODEL):
         if started or not _down(e):
             raise
         _fallback_note(e)
-        yield FALLBACK_SHOWN
-        yield from _ollama_stream(messages, config.LOCAL_MODEL)
+        yield from _backup_stream(messages)
+
+
+def _backup_json(system: str, user: str, schema, retries: int):
+    if gemini.available():
+        try:
+            parsed, spent = gemini.ask_json(system, user, schema)
+            usage.add("gemini", spent)
+            return parsed
+        except Exception as g:
+            sys.stderr.write(f"Gemini failed too on {schema.__name__} ({type(g).__name__}: {g})\n")
+    usage.add("local")
+    return _ollama_json(system, user, schema, config.LOCAL_MODEL, retries)
 
 
 def ask_json(system: str, user: str, schema, model: str = config.CHAT_MODEL, retries: int = 2):
     """Structured output: the reply must match the pydantic schema."""
-    if not _is_claude(model) or claude_status.out():
-        return _ollama_json(system, user, schema, model if not _is_claude(model) else config.LOCAL_MODEL, retries)
+    if not _is_claude(model):
+        usage.add("local")
+        return _ollama_json(system, user, schema, model, retries)
+    if claude_status.out():
+        return _backup_json(system, user, schema, retries)
     try:
         return _claude_json(system, user, schema, model)
     except Exception as e:
         if not _down(e):
             raise
         _fallback_note(e)
-        return _ollama_json(system, user, schema, config.LOCAL_MODEL, retries)
+        return _backup_json(system, user, schema, retries)
