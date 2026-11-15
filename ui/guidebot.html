@@ -121,8 +121,8 @@ aside {
   transition: max-height 0.2s, opacity 0.2s; }
 .modes label:hover small, .modes label:has(input:focus-visible) small { max-height: 2em; opacity: 1; }
 .modes label:hover { border-color: rgba(217, 102, 31, 0.4); }
-.modes label:has(input:checked) { border-color: var(--navy); background: rgba(217, 102, 31, 0.1); }
-.modes label:has(input:checked) b { color: var(--navy); }
+/* The picked mode shows as an orange word, no box. Guidelines is the default, so it stays plain. */
+.modes label:has(input[value=deal]:checked) b { color: var(--navy); }
 .modes label:has(input:focus-visible) { outline: 2px solid var(--navy); outline-offset: 2px; }
 .modes label.off { opacity: 0.45; cursor: default; }
 .modes label.off:hover { border-color: var(--rule); }
