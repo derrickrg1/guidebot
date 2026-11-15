@@ -170,7 +170,12 @@ select option { background: #131c1e; }
 .newchat svg { width: 15px; height: 15px; }
 .chats { display: flex; flex-direction: column; gap: 1px; min-height: 60px; overflow-y: auto; }   /* scrolls on short windows instead of running under the footer */
 .chats .when { font: 600 0.62rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.2em; color: var(--mist);
-  text-transform: uppercase; padding: 10px 8px 4px; }
+  text-transform: uppercase; padding: 10px 8px 4px; display: flex; align-items: center; gap: 6px; width: 100%;
+  background: none; border: 0; cursor: pointer; text-align: left; }
+.chats .when:hover { color: var(--ink); }
+.chats .when svg { width: 11px; height: 11px; transition: transform 0.15s; }
+.chats .when.shut svg { transform: rotate(-90deg); }
+.chat-item[hidden] { display: none; }
 .chat-item { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 7px; cursor: pointer;
   font-size: 0.8rem; color: var(--steel); }
 .chat-item:hover { background: rgba(255, 255, 255, 0.05); color: var(--ink); }
@@ -911,12 +916,27 @@ async function loadChats() {
   try { chats = (await (await fetch(API + "/api/chats")).json()).chats || []; } catch { return; }
   let last = "";
   $("chats").innerHTML = chats.map(c => {
-    const w = whenLabel(c.updated), head = w !== last ? `<div class="when">${w}</div>` : "";
+    const w = whenLabel(c.updated), shut = folded(w);
+    const head = w !== last ? `<button type="button" class="when${shut ? " shut" : ""}" data-when="${w}" aria-expanded="${!shut}">${w}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>` : "";
     last = w;
-    return head + `<div class="chat-item${c.id === chatId ? " on" : ""}" data-id="${esc(c.id)}" title="${esc(c.title)}">
+    return head + `<div class="chat-item${c.id === chatId ? " on" : ""}" data-id="${esc(c.id)}" data-when="${w}" title="${esc(c.title)}"${shut ? " hidden" : ""}>
       <span class="t">${esc(c.title)}</span><button class="x" type="button" aria-label="Delete chat" title="Delete">×</button></div>`;
   }).join("");
 }
+// Chat groups fold by their heading. Today and Yesterday start open, This week and Earlier start folded;
+// a click flips it and the browser remembers (asknick.fold).
+function folds() { try { return JSON.parse(store.get("asknick.fold") || "{}"); } catch { return {}; } }
+function folded(w) { const f = folds(); return w in f ? f[w] : w === "This week" || w === "Earlier"; }
+$("chats").addEventListener("click", e => {
+  const h = e.target.closest(".when");
+  if (!h) return;
+  const w = h.dataset.when, shut = !folded(w), f = folds();
+  f[w] = shut;
+  store.set("asknick.fold", JSON.stringify(f));
+  h.classList.toggle("shut", shut);
+  h.setAttribute("aria-expanded", !shut);
+  $("chats").querySelectorAll(`.chat-item[data-when="${w}"]`).forEach(el => el.hidden = shut);
+});
 $("chats").addEventListener("click", async e => {
   const item = e.target.closest(".chat-item");
   if (!item || busy) return;
