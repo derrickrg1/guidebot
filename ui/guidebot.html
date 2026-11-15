@@ -211,6 +211,13 @@ select option { background: #131c1e; }
 .seg button[data-v="1.25"] { font-size: 0.95rem; }
 .set-note { color: var(--mist); font-size: 0.72rem; }
 #hsettings, #showside { display: none; }
+.mbar { display: contents; }   /* a row of its own on a phone only */
+.mbar .mbrand { display: none; }
+#scrim { display: none; }
+.mbrand { display: flex; align-items: center; gap: 8px; color: var(--gold); font: 500 1.15rem/1 "Bodoni Moda", Didot, "Bodoni MT", serif; letter-spacing: 0.04em; }
+.mbrand img { width: 30px; height: 30px; margin-top: -6px; }
+.mbrand .sam { display: none; color: #d6282f; font: 700 1.2rem/1 Caveat, cursive; letter-spacing: 0; transform: rotate(-6deg); }
+.mbrand.va .nick { display: none; } .mbrand.va .sam { display: inline; }
 /* Collapsible sidebar: the panel button in the brand hides it, the same icon in the header brings it back. With the
    sidebar hidden the header carries the settings gear, since the account row went with it. */
 #hideside { margin-left: auto; align-self: flex-start; width: 30px; height: 30px; display: grid; place-items: center;
@@ -393,20 +400,35 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
   #viewer { position: fixed; inset: 0; z-index: 60; width: 100% !important; height: 100%; transform: translateX(100%);
     transition: transform 0.28s ease; }
   body.viewing #viewer { transform: none; }
-  body { flex-direction: column; }
-  aside { width: 100%; border-right: 0; border-bottom: 1px solid var(--rule); padding: 14px 16px; gap: 10px; max-height: 45vh; }
+  /* The sidebar is a drawer on a phone: the menu button slides it in over the chat, a tap outside closes it.
+     It used to stack above the chat and take most of the first screen. */
+  aside, body.noside aside { display: flex; position: fixed; top: 0; bottom: 0; left: 0; z-index: 50;
+    width: min(86vw, 320px); padding: 18px 16px; transform: translateX(-105%); transition: transform 0.25s ease;
+    background: #15171a; }
+  body.drawer aside { transform: none; }
+  #scrim { position: fixed; inset: 0; z-index: 49; background: rgba(0, 0, 0, 0.55); opacity: 0; pointer-events: none;
+    transition: opacity 0.25s ease; }
+  body.drawer #scrim { opacity: 1; pointer-events: auto; }
   .foot { display: none; }
-  #hsettings { display: grid; position: absolute; top: 14px; right: 12px; width: 32px; height: 32px; place-items: center;
-    border: 1px solid var(--rule); border-radius: 8px; background: rgba(255, 255, 255, 0.04); color: var(--mist); }
+  body, body.noside { --gut: 16px; }
+  main { height: 100vh; height: 100dvh; }
+  header { padding: 10px 12px 10px; }
+  body.noside header { padding-left: 12px; }
+  #scrim { display: block; }
+  .mbar .mbrand { display: flex; }
+  .mbar { display: flex; align-items: center; justify-content: center; position: relative; height: 36px; margin-bottom: 8px; }
+  #showside, #hsettings, body.noside #showside, body.noside #hsettings { display: grid; position: absolute; top: 2px;
+    width: 32px; height: 32px; place-items: center; border: 1px solid var(--rule); border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04); color: var(--mist); cursor: pointer; }
+  #showside, body.noside #showside { left: 0; }
+  #hsettings, body.noside #hsettings { right: 0; }
+  #hsettings svg { width: 17px; height: 17px; }
   .settings { left: 12px !important; right: 12px; width: auto; }
-  .sections { margin-right: 40px; gap: 4px; }   /* clear of the header gear */
-  .sections button { padding: 6px 9px; letter-spacing: 0.08em; gap: 5px; }
-  body.noside #hsettings { right: 12px; top: 14px; }
-  body.noside #showside { left: 12px; top: 14px; }
-  body.noside header { padding-left: 56px; }
-  main { height: auto; flex: 1; min-height: 0; }
-  body { height: 100vh; }
-  header, #log, form { padding-left: 16px; padding-right: 16px; }
+  .sections { gap: 4px; margin-bottom: 10px; justify-content: space-between; }
+  .sections button { padding: 6px 9px; letter-spacing: 0.06em; gap: 5px; }
+  h1, .subtitle { font-size: 0.95rem; }
+  #log, form { padding-left: 14px; padding-right: 14px; }
+  form { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
 }
 </style>
 </head>
@@ -450,8 +472,11 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
       <svg class="out" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M3 12h18"/></svg>
       <svg class="in" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l5 5-5 5M20 7l-5 5 5 5M9 12H2M15 12h7"/></svg>
     </button>
-    <button id="showside" type="button" title="Show sidebar" aria-label="Show sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/></svg></button>
-    <button id="hsettings" type="button" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    <div class="mbar">
+      <button id="showside" type="button" title="Show sidebar" aria-label="Show sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/></svg></button>
+      <button id="hsettings" type="button" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      <span class="mbrand" id="mbrand"><img src="logo.png" alt="">ASK<span class="nick">NICK</span><span class="sam">SAM</span></span>
+    </div>
     <nav class="sections" id="sections" role="tablist" aria-label="Product">
       <button type="button" role="tab" data-sec="NonQM">NonQM</button>
       <button type="button" role="tab" data-sec="Conventional"><i class="pdot" data-prog="conv"></i>Conventional</button>
@@ -475,6 +500,7 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
     </div>
   </form>
 </main>
+<div id="scrim"></div>
 <section id="viewer" aria-label="Guideline viewer" aria-hidden="true">
   <div class="vbar">
     <div class="vtitle"><b id="vname"></b><span id="vpage"></span></div>
@@ -579,6 +605,8 @@ function showBadge(animate = false) {
     el.classList.remove("go", "back");
     if (animate && va !== was) { void el.offsetWidth; el.classList.add(va ? "go" : "back"); }   // reflow restarts it
   }
+  $("mbrand").classList.toggle("va", va);   // the phone's header row
+  $("mbrand").querySelector("img").src = va ? "logo-va.png" : "logo.png";
 }
 function setSection(s, keep = "") {
   if (!SECTIONS[s]) return;
@@ -707,8 +735,16 @@ document.addEventListener("keydown", e => {
   if (e.key === "Escape" && !settingsBox.hidden) { e.stopImmediatePropagation(); closeSettings(); }   // not the viewer too
 });
 $("widen").addEventListener("click", () => setSetting("wide", setting("wide") === "1" ? "" : "1"));
-$("hideside").addEventListener("click", () => { closePicker(); closeSettings(); setSetting("side", "hidden"); });
-$("showside").addEventListener("click", () => setSetting("side", ""));
+// On a phone the sidebar is a drawer (body.drawer, not saved); on a computer the same buttons hide and show it.
+const phone = matchMedia("(max-width: 760px)");
+function drawer(open) { document.body.classList.toggle("drawer", open); if (!open) closePicker(); }
+$("hideside").addEventListener("click", () => {
+  closePicker(); closeSettings();
+  if (phone.matches) drawer(false); else setSetting("side", "hidden");
+});
+$("showside").addEventListener("click", e => { e.stopPropagation(); phone.matches ? drawer(true) : setSetting("side", ""); });
+$("scrim").addEventListener("click", () => drawer(false));
+document.addEventListener("keydown", e => { if (e.key === "Escape" && document.body.classList.contains("drawer")) drawer(false); });
 applySettings();
 picker.menu.addEventListener("click", e => { const o = e.target.closest(".picker-opt:not(.off)"); if (o) choose(o.dataset.value); });
 picker.menu.addEventListener("mousemove", e => {
@@ -881,6 +917,7 @@ $("chats").addEventListener("click", async e => {
     if (item.dataset.id === chatId) $("newchat").click(); else loadChats();
     return;
   }
+  drawer(false);
   openChat(item.dataset.id);
 });
 async function openChat(id) {
@@ -937,6 +974,7 @@ $("q").addEventListener("input", e => { e.target.style.height = ""; e.target.sty
 $("newchat").addEventListener("click", () => {
   if (busy) return;
   history = []; chatId = null;
+  drawer(false);
   $("log").innerHTML = `<div class="empty" id="empty"></div>`;
   renderSidebar();
   loadChats();
