@@ -168,7 +168,7 @@ handbook)", never "Overlay". The top 3 handbook hits also bring the previous pag
 email ("local" on this PC). The server saves each turn after the answer finishes; people see only their own.
 * Search index (ChromaDB in `db/`): update it only through the admin Index tab, never from a second process
 while the server runs. Two processes corrupted it on 2026-11-12 (broken copy in `db.broken-2026-11-12/`, rebuilt).
-* Mode names on the page: Guidelines and Scenario (was "Deal check"; the radio value is still `deal`).
+* Mode names on the page: Guidelines and Scenario (was "Deal check"; the radio value is still `deal`). Since 2026-11-15 Guidelines has no button (it is the default); Scenario is a toggle, orange word when on, tap again for Guidelines.
 * Streamlit (old): `streamlit run ui/app.py`. Tests: `.venv\Scripts\python.exe -m pytest` (system Python lacks ollama).
 Model race: `python -m tools.compare_models <model> ...`.
 

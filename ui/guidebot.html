@@ -114,6 +114,7 @@ aside {
   display: block; padding: 9px 12px; border: 1px solid var(--rule); border-radius: 8px; cursor: pointer;
   background: var(--card); transition: border-color 0.15s, background 0.15s;
 }
+.modes label[hidden] { display: none; }
 .modes input { position: absolute; opacity: 0; pointer-events: none; }
 .modes b { display: block; font-weight: 600; font-size: 0.8rem; }
 /* The one-line description only opens on hover (or keyboard focus). */
@@ -440,8 +441,8 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
   <hr>
   <div class="label">WHAT DO YOU NEED?</div>
   <div class="modes">
-    <label><input type="radio" name="mode" value="ask" checked><b>Guidelines</b><small>How a rule works, what's allowed</small></label>
-    <label><input type="radio" name="mode" value="deal"><b>Scenario</b><small>Max LTV for a borrower's scenario</small></label>
+    <label hidden><input type="radio" name="mode" value="ask" checked><b>Guidelines</b><small>How a rule works, what's allowed</small></label>
+    <label><input type="radio" name="mode" value="deal"><b>Scenario</b><small>Max LTV for a borrower's scenario. Tap again to turn off.</small></label>
     <label class="off"><input type="radio" name="mode" value="pricing" disabled><b>Pricing</b><small>Coming soon</small></label>
   </div>
   <div class="label">PROGRAM</div>
@@ -639,6 +640,15 @@ async function loadPrograms() {
   renderSidebar();
 }
 document.querySelectorAll("input[name=mode], #program").forEach(el => el.addEventListener("change", renderSidebar));
+// Guidelines is the default and has no button; Scenario is a toggle. Tapping it while on goes back to Guidelines.
+document.querySelector("input[name=mode][value=deal]").closest("label").addEventListener("click", e => {
+  const deal = document.querySelector("input[name=mode][value=deal]");
+  if (e.target === deal || !deal.checked) return;   // the label's own click on the input bubbles back through here
+  e.preventDefault();
+  const ask = document.querySelector("input[name=mode][value=ask]");
+  ask.checked = true;
+  ask.dispatchEvent(new Event("change"));
+});
 
 // ---------- program picker ----------
 // Draws the hidden <select>'s options as a menu. Picking one sets the select and fires its change event,
