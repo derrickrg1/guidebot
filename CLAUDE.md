@@ -150,7 +150,7 @@ messages via `--ts`; sizes inside messages are in em), chat width, program color
   CSS `sam-in`/`nick-out`, `showBadge` in `guidebot.html`); leaving VA, Nick hops back in. Meanwhile a red pen
   strikes NICK in the wordmark (two SVG strokes) and writes SAM over it in Caveat (`pen`/`write`, on `.brand`). Off with reduced motion.
   Favicon and admin stay `logo.png`.
-* Fonts: Lato everywhere (both pages), Bodoni Moda only for the ASKNICK wordmark. Matte page: soft vignette plus
+* Fonts: Lato everywhere (both pages), Bodoni Moda only for the AskNICK wordmark (browser tab reads AskNICK too). Matte page: soft vignette plus
 an SVG grain; flat translucent answer cards; the sidebar casts a shadow over the chat; section tabs centered.
 * Admin console: `/admin` (`ui/admin.html`, `guidebot/admin.py`) replaces the Streamlit Verify page: doc
 statuses, PDF page beside editable matrix/text, re-read, approve docs and overlay rules. Only his Gmail via
