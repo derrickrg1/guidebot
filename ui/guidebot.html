@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
 <title>AskNick</title>
 <link rel="icon" type="image/png" href="logo.png?v=6">
 <!-- Closest free match to Claude's type: serif for answers, clean sans for the interface. -->
@@ -41,7 +41,7 @@ html {
 html, body { margin: 0; height: 100%; }
 /* The page itself never scrolls: only the chat (#log) and the sidebar list do, so the header, tabs and sidebar stay put
    (on an iPad the whole page used to slide with the chat). */
-html, body { height: 100vh; height: 100dvh; overflow: hidden; overscroll-behavior: none; }
+html, body { height: 100vh; height: var(--app-h, 100dvh); overflow: hidden; overscroll-behavior: none; }
 body {
   background: transparent; color: var(--ink);
   font: 15px/1.55 Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
@@ -270,8 +270,8 @@ body.nocolors .md li.row[data-prog] { background: none; padding-left: 0; }
 hr { border: 0; border-top: 1px solid var(--rule); margin: 0; width: 100%; }
 
 /* 100dvh is the visible height: on an iPad 100vh counts the space behind the browser bars, which pushed the question box below the fold. */
-main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
-aside { height: 100vh; height: 100dvh; }
+main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; height: var(--app-h, 100dvh); }
+aside { height: 100vh; height: var(--app-h, 100dvh); }
 /* Column width: normal reads like Claude; "wide" (the header toggle) gives tables and long answers the room. */
 :root { --col: 780px; --gut: 32px; }
 body.wide { --col: 1240px; --gut: 20px; }
@@ -534,7 +534,7 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
     transition: opacity 0.25s ease; }
   body.drawer #scrim { opacity: 1; pointer-events: auto; }
   body, body.noside { --gut: 16px; }
-  main { height: 100vh; height: 100dvh; }
+  main { height: 100vh; height: var(--app-h, 100dvh); }
   header { padding: 10px 12px 10px; }
   body.noside header { padding-left: 12px; }
   #scrim { display: block; }
@@ -1321,6 +1321,23 @@ $("q").addEventListener("keydown", e => {
 });
 // Fold the box to one row when nothing is in it and you're working elsewhere. It opens on a tap or focus inside and
 // stays open until a tap (or focus) lands outside it, so tapping the Scenario chip doesn't fold it.
+// The page is exactly the visible area, so a phone keyboard pushes the box up instead of covering it (like Claude's
+// app). Android Chrome does this from the viewport meta (interactive-widget); iPhone Safari only shrinks the visual
+// viewport, so its height is copied into --app-h and the page is held at the top.
+if (window.visualViewport) {
+  let last = 0;
+  const vv = visualViewport, fit = () => {
+    if (vv.scale > 1.05) return;   // pinch zoom shrinks the visual viewport too: leave the layout alone
+    const h = Math.round(vv.height), log = $("log"), atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 80;
+    document.documentElement.style.setProperty("--app-h", h + "px");
+    if (vv.offsetTop || scrollY) scrollTo(0, 0);
+    if (h < last && atEnd) log.scrollTop = log.scrollHeight;   // keyboard up: keep the latest answer in view
+    last = h;
+  };
+  vv.addEventListener("resize", fit);
+  vv.addEventListener("scroll", () => { if (vv.offsetTop) scrollTo(0, 0); });
+  fit();
+}
 let boxOpen = false;
 function fold() {
   const keep = boxOpen || $("q").value.trim() || pending.length || !$("attach-menu").hidden;
