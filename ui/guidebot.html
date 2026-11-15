@@ -377,18 +377,18 @@ form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
 .sform-toggle[hidden] { display: none; }
 /* Scenario is a switch by the question box (2026-11-15; it was a button in the sidebar). Off means Guidelines. */
 .scen { display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; color: var(--mist);
-  font: 700 0.74rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.06em; transition: color 0.2s; }
+  font: 700 0.84rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.06em; transition: color 0.2s; gap: 9px; }
 .scen input { position: absolute; opacity: 0; pointer-events: none; }
-.scen .sw { position: relative; width: 26px; height: 15px; border-radius: 999px; background: rgba(255, 255, 255, 0.1);
+.scen .sw { position: relative; width: 34px; height: 19px; border-radius: 999px; background: rgba(255, 255, 255, 0.1);
   border: 1px solid var(--rule); transition: background 0.2s, border-color 0.2s; }
-.scen .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 9px; height: 9px; border-radius: 50%;
+.scen .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%;
   background: var(--steel); transition: transform 0.2s, background 0.2s; }
 .scen:hover { color: var(--ink); }
 .scen:has(input:checked) { color: var(--navy); }
 .scen:has(input:checked) .sw { background: rgba(192, 143, 44, 0.25); border-color: rgba(192, 143, 44, 0.6); }
-.scen:has(input:checked) .sw::after { transform: translateX(11px); background: var(--navy); }
+.scen:has(input:checked) .sw::after { transform: translateX(15px); background: var(--navy); }
 .scen:has(input:focus-visible) .sw { outline: 2px solid var(--navy); outline-offset: 2px; }
-.sform-toggle { font: 600 0.74rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.06em; color: var(--mist);
+.sform-toggle { font: 600 0.8rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.06em; color: var(--mist);
   background: none; border: 0; padding: 2px 0; cursor: pointer; display: flex; align-items: center; gap: 5px; }
 .sform-toggle:hover, .sform-toggle[aria-expanded=true] { color: var(--navy); }
 .sform-toggle svg { width: 12px; height: 12px; transition: transform 0.15s; }
