@@ -55,7 +55,7 @@ shown on a phone). The page shows only the progress line until an answer is done
   `gemini.stream` yields text only and returns its cost as the generator's return value. A Gemini failure before its
   first chunk falls through to the local model.
   * Env vars: `GEMINI_API_KEY` (in `.env`, never print or log it), `GUIDEBOT_GEMINI=0` turns Gemini off,
-    `GUIDEBOT_GEMINI_MODEL` (default `gemini-3.5-flash`).
+    `GUIDEBOT_GEMINI_MODEL` (default `gemini-3.8-flash`).
   * **Gemini must not get borrower data unless the key's Google project has billing linked (paid tier).** On the free
     tier Google may use prompts to train its models. Sandbox phase: no borrower data goes in AskNick anyway.
   * Status (`guidebot/claude_status.py`): a free `messages.count_tokens` call fails with the credit-balance error when
@@ -68,16 +68,19 @@ shown on a phone). The page shows only the progress line until an answer is done
     admin, your own for others).
   * Spend (`guidebot/usage.py`, `data/usage.jsonl`): one row per answer with the engine that answered (claude, gemini
     or local, the furthest down the line any call went), model, tokens and dollars. No question or answer text. Prices
-    per million tokens in `PRICES` (gemini-3.5-flash $1.50 in / $9 out, gemini-3.1-pro-preview $2 / $12); Gemini's
+    per million tokens in `PRICES` (gemini-3.8-flash $0.75 in / $3.75 out to Dec 31 then double, gemini-4-carbon/argon $2 / $10 to Nov 30 then double, 3.5 Flash $1.50 / $9 unconfirmed, gemini-3.1-pro-preview $2 / $12); Gemini's
     thinking tokens bill as output. Python-only answers (deal lookups, calculators) aren't recorded.
   * Tests: `tests/conftest.py` turns Gemini off, answers the status check "ok" without a call, and sends spend to a temp
   file. `tests/test_claude_status.py` runs the fallback with a fake Gemini client.
   * Out of Claude credit since 2026-11-13.
-  * The Gemini key is on the free tier (found 2026-11-14): Gemini 4 Argon/Carbon have a quota of 0 there, 4 Hydrogen
-    stops at 20 requests a day (an answer is several calls, so a handful of answers), 3.8 Flash answers 503 "high
-    demand". Past that the backup falls to gemma. Calls retry 408/429/5xx 4 times (`gemini._client`).
-    `tools/backup_race.py run gemini-<model> 0 37` races a Gemini model (answers that fell back aren't saved);
-    unfinished until billing is linked. Hydrogen's partial run: 5 of 6 keys right, about 45 s and $0.20 an answer.
+  * Billing linked on the Gemini key's project 2026-11-14 (paid tier; the same key AppraisAI uses). Before that, on
+    the free tier, Gemini 4 Argon/Carbon had a quota of 0 and 4 Hydrogen stopped at 20 requests a day. Calls retry
+    408/429/5xx 4 times (`gemini._client`; 3.8 Flash answered 503 "high demand" once).
+  * Backup picked 2026-11-14 by `tools/backup_race.py run gemini-<model> 0 12` (answers that fell back aren't saved),
+    12 keyed questions across all four sections, cut from 37 to save money: 3.8 Flash 11/12, 3 grounding problems,
+    $0.74; 4 Carbon 11/12, 31 grounding problems (cites filenames in backticks, so chips don't open), $1.67. Both
+    missed only conv-guide-06 (gave HomeReady's 80% AMI, not the 50% the key also wants). gemma4 12/12 on the same
+    12, 20 grounding problems, free but about 77 s. Hydrogen and Argon dropped before finishing.
 * pdfplumber, pandas, ChromaDB + BM25 (hybrid search), Streamlit UI.
 * GPU (RTX 5070 Ti, 16 GB): torch cu128 in `.venv` (Docling's install swapped it to CPU once; reinstall cu128 with
 `--force-reinstall --no-deps` if `torch.cuda.is_available()` is False). Reranker `guidebot/rerank.py`

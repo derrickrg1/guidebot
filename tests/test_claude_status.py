@@ -64,8 +64,8 @@ def test_down_goes_to_gemini_not_claude(monkeypatch):
     assert out == llm.FALLBACK_SHOWN + "Gemini"
     system = fake.sent[0][2].system_instruction
     assert system == "rules"   # the same system prompt Claude gets
-    # $1.50/M in, $9/M out, thinking bills as output: 1.5 + 0.2M * 9 = $3.30
-    assert run["engine"] == "gemini" and run["model"] == "gemini-3.5-flash" and run["usd"] == pytest.approx(3.30)
+    # $0.75/M in, $3.75/M out, thinking bills as output: 0.75 + 0.2M * 3.75 = $1.50
+    assert run["engine"] == "gemini" and run["model"] == "gemini-3.8-flash" and run["usd"] == pytest.approx(1.50)
 
 
 def test_gemini_failure_falls_to_local(monkeypatch):

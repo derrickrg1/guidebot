@@ -1,7 +1,7 @@
 """Gemini fallback (2026-11-14): when Claude can't answer (out of credits, unreachable), answers go to Google's Gemini
 API before the local model. Same system prompt and task Claude gets. Same pattern as AppraisAI's gemini.py.
 
-Key GEMINI_API_KEY in .env, model GUIDEBOT_GEMINI_MODEL (default gemini-3.5-flash). Off: GUIDEBOT_GEMINI=0.
+Key GEMINI_API_KEY in .env, model GUIDEBOT_GEMINI_MODEL (default gemini-3.8-flash, picked by a race 2026-11-14). Off: GUIDEBOT_GEMINI=0.
 Gemini only gets real borrower data if the key's Google project has billing linked (paid tier): on the free tier
 Google may use prompts to improve its models. Sandbox phase: no borrower data goes in AskNick anyway.
 """
