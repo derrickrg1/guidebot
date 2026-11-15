@@ -263,6 +263,9 @@ body.wide #widen .in { display: block; }
 /* Main area reads like Claude: one serif at one size. The title only differs by weight and color. */
 h1, .subtitle, .empty, .msg.bot { font: 400 1rem/1.65 var(--serif); letter-spacing: 0; }
 h1 { margin: 0; color: var(--navy); font-weight: 600; }
+/* The title and subtitle under the tabs repeated the tab and mode (2026-11-15): hidden. JS still fills them; the tab title uses the same text. */
+#title, #subtitle { display: none; }
+header .sections { margin-bottom: 0; }
 .subtitle { color: var(--mist); }
 /* Section tabs across the top: NonQM, Conventional, FHA, VA. Each narrows the picker and the chat to its programs. */
 .sections { display: flex; justify-content: center; gap: 6px; margin: 0 0 14px; overflow-x: auto; scrollbar-width: none; }
@@ -484,7 +487,7 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
     <div class="mbar">
       <button id="showside" type="button" title="Show sidebar" aria-label="Show sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/></svg></button>
       <button id="hsettings" type="button" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
-      <span class="mbrand" id="mbrand"><img src="logo.png" alt="">ASK<span class="nick">NICK</span><span class="sam">SAM</span></span>
+      <span class="mbrand" id="mbrand"><img src="logo.png" alt=""><span>ASK<span class="nick">NICK</span><span class="sam">SAM</span></span></span>
     </div>
     <nav class="sections" id="sections" role="tablist" aria-label="Product">
       <button type="button" role="tab" data-sec="NonQM">NonQM</button>
