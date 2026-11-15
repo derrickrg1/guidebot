@@ -20,6 +20,11 @@
   --warn-bg: rgba(226, 184, 102, 0.1); --bad: #e08080; --ok: #7cc48a;
 }
 /* Each tab tints the page (2026-11-15): NonQM charcoal, Conventional olive, FHA blue, VA oxblood, all near black. */
+/* --page is registered as a color so the tint can fade between tabs instead of snapping (a plain custom property
+   can't be animated). Browsers without @property just switch. */
+@property --page { syntax: "<color>"; inherits: true; initial-value: #131c1e; }
+:root { transition: --page 0.9s cubic-bezier(0.4, 0, 0.2, 1); }
+@media (prefers-reduced-motion: reduce) { :root { transition: none; } }
 :root[data-sec=NonQM] { --page: #161616; }
 :root[data-sec=Conventional] { --page: #181c12; }
 :root[data-sec=FHA] { --page: #0f1622; }
@@ -289,7 +294,7 @@ header .sections { margin-bottom: 0; }
 .sections { display: flex; justify-content: center; gap: 6px; margin: 0 0 14px; overflow-x: auto; scrollbar-width: none; }
 .sections::-webkit-scrollbar { display: none; }
 .sections button { display: flex; align-items: center; gap: 7px; flex: none; padding: 6px 14px; border: 1px solid var(--rule);
-  border-radius: 999px; background: none; color: var(--steel); cursor: pointer; letter-spacing: 0.1em;
+  border-radius: 999px; background: none; color: var(--steel); cursor: pointer; letter-spacing: 0.1em; transition: color 0.4s, border-color 0.4s;
   font: 700 0.72rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; text-transform: uppercase; }
 .sections button:hover { color: var(--ink); border-color: rgba(192, 143, 44, 0.4); }
 .sections button[aria-selected=true] { color: var(--navy); }   /* the word only, no filled pill */
