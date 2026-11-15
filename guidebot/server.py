@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from guidebot import admin, agency, chat, claude_status, config, history, usage
+from guidebot import admin, agency, chat, claude_status, config, history, updates, usage
 
 PORT = 8600
 PAGE = config.ROOT / "ui" / "guidebot.html"
@@ -125,6 +125,9 @@ class Handler(BaseHTTPRequestHandler):
         elif path.startswith("/api/chats/"):
             c = history.get_chat(path.rsplit("/", 1)[1], history.user(self.headers))
             self._json(c) if c else self._json({"error": "not found"}, 404)
+        elif path == "/api/updates":   # the "what changed" banner over the chat (updates.py)
+            sec = parse_qs(url.query).get("section", [""])[0]
+            self._json({"updates": updates.recent(sec, chat.SECTIONS) if sec in chat.SECTIONS else []})
         elif path == "/api/programs":
             self._json({"programs": chat.programs_info(), "model": config.CHAT_MODEL,
                         "user": history.user(self.headers), "claude": _claude(self.headers)})   # shown on the settings button
@@ -194,6 +197,8 @@ class Handler(BaseHTTPRequestHandler):
                                         note, str(body.get("chat_id") or ""), str(body.get("program") or ""),
                                         str(body.get("section") or ""), str(body.get("mode") or ""))
             self._json({"ok": True, "id": fid})
+        elif path == "/api/chats/pin":
+            self._json({"ok": history.pin_chat(str(body.get("id") or ""), history.user(self.headers), bool(body.get("pinned")))})
         elif path == "/api/chats/delete":
             self._json({"ok": history.delete_chat(str(body.get("id") or ""), history.user(self.headers))})
         else:

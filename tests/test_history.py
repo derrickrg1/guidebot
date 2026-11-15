@@ -47,3 +47,11 @@ def test_delete():
 def test_user_from_cloudflare_header():
     assert history.user({"Cf-Access-Authenticated-User-Email": " NWilson@RevoFunding.com "}) == "nwilson@revofunding.com"
     assert history.user({}) == "local"
+
+
+def test_pinned_chats_come_first_and_only_the_owner_can_pin():
+    history.save_turn("old", "a@x.com", "q", "a")
+    history.save_turn("new", "a@x.com", "q", "a")
+    assert not history.pin_chat("old", "b@x.com", True)
+    assert history.pin_chat("old", "a@x.com", True)
+    assert [(c["id"], c["pinned"]) for c in history.list_chats("a@x.com")] == [("old", 1), ("new", 0)]

@@ -29,6 +29,9 @@ html {
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
+/* The page itself never scrolls: only the chat (#log) and the sidebar list do, so the header, tabs and sidebar stay put
+   (on an iPad the whole page used to slide with the chat). */
+html, body { height: 100vh; height: 100dvh; overflow: hidden; overscroll-behavior: none; }
 body {
   background: transparent; color: var(--ink);
   font: 15px/1.55 Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
@@ -178,6 +181,7 @@ select option { background: #131c1e; }
 .chats .when:hover { color: var(--ink); }
 .chats .when svg { width: 11px; height: 11px; transition: transform 0.15s; }
 .chats .when.shut svg { transform: rotate(-90deg); }
+.chats .when[data-when=Pinned] { cursor: default; color: var(--navy); } .chats .when[data-when=Pinned] svg { display: none; }
 .chat-item[hidden] { display: none; }
 .chat-item { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 7px; cursor: pointer;
   font-size: 0.8rem; color: var(--steel); }
@@ -187,6 +191,13 @@ select option { background: #131c1e; }
 .chat-item .x { opacity: 0; border: 0; background: none; color: var(--mist); cursor: pointer; padding: 0 2px; font-size: 1rem; line-height: 1; }
 .chat-item:hover .x { opacity: 1; }
 .chat-item .x:hover { color: var(--bad); }
+/* Pin keeps a chat in "Pinned" at the top (saved with the chat, so it follows you to the phone). */
+.chat-item .pin { opacity: 0; border: 0; background: none; color: var(--mist); cursor: pointer; padding: 0 2px; display: grid; }
+.chat-item .pin svg { width: 13px; height: 13px; }
+.chat-item:hover .pin, .chat-item.pinned .pin { opacity: 1; }
+.chat-item.pinned .pin { color: var(--navy); }
+.chat-item .pin:hover { color: var(--navy); }
+@media (hover: none) { .chat-item .pin, .chat-item .x { opacity: 0.7; } }
 .note { font-size: 0.78rem; padding: 8px 10px; border-radius: 6px; background: var(--warn-bg); color: var(--warn); }
 .row { display: flex; gap: 8px; }
 .btn {
@@ -250,7 +261,7 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 0; width: 100%; }
 
 /* 100dvh is the visible height: on an iPad 100vh counts the space behind the browser bars, which pushed the question box below the fold. */
 main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
-aside { max-height: 100dvh; }
+aside { height: 100vh; height: 100dvh; }
 /* Column width: normal reads like Claude; "wide" (the header toggle) gives tables and long answers the room. */
 :root { --col: 780px; --gut: 32px; }
 body.wide { --col: 1240px; --gut: 20px; }
@@ -280,7 +291,7 @@ header .sections { margin-bottom: 0; }
 #offline { display: none; margin-top: 10px; }
 #offline code { background: var(--card); padding: 1px 5px; border-radius: 4px; }
 /* Conversation and input share one centered column, like Claude's chat. */
-#log { flex: 1; overflow-y: auto; padding: 24px max(var(--gut), calc((100% - var(--col)) / 2)); display: flex; flex-direction: column; gap: 18px; }
+#log { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 24px max(var(--gut), calc((100% - var(--col)) / 2)); display: flex; flex-direction: column; gap: 18px; }
 .empty { color: var(--mist); max-width: 560px; }
 .msg.user {
   align-self: flex-end; background: rgba(255, 255, 255, 0.07); color: var(--ink); padding: 10px 16px;
@@ -296,7 +307,8 @@ header .sections { margin-bottom: 0; }
 .choices button { font: 600 0.8rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: var(--user-ink); cursor: pointer;
   background: var(--user); border: 1px solid rgba(192, 143, 44, 0.45); border-radius: 999px; padding: 6px 14px; }
 .choices button:hover { border-color: var(--navy); }
-.wrong { margin-top: 8px; text-align: right; font: 0.75rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: var(--mist); }
+/* Under each answer: Copy for notes (plain text with its citations, for the loan file) and This is wrong. */
+.wrong { display: flex; justify-content: flex-end; gap: 14px; margin-top: 8px; text-align: right; font: 0.75rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: var(--mist); }
 .wrong button { font: inherit; color: inherit; background: none; border: 0; padding: 2px 0; cursor: pointer; text-decoration: underline dotted; }
 .wrong button:hover { color: var(--navy); }
 .md > :first-child { margin-top: 0; }
@@ -349,6 +361,41 @@ details.src summary { cursor: pointer; color: var(--steel); }
 }
 /* One rounded box holding the question and a round send arrow, like Claude's input. */
 form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
+/* Scenario form: fields that build the deal sentence, so the reader never misreads it. Scenario mode only. */
+.sform-bar { display: flex; justify-content: flex-start; margin-bottom: 6px; }
+.sform-bar[hidden] { display: none; }
+.sform-toggle { font: 600 0.74rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.06em; color: var(--mist);
+  background: none; border: 0; padding: 2px 0; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+.sform-toggle:hover, .sform-toggle[aria-expanded=true] { color: var(--navy); }
+.sform-toggle svg { width: 12px; height: 12px; transition: transform 0.15s; }
+.sform-toggle[aria-expanded=true] svg { transform: rotate(180deg); }
+.sform { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; padding: 12px;
+  border: 1px solid var(--rule); border-radius: 12px; background: var(--card); }
+.sform[hidden] { display: none; }
+.sform label { display: flex; flex-direction: column; gap: 4px; font: 600 0.62rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--mist); }
+.sform input, .sform select { font: 0.88rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: var(--ink);
+  background: rgba(0, 0, 0, 0.3); border: 1px solid var(--rule); border-radius: 7px; padding: 7px 8px; min-width: 0; width: 100%; }
+.sform select option { background: #15171a; }
+.sform input:focus, .sform select:focus { outline: none; border-color: rgba(192, 143, 44, 0.6); }
+.sform .run { grid-column: 4; align-self: end; padding: 8px; border: 1px solid rgba(192, 143, 44, 0.6); border-radius: 7px;
+  background: rgba(192, 143, 44, 0.16); color: var(--navy); font: 700 0.8rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; cursor: pointer; }
+.sform .run:hover { background: rgba(192, 143, 44, 0.26); }
+.sform .opt { color: var(--mist); font-weight: 400; letter-spacing: 0.04em; text-transform: none; }
+@media (max-width: 760px) { .sform { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sform .run { grid-column: 1 / -1; } }
+/* What changed lately on this tab (updates.py): sheets NDM swapped and new agency letters. Dismissed per browser. */
+.news { margin: 12px max(var(--gut), calc((100% - var(--col)) / 2)) 0; padding: 9px 12px; display: flex; gap: 10px; align-items: flex-start;
+  border: 1px solid rgba(192, 143, 44, 0.35); border-radius: 10px; background: rgba(192, 143, 44, 0.07); font-size: 0.8rem; color: var(--steel); }
+.news[hidden] { display: none; }
+.news b { color: var(--navy); font-weight: 700; letter-spacing: 0.12em; font-size: 0.66rem; text-transform: uppercase; padding-top: 2px; flex: none; }
+.news ul { list-style: none; margin: 0; padding: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.news a { color: var(--ink); text-decoration: none; } .news a:hover { color: var(--navy); }
+.news .d { color: var(--mist); margin-left: 6px; }
+.news .x { border: 0; background: none; color: var(--mist); cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 2px; }
+.news .x:hover { color: var(--ink); }
+/* The money line of a deal answer as the headline: "Max LTV/CLTV: 75%" or "Best fit: 80% max LTV". */
+.md p.hero { margin: 0 0 10px; font-size: 0.95em; color: var(--steel); }
+.md p.hero strong:first-child { display: block; font: 600 1.9em/1.1 "Bodoni Moda", Didot, "Bodoni MT", serif; color: var(--navy); letter-spacing: 0.01em; margin-bottom: 4px; }
 .composer {
   display: flex; align-items: flex-end; gap: 10px; padding: 12px 12px 12px 18px;
   border: 1px solid rgba(200, 204, 210, 0.16); border-radius: 20px; background: rgba(255, 255, 255, 0.04);
@@ -501,10 +548,23 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
     <div id="offline" class="note">Can't reach AskNick. Start it in PowerShell from the guidebot folder:
       <code>.venv\Scripts\activate; python -m guidebot.server</code> then reload this page.</div>
   </header>
+  <div id="news" class="news" hidden></div>
   <div id="log">
     <div class="empty" id="empty"></div>
   </div>
   <form id="ask">
+    <div class="sform-bar" id="sform-bar" hidden><button type="button" class="sform-toggle" id="sform-toggle" aria-expanded="false" aria-controls="sform">
+      Fill in a form<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></div>
+    <div class="sform" id="sform" hidden>
+      <label>FICO<input id="f-fico" inputmode="numeric" placeholder="720"></label>
+      <label>Loan amount<input id="f-loan" inputmode="numeric" placeholder="650,000"></label>
+      <label>Value / price <span class="opt">optional</span><input id="f-value" inputmode="numeric" placeholder="850,000"></label>
+      <label>ZIP <span class="opt">optional</span><input id="f-zip" inputmode="numeric" maxlength="5" placeholder="92101"></label>
+      <label>Occupancy<select id="f-occ"><option>primary residence</option><option>second home</option><option>investment property</option></select></label>
+      <label>Purpose<select id="f-purpose"><option>purchase</option><option>rate and term refinance</option><option>cash-out refinance</option></select></label>
+      <label>Property<select id="f-prop"><option>single family</option><option>PUD</option><option>condo</option><option>non-warrantable condo</option><option>2-unit</option><option>3-unit</option><option>4-unit</option></select></label>
+      <button type="button" class="run" id="f-run">Run scenario</button>
+    </div>
     <div class="composer">
       <textarea id="q" rows="2" placeholder="Ask about a guideline, or give me a scenario"></textarea>
       <button class="send" id="send" aria-label="Send" title="Send (Enter)">
@@ -579,8 +639,52 @@ function renderSidebar() {
       + esc(choice.replace(/ \(Express \+ Ignite\)$/, " · Express + Ignite")) : esc($("program").selectedOptions[0]?.textContent || "All programs");
   store.set("mode", m); store.set("program", choice);
   document.querySelectorAll("#sections button").forEach(b => b.setAttribute("aria-selected", b.dataset.sec === section));
+  $("sform-bar").hidden = m !== "deal";
+  if (m !== "deal") showForm(false);
+  if (newsFor !== section) loadNews();
   const p = programs.find(x => x.name === choice);
   $("docnote").hidden = !(p && p.docs.some(d => d.status !== "verified"));
+}
+// ---------- scenario form: builds the same sentence a person would type, so the deal reader takes it as is ----------
+function showForm(open) {
+  $("sform").hidden = !open;
+  $("sform-toggle").setAttribute("aria-expanded", open);
+  if (open) $("f-fico").focus();
+}
+$("sform-toggle").addEventListener("click", () => showForm($("sform").hidden));
+function money(id) {
+  const v = $(id).value.replace(/[^\d.km]/gi, "");
+  return v ? Math.round(parseFloat(v) * (/m$/i.test(v) ? 1e6 : /k$/i.test(v) ? 1e3 : 1)) || 0 : 0;
+}
+$("f-run").addEventListener("click", () => {
+  const fico = parseInt($("f-fico").value, 10), loan = money("f-loan"), value = money("f-value"), zip = $("f-zip").value.trim();
+  if (!fico || !loan) { (fico ? $("f-loan") : $("f-fico")).focus(); return; }
+  const usd = n => "$" + n.toLocaleString("en-US"), purchase = $("f-purpose").value === "purchase";
+  const parts = [`${fico} FICO`, `${usd(loan)} loan amount`];
+  if (value) parts.push(`${purchase ? "purchase price" : "value"} ${usd(value)}`);
+  parts.push($("f-occ").value, $("f-purpose").value, $("f-prop").value);
+  if (/^\d{5}$/.test(zip)) parts.push(`ZIP ${zip}`);
+  showForm(false);
+  send(parts.join(", "));
+});
+// ---------- what changed lately on this tab (server: updates.py). Dismissed items stay gone in this browser. ----------
+let newsFor = null;
+const MONTH = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
+async function loadNews() {
+  newsFor = section;
+  let items = [];
+  try { items = (await (await fetch(API + "/api/updates?section=" + encodeURIComponent(section))).json()).updates || []; } catch {}
+  if (newsFor !== section) return;
+  const gone = new Set(store.get("asknick.news").split("\n"));
+  items = items.filter(u => !gone.has(u.id)).slice(0, 3);
+  $("news").hidden = !items.length;
+  $("news").innerHTML = items.length ? `<b>What's new</b><ul>${items.map(u =>
+    `<li><a href="${API}/pdf/${encodeURIComponent(u.file)}" target="_blank" rel="noopener">${esc(u.title)}</a> ${u.kind === "new" ? "added" : "updated"}<span class="d">${MONTH(u.date)}</span></li>`).join("")}</ul>
+    <button class="x" type="button" aria-label="Dismiss" title="Dismiss">×</button>` : "";
+  $("news").querySelector(".x")?.addEventListener("click", () => {
+    store.set("asknick.news", [...gone, ...items.map(u => u.id)].filter(Boolean).slice(-200).join("\n"));
+    $("news").hidden = true;
+  });
 }
 // The section tabs. Same split as chat.SECTIONS on the server, which narrows the answer to these programs.
 const SECTIONS = {
@@ -890,11 +994,38 @@ $("log").addEventListener("click", e => {
   setTimeout(() => pick.click());   // after this click reaches the picker's "click outside closes it" listener
 });
 // "This is wrong": the note goes to Derrick (admin Feedback tab), and each report becomes a stress test case.
+// The answer as plain text for the loan file or an email: markdown and the viewer's mark coordinates stripped,
+// citations kept as "(file, p. N)".
+function notesText(question, answer) {
+  const t = clean(answer)
+    .replace(/,?\s*mark(?:\s+[\d.]+)+/g, "")
+    .split("\n").filter(l => !/^\s*\|?\s*:?-{3,}/.test(l))
+    .map(l => /^\s*\|/.test(l) ? l.trim().replace(/^\||\|$/g, "").split("|").map(c => c.trim()).join(" | ") : l)
+    .join("\n")
+    .replace(/\*\*([^*]+)\*\*/g, "$1").replace(/(^|[\s(])[*_]([^*_\n]+)[*_](?=[\s).,:;]|$)/gm, "$1$2")
+    .replace(/^#+\s*/gm, "").replace(/^\s*[*\-]\s+/gm, "- ").replace(/\n{3,}/g, "\n\n").trim();
+  return `Q: ${question}\n\n${t}\n\n(AskNick, ${new Date().toLocaleDateString()})`;
+}
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch {}
+  const ta = Object.assign(document.createElement("textarea"), { value: text });   // older Safari, plain http
+  ta.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(ta); ta.select();
+  const ok = document.execCommand("copy"); ta.remove(); return ok;
+}
+function heroize(box) {
+  const p = box.querySelector(".md > p"), s = p && p.firstElementChild;
+  if (s && s.tagName === "STRONG" && p.firstChild === s && /^(Max LTV\/CLTV|Best fit):\s*\d/.test(s.textContent)) p.classList.add("hero");
+}
 function addWrong(box, question, answer) {
+  heroize(box);
   const d = document.createElement("div");
   d.className = "wrong";
-  d.innerHTML = `<button type="button">This is wrong</button>`;
-  d.querySelector("button").onclick = async () => {
+  d.innerHTML = `<button type="button" class="copy">Copy for notes</button><button type="button" class="bad">This is wrong</button>`;
+  d.querySelector(".copy").onclick = async e => {
+    const b = e.target, ok = await copyText(notesText(question, answer));
+    b.textContent = ok ? "Copied" : "Couldn't copy"; setTimeout(() => b.textContent = "Copy for notes", 1600);
+  };
+  d.querySelector(".bad").onclick = async () => {
     const note = prompt("What's wrong with this answer? (What should it say, or where's the rule?)");
     if (!note || !note.trim()) return;
     try {
@@ -923,20 +1054,22 @@ async function loadChats() {
   try { chats = (await (await fetch(API + "/api/chats")).json()).chats || []; } catch { return; }
   let last = "";
   $("chats").innerHTML = chats.map(c => {
-    const w = whenLabel(c.updated), shut = folded(w);
+    const w = c.pinned ? "Pinned" : whenLabel(c.updated), shut = folded(w);
     const head = w !== last ? `<button type="button" class="when${shut ? " shut" : ""}" data-when="${w}" aria-expanded="${!shut}">${w}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>` : "";
     last = w;
-    return head + `<div class="chat-item${c.id === chatId ? " on" : ""}" data-id="${esc(c.id)}" data-when="${w}" title="${esc(c.title)}"${shut ? " hidden" : ""}>
-      <span class="t">${esc(c.title)}</span><button class="x" type="button" aria-label="Delete chat" title="Delete">×</button></div>`;
+    return head + `<div class="chat-item${c.id === chatId ? " on" : ""}${c.pinned ? " pinned" : ""}" data-id="${esc(c.id)}" data-when="${w}" title="${esc(c.title)}"${shut ? " hidden" : ""}>
+      <span class="t">${esc(c.title)}</span><button class="pin" type="button" aria-label="${c.pinned ? "Unpin" : "Pin"} chat" title="${c.pinned ? "Unpin" : "Pin to top"}">${PIN}</button><button class="x" type="button" aria-label="Delete chat" title="Delete">×</button></div>`;
   }).join("");
 }
 // Chat groups fold by their heading. Today and Yesterday start open, This week and Earlier start folded;
 // a click flips it and the browser remembers (asknick.fold).
+const PIN = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M15 3l6 6-3 1-3.5 3.5L15 18l-2 2-4-4-5 5-1-1 5-5-4-4 2-2 4.5.5L14 6z"/></svg>`;
 function folds() { try { return JSON.parse(store.get("asknick.fold") || "{}"); } catch { return {}; } }
-function folded(w) { const f = folds(); return w in f ? f[w] : w === "This week" || w === "Earlier"; }
+function folded(w) {
+  if (w === "Pinned") return false; const f = folds(); return w in f ? f[w] : w === "This week" || w === "Earlier"; }
 $("chats").addEventListener("click", e => {
   const h = e.target.closest(".when");
-  if (!h) return;
+  if (!h || h.dataset.when === "Pinned") return;   // Pinned always stays open
   const w = h.dataset.when, shut = !folded(w), f = folds();
   f[w] = shut;
   store.set("asknick.fold", JSON.stringify(f));
@@ -947,6 +1080,11 @@ $("chats").addEventListener("click", e => {
 $("chats").addEventListener("click", async e => {
   const item = e.target.closest(".chat-item");
   if (!item || busy) return;
+  if (e.target.closest(".pin")) {
+    await fetch(API + "/api/chats/pin", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: item.dataset.id, pinned: !item.classList.contains("pinned") }) });
+    return loadChats();
+  }
   if (e.target.closest(".x")) {
     if (!confirm("Delete this chat?")) return;
     await fetch(API + "/api/chats/delete", { method: "POST", headers: { "Content-Type": "application/json" },

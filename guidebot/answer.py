@@ -650,6 +650,10 @@ def matrix_cite(m: dict, res: dict) -> str:
     return f"({m['file']}, p. {m['page']}{mark})"
 
 
+def _and(names: list[str]) -> str:
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
 def comparison_md(comp: dict) -> str:
     """Markdown for compare_programs results, shared by both UIs."""
     if comp["missing"]:
@@ -658,10 +662,15 @@ def comparison_md(comp: dict) -> str:
     if not results:
         return "No programs with verified matrices found. Verify matrices in Verify Documents first."
     parts = []
-    eligible = [r for r in results if r.get("eligible") is True]
+    # Best LTV first, so the card reads as "where does this loan go" (2026-11-15).
+    eligible = sorted((r for r in results if r.get("eligible") is True), key=lambda r: -(r.get("max_ltv") or 0))
     ineligible = [r for r in results if r.get("eligible") is False]
     errors = [r for r in results if r.get("eligible") is None]
     if eligible:
+        top = eligible[0]["max_ltv"]
+        best = [r["program"] for r in eligible if r["max_ltv"] == top]
+        parts.append(f"**Best fit: {top:g}% max LTV** on {_and(best)}. "
+                     f"{len(eligible)} of {len(results)} program{'s' if len(results) != 1 else ''} take this deal.")
         rows = "\n".join(
             f"| {r['program']} | **{r['max_ltv']:g}%** | {' '.join(x for x in (r.get('cell', ''), r.get('cite')) if x)} | "
             f"{', '.join(r.get('overlays') or []).replace('|', '/') or 'none'}{' ⚠️ stacked' if r.get('stacked') else ''} |"

@@ -105,7 +105,7 @@ def route_of(r: dict) -> str:
         return "pick"
     if re.search(r"To (pull the exact number|compare programs) I need|I need a few details|need the (loan amount|fico)", a, re.I):
         return "missing"
-    if re.match(r"\s*(\*\*(Max LTV/CLTV|Eligible programs|Not eligible|No final LTV|Could not check)|\*Matrix:|"
+    if re.match(r"\s*(\*\*(Max LTV/CLTV|Best fit|Eligible programs|Not eligible|No final LTV|Could not check)|\*Matrix:|"
                 r"To compare|\*\*\S+\*\* hasn't been verified)", a) or re.search(r"Can't price this|no LTV table", a):
         return "deal"
     if False and re.search(r"Max LTV/CLTV|Eligible programs|Not eligible on th|Could not check|no LTV table|"

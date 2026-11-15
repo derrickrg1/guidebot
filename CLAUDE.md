@@ -98,6 +98,14 @@ deals with a county or ZIP get a county limit check (over it is "Not eligible", 
 column otherwise). NDM's sheets already use early 2027 limits ($845,000 baseline); FHFA 2027 comes out late
 November, so drop `fhfa_2027.xlsx` into `limits/` then. The sheet's number wins in baseline counties. FHA gets the
 national floor/ceiling only (HUD's county file wasn't downloadable).
+* Added 2026-11-15:
+  * "Copy for notes" under each answer: plain text with its citations, the viewer's mark coordinates stripped (`notesText`).
+  * Scenario form ("Fill in a form" over the box, Scenario mode only): builds the sentence a person would type, so the deal reader takes it as is.
+  * Section-wide deals lead with "**Best fit: X% max LTV** on ..." and rank programs by LTV (`comparison_md`).
+  * The money line ("Max LTV/CLTV: 75%", "Best fit: ...") shows as a big gold headline (`heroize`).
+  * Pinned chats (`chats.pinned`, POST `/api/chats/pin`) sit under "Pinned" at the top of the sidebar.
+  * "What's new" banner (`guidebot/updates.py`, GET `/api/updates?section=`): NDM sheets new or changed since the server's first look (baseline 2026-11-15 in `data/sheets_seen.json`) and agency files after their first load, last 30 days, dismissed per browser.
+  * The page never scrolls, only the chat and the chat list, so the header and sidebar stay put.
 * Answers that aren't deals end with "*Checked: ...*" naming every sheet/guide page cited (`chat.checked_line`).
 * "This is wrong" button under each answer saves to `feedback` in `data/chats.db` (admin Feedback tab);
 `tools/stress_bank.py` turns each report into a stress case (`fb-N`). Every answer also writes a trace row
@@ -215,7 +223,7 @@ so the bot no longer calls its own earlier citation wrong.
 
 ## Current status
 
-* 258 tests passing (48 are Hypothesis property runs). Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 261 tests passing (48 are Hypothesis property runs). Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked

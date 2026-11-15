@@ -37,6 +37,10 @@ def _db():
             question TEXT NOT NULL, program TEXT NOT NULL, mode TEXT NOT NULL, model TEXT NOT NULL, secs REAL NOT NULL,
             fallback INTEGER NOT NULL, sources TEXT NOT NULL, answer_chars INTEGER NOT NULL);
     """)
+    try:   # pinned chats (2026-11-15) stay on top of the sidebar; older files get the column here
+        con.execute("ALTER TABLE chats ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
     try:
         with con:
             yield con
@@ -57,7 +61,7 @@ def save_turn(chat_id: str, email: str, question: str, answer: str, program: str
         if row:
             con.execute("UPDATE chats SET updated = ?, program = ?, mode = ? WHERE id = ?", (now, program, mode, chat_id))
         else:
-            con.execute("INSERT INTO chats VALUES (?, ?, ?, ?, ?, ?, ?)",
+            con.execute("INSERT INTO chats (id, email, title, program, mode, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?)",
                         (chat_id, email, " ".join(question.split())[:90], program, mode, now, now))
         n = con.execute("SELECT COUNT(*) FROM messages WHERE chat_id = ?", (chat_id,)).fetchone()[0]
         con.execute("INSERT INTO messages VALUES (?, ?, 'user', ?, '[]', ?)", (chat_id, n, question, now))
@@ -69,7 +73,7 @@ def save_turn(chat_id: str, email: str, question: str, answer: str, program: str
 def list_chats(email: str | None = None, limit: int = 60) -> list[dict]:
     """A person's chats, newest first. email=None lists everyone's (admin)."""
     sql = ("SELECT c.*, (SELECT COUNT(*) FROM messages m WHERE m.chat_id = c.id) / 2 AS turns FROM chats c"
-           + (" WHERE email = ?" if email is not None else "") + " ORDER BY updated DESC LIMIT ?")
+           + (" WHERE email = ?" if email is not None else "") + " ORDER BY pinned DESC, updated DESC LIMIT ?")
     with _db() as con:
         return [dict(r) for r in con.execute(sql, ((email,) if email is not None else ()) + (limit,))]
 
@@ -83,6 +87,12 @@ def get_chat(chat_id: str, email: str | None = None) -> dict | None:
         msgs = [{"role": m["role"], "content": m["content"], "sources": json.loads(m["sources"])}
                 for m in con.execute("SELECT * FROM messages WHERE chat_id = ? ORDER BY n", (chat_id,))]
     return {**dict(row), "messages": msgs}
+
+
+def pin_chat(chat_id: str, email: str, pinned: bool) -> bool:
+    with _db() as con:
+        return con.execute("UPDATE chats SET pinned = ? WHERE id = ? AND email = ?",
+                           (int(pinned), chat_id, email)).rowcount > 0
 
 
 def delete_chat(chat_id: str, email: str) -> bool:

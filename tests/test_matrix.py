@@ -605,3 +605,14 @@ def test_units_plus_merged_fico_fills_the_right_column():
     assert df[["Loan Amount", "FICO"]].values.tolist() == [
         ["<= $1,500,000", "720"], ["$1,500,001 - $2,000,000", "720"],
         ["$2,000,001 - $3,000,000", "720"], ["<= $1,500,000", "700"]]
+
+
+def test_comparison_leads_with_the_best_fit_and_ranks_by_ltv():
+    comp = {"missing": [], "results": [
+        {"program": "Express DSCR", "eligible": True, "max_ltv": 75, "cell": "75%", "overlays": []},
+        {"program": "Ignite DSCR", "eligible": True, "max_ltv": 80, "cell": "80%", "overlays": []},
+        {"program": "Ignite P&L", "eligible": True, "max_ltv": 80, "cell": "80%", "overlays": []},
+        {"program": "Ignite 1099", "eligible": False, "error": "no Investment rows"}]}
+    md = answer.comparison_md(comp)
+    assert md.startswith("**Best fit: 80% max LTV** on Ignite DSCR and Ignite P&L. 3 of 4 programs take this deal.")
+    assert md.index("| Ignite DSCR |") < md.index("| Express DSCR |")
