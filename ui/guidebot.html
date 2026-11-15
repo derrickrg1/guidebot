@@ -235,7 +235,7 @@ select option { background: #131c1e; }
 .seg button[data-v="0.9"] { font-size: 0.7rem; } .seg button[data-v="1.12"] { font-size: 0.86rem; }
 .seg button[data-v="1.25"] { font-size: 0.95rem; }
 .set-note { color: var(--mist); font-size: 0.72rem; }
-#hsettings, #showside { display: none; }
+#hsettings, #showside, #hnew { display: none; }
 .mbar { display: contents; }   /* a row of its own on a phone only */
 .mbar .mbrand { display: none; }
 #scrim { display: none; }
@@ -475,20 +475,22 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
   #scrim { position: fixed; inset: 0; z-index: 49; background: rgba(0, 0, 0, 0.55); opacity: 0; pointer-events: none;
     transition: opacity 0.25s ease; }
   body.drawer #scrim { opacity: 1; pointer-events: auto; }
-  .foot { display: none; }
   body, body.noside { --gut: 16px; }
   main { height: 100vh; height: 100dvh; }
   header { padding: 10px 12px 10px; }
   body.noside header { padding-left: 12px; }
   #scrim { display: block; }
-  .mbar .mbrand { display: flex; }
+  /* The drawer is the same sidebar as on a computer (brand, modes, chats, model line, account). The header row
+     is only its toggle and a new-chat +, like Claude's app. */
+  .mbar .mbrand { display: none; }
   .mbar { display: flex; align-items: center; justify-content: center; position: relative; height: 36px; margin-bottom: 8px; }
-  #showside, #hsettings, body.noside #showside, body.noside #hsettings { display: grid; position: absolute; top: 2px;
+  #hsettings, body.noside #hsettings { display: none; }
+  #showside, #hnew, body.noside #showside { display: grid; position: absolute; top: 2px;
     width: 32px; height: 32px; place-items: center; border: 1px solid var(--rule); border-radius: 8px;
     background: rgba(255, 255, 255, 0.04); color: var(--mist); cursor: pointer; }
   #showside, body.noside #showside { left: 0; }
-  #hsettings, body.noside #hsettings { right: 0; }
-  #hsettings svg { width: 17px; height: 17px; }
+  #hnew { right: 0; color: var(--navy); border-color: rgba(192, 143, 44, 0.45); }
+  #hnew svg { width: 16px; height: 16px; }
   .settings { left: 12px !important; right: 12px; width: auto; }
   .sections { gap: 4px; margin-bottom: 10px; justify-content: space-between; }
   .sections button { padding: 6px 9px; letter-spacing: 0.06em; gap: 5px; }
@@ -540,6 +542,7 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
     <div class="mbar">
       <button id="showside" type="button" title="Show sidebar" aria-label="Show sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/></svg></button>
       <button id="hsettings" type="button" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+      <button id="hnew" type="button" title="New chat" aria-label="New chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
       <span class="mbrand" id="mbrand"><img src="logo.png" alt=""><span>ASK<span class="nick">NICK</span><span class="sam">SAM</span></span></span>
     </div>
     <nav class="sections" id="sections" role="tablist" aria-label="Product">
@@ -876,6 +879,7 @@ $("hideside").addEventListener("click", () => {
 });
 $("showside").addEventListener("click", e => { e.stopPropagation(); phone.matches ? drawer(true) : setSetting("side", ""); });
 $("scrim").addEventListener("click", () => drawer(false));
+$("hnew").addEventListener("click", () => $("newchat").click());
 document.addEventListener("keydown", e => { if (e.key === "Escape" && document.body.classList.contains("drawer")) drawer(false); });
 applySettings();
 picker.menu.addEventListener("click", e => { const o = e.target.closest(".picker-opt:not(.off)"); if (o) choose(o.dataset.value); });

@@ -135,7 +135,7 @@ looked for word for word first; short quotes scored nothing as words and the mar
 "hero" tones; FHA Teal lightened; VA's dot is a tiny US flag, an SVG in `md.js`). Express and Ignite share a product's color. Dots show on
 citation chips, table program cells, "Term:" rows, the picker and the viewer title. The header button toggles a
 wide chat column (remembered per browser).
-* Phone (<= 760px, 2026-11-15): the sidebar is a slide-out drawer (menu button top left, tap outside or pick a chat to close; `body.drawer`, not saved). The header row is menu, small badge + ASKNICK (ASK SAM in red on VA), gear. It used to stack the whole sidebar over the chat.
+* Phone (<= 760px, 2026-11-15): the same sidebar as on a computer (footer and account row included), collapsed into a slide-out panel (toggle top left, tap outside or pick a chat to close; `body.drawer`, not saved). The header row is the toggle and a new-chat +, like Claude's app. It used to stack the whole sidebar over the chat.
 * Settings (account row, bottom left; header gear on a phone or with the sidebar hidden): text size (scales chat
 messages via `--ts`; sizes inside messages are in em), chat width, program colors on/off. The sidebar collapses
 (panel icon by the logo). All kept per browser in localStorage (`asknick.*`).
