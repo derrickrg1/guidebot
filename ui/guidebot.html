@@ -430,17 +430,17 @@ form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
    opens the full box with Scenario. */
 .composer.folded { flex-direction: row; align-items: center; gap: 8px; padding: 8px 8px 8px 8px; cursor: text; }
 .composer.folded .tools { display: contents; }
-.composer.folded .plus { order: 0; }
+.composer.folded #plus { order: 0; }
 .composer.folded textarea { order: 1; flex: 1; min-height: 0; height: 24px !important; padding: 0 4px; overflow: hidden;
   white-space: nowrap; text-overflow: ellipsis; }
 .composer.folded .send { order: 2; margin-left: 0; }
 .composer.folded .scen, .composer.folded .sform-toggle { display: none; }
-.plus { flex: none; width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border: 1px solid transparent;
+#plus { flex: none; width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border: 1px solid transparent;
   background: rgba(255, 255, 255, 0.07) !important;
   border-radius: 50%; background: none; color: var(--steel); cursor: pointer; transition: color 0.15s, border-color 0.15s, transform 0.2s; }
-.plus:hover, .plus[aria-expanded=true] { color: var(--navy); border-color: rgba(192, 143, 44, 0.55); }
-.plus[aria-expanded=true] { transform: rotate(45deg); }
-.plus svg { width: 17px; height: 17px; }
+#plus:hover, #plus[aria-expanded=true] { color: var(--navy); border-color: rgba(192, 143, 44, 0.55); }
+#plus[aria-expanded=true] { transform: rotate(45deg); }
+#plus svg { width: 17px; height: 17px; }
 .attach-menu { position: fixed; z-index: 70; min-width: 210px; padding: 6px; border-radius: 12px; background: #1a1c1f;
   border: 1px solid rgba(200, 204, 210, 0.16); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55); }
 .attach-menu[hidden] { display: none; }
