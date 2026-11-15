@@ -1340,12 +1340,23 @@ if (window.visualViewport) {
 }
 let boxOpen = false;
 function fold() {
-  const keep = boxOpen || $("q").value.trim() || pending.length || !$("attach-menu").hidden;
+  const keep = boxOpen || $("q").value.trim() || pending.length || !$("attach-menu").hidden || !$("sform").hidden;
   $("composer").classList.toggle("folded", !keep);
 }
-const inside = t => t && t.closest && t.closest("#composer, #attach-menu");
+const inside = t => t && t.closest && t.closest("#composer, #attach-menu, #sform");
 document.addEventListener("pointerdown", e => { boxOpen = !!inside(e.target); fold(); }, true);
 document.addEventListener("focusin", e => { boxOpen = !!inside(e.target); fold(); });
+// While you're typing, the box's buttons (+, Scenario, Fill in a form) don't take focus from the text: the keyboard
+// stays up and nothing moves. mousedown is where a tap moves focus, on phones too.
+$("composer").addEventListener("mousedown", e => {
+  if (e.target !== $("q") && e.target.closest(".tools") && document.activeElement === $("q")) e.preventDefault();
+});
+// A label hands focus to its (hidden) radio on click; give it straight back if you were typing.
+let typing = false;
+document.addEventListener("pointerdown", () => { typing = document.activeElement === $("q"); }, true);
+document.querySelector("label.scen").addEventListener("click", () => {
+  if (typing) setTimeout(() => $("q").focus({ preventScroll: true }), 0);
+});
 $("composer").addEventListener("click", e => { if (e.target === $("composer") || e.target.classList.contains("tools")) $("q").focus(); });
 $("q").addEventListener("input", e => { e.target.style.height = ""; e.target.style.height = e.target.scrollHeight + "px"; });
 $("newchat").addEventListener("click", () => {
