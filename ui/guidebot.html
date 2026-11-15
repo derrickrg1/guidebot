@@ -372,10 +372,9 @@ details.src summary { cursor: pointer; color: var(--steel); }
 /* One rounded box holding the question and a round send arrow, like Claude's input. */
 form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
 /* Scenario form: fields that build the deal sentence, so the reader never misreads it. Scenario mode only. */
-.sform-bar { display: flex; justify-content: flex-start; margin-bottom: 6px; }
-.sform-bar { align-items: center; gap: 16px; }
 .sform-toggle[hidden] { display: none; }
-/* Scenario is a switch by the question box (2026-11-15; it was a button in the sidebar). Off means Guidelines. */
+/* Scenario is a switch in the question box's bottom row, right of the + (where Claude's model picker sits). Off means
+   Guidelines. */
 .scen { display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; color: var(--mist);
   font: 700 0.84rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.06em; transition: color 0.2s; gap: 9px; }
 .scen input { position: absolute; opacity: 0; pointer-events: none; }
@@ -427,7 +426,10 @@ form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
 }
 .composer:focus-within { border-color: rgba(192, 143, 44, 0.55); }
 /* + in the question box, like Claude's: camera (phones), photos, files. Attachments show above the text. */
-.composer { flex-wrap: wrap; padding-left: 10px; }
+.composer { flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 12px 10px; }
+.composer textarea { padding: 2px 6px; min-height: 30px; }
+.tools { display: flex; align-items: center; gap: 14px; }
+.tools .send { margin-left: auto; }
 .plus { flex: none; width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border: 1px solid var(--rule);
   border-radius: 50%; background: none; color: var(--steel); cursor: pointer; transition: color 0.15s, border-color 0.15s, transform 0.2s; }
 .plus:hover, .plus[aria-expanded=true] { color: var(--navy); border-color: rgba(192, 143, 44, 0.55); }
@@ -441,7 +443,7 @@ form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
 .attach-menu button:hover { background: rgba(255, 255, 255, 0.06); }
 .attach-menu button svg { width: 18px; height: 18px; color: var(--steel); flex: none; }
 .attach-menu button[hidden] { display: none; }
-.pending { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px; padding: 0 0 4px 4px; }
+.pending { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 0 4px 4px; }
 .pending:empty { display: none; }
 .att { position: relative; display: flex; align-items: center; gap: 8px; height: 52px; max-width: 220px; padding: 0 28px 0 0;
   border: 1px solid var(--rule); border-radius: 10px; background: rgba(0, 0, 0, 0.25); overflow: hidden;
@@ -615,11 +617,6 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
     <div class="empty" id="empty"></div>
   </div>
   <form id="ask">
-    <div class="sform-bar" id="sform-bar">
-      <input type="radio" name="mode" value="ask" checked hidden>
-      <label class="scen" title="Scenario: max LTV for a borrower's deal. Off is Guidelines."><input type="radio" name="mode" value="deal"><span class="sw"></span>Scenario</label>
-      <button type="button" class="sform-toggle" id="sform-toggle" aria-expanded="false" aria-controls="sform" hidden>
-      Fill in a form<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></div>
     <div class="sform" id="sform" hidden>
       <label>FICO<input id="f-fico" inputmode="numeric" placeholder="720"></label>
       <label>Loan amount<input id="f-loan" inputmode="numeric" placeholder="650,000"></label>
@@ -632,15 +629,21 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
     </div>
     <div class="composer">
       <div class="pending" id="pending"></div>
+      <textarea id="q" rows="1" placeholder="Ask about a guideline, or give me a scenario"></textarea>
+      <div class="tools">
       <button type="button" class="plus" id="plus" aria-label="Add photos or files" aria-haspopup="menu" aria-expanded="false" title="Add photos or files">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
       <input type="file" id="f-camera" accept="image/*" capture="environment" hidden>
       <input type="file" id="f-photos" accept="image/*" multiple hidden>
       <input type="file" id="f-files" accept="application/pdf,image/*" multiple hidden>
-      <textarea id="q" rows="2" placeholder="Ask about a guideline, or give me a scenario"></textarea>
+      <input type="radio" name="mode" value="ask" checked hidden>
+      <label class="scen" title="Scenario: max LTV for a borrower's deal. Off is Guidelines."><input type="radio" name="mode" value="deal"><span class="sw"></span>Scenario</label>
+      <button type="button" class="sform-toggle" id="sform-toggle" aria-expanded="false" aria-controls="sform" hidden>
+      Fill in a form<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
       <button class="send" id="send" aria-label="Send" title="Send (Enter)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
       </button>
+      </div>
     </div>
   </form>
 </main>
