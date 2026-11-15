@@ -377,10 +377,10 @@ form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
    Guidelines. */
 .scen { display: flex; align-items: center; height: 34px; padding: 0 12px; border-radius: 999px; cursor: pointer; user-select: none;
   color: var(--steel); font: 600 0.86rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.02em;
-  transition: color 0.15s, background 0.15s; }
+  background: rgba(255, 255, 255, 0.07); transition: color 0.15s, background 0.15s; }
 .scen input { position: absolute; opacity: 0; pointer-events: none; }
-.scen:hover { color: var(--ink); background: rgba(255, 255, 255, 0.06); }
-.scen:has(input:checked) { color: var(--navy); background: rgba(192, 143, 44, 0.14); }
+.scen:hover { color: var(--ink); background: rgba(255, 255, 255, 0.11); }
+.scen:has(input:checked) { color: var(--navy); background: rgba(192, 143, 44, 0.16); }
 .scen:has(input:focus-visible) { outline: 2px solid var(--navy); outline-offset: 2px; }
 .sform-toggle { font: 600 0.8rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.06em; color: var(--mist);
   background: none; border: 0; padding: 2px 0; cursor: pointer; display: flex; align-items: center; gap: 5px; }
@@ -423,10 +423,20 @@ form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
 /* + in the question box, like Claude's: camera (phones), photos, files. Attachments show above the text. */
 .composer { flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 12px 10px; }
 .composer textarea { padding: 2px 6px; min-height: 30px; }
-.tools { display: flex; align-items: center; gap: 4px; }
+.tools { display: flex; align-items: center; gap: 8px; }
 .tools .sform-toggle { margin-left: 8px; }
 .tools .send { margin-left: auto; }
-.plus { flex: none; width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border: 1px solid var(--rule);
+/* Folded (not focused, nothing typed or attached): one row, + then the text then send, like Claude's app. Tapping in
+   opens the full box with Scenario. */
+.composer.folded { flex-direction: row; align-items: center; gap: 8px; padding: 8px 8px 8px 8px; cursor: text; }
+.composer.folded .tools { display: contents; }
+.composer.folded .plus { order: 0; }
+.composer.folded textarea { order: 1; flex: 1; min-height: 0; height: 24px !important; padding: 0 4px; overflow: hidden;
+  white-space: nowrap; text-overflow: ellipsis; }
+.composer.folded .send { order: 2; margin-left: 0; }
+.composer.folded .scen, .composer.folded .sform-toggle { display: none; }
+.plus { flex: none; width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.07) !important;
   border-radius: 50%; background: none; color: var(--steel); cursor: pointer; transition: color 0.15s, border-color 0.15s, transform 0.2s; }
 .plus:hover, .plus[aria-expanded=true] { color: var(--navy); border-color: rgba(192, 143, 44, 0.55); }
 .plus[aria-expanded=true] { transform: rotate(45deg); }
@@ -623,7 +633,7 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
       <label>Property<select id="f-prop"><option>single family</option><option>PUD</option><option>condo</option><option>non-warrantable condo</option><option>2-unit</option><option>3-unit</option><option>4-unit</option></select></label>
       <button type="button" class="run" id="f-run">Run scenario</button>
     </div>
-    <div class="composer">
+    <div class="composer folded" id="composer">
       <div class="pending" id="pending"></div>
       <textarea id="q" rows="1" placeholder="Ask about a guideline, or give me a scenario"></textarea>
       <div class="tools">
@@ -1209,7 +1219,7 @@ $("m-camera").hidden = !touch;   // a computer's file picker can't open the came
 function attachMenu(open) {
   const m = $("attach-menu"), b = $("plus");
   m.hidden = !open; b.setAttribute("aria-expanded", open);
-  if (!open) return;
+  if (!open) return setTimeout(fold, 0);
   const r = b.getBoundingClientRect();
   m.style.left = Math.max(8, r.left) + "px";
   m.style.bottom = innerHeight - r.top + 8 + "px";
@@ -1259,6 +1269,7 @@ function removeAtt(id) {
 const attHtml = (a, rm) => `<span class="att${a.data ? "" : " busy"}" title="${esc(a.name)}">${a.url ? `<img src="${a.url}" alt="">`
   : `<span class="ic">${a.type === "application/pdf" ? "PDF" : "IMG"}</span>`}<span class="nm">${esc(a.name)}</span>${rm ? `<button type="button" class="rm" data-rm="${a.id}" aria-label="Remove ${esc(a.name)}">×</button>` : ""}</span>`;
 function drawPending() {
+  setTimeout(fold, 0);
   $("pending").innerHTML = pending.map(a => attHtml(a, true)).join("");
   pending.forEach(a => a.ready?.then(() => drawPendingSoon()));
 }
@@ -1308,6 +1319,17 @@ async function send(question, over = {}) {
 $("q").addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("ask").requestSubmit(); }
 });
+// Fold the box to one row when nothing is in it and you're working elsewhere. It opens on a tap or focus inside and
+// stays open until a tap (or focus) lands outside it, so tapping the Scenario chip doesn't fold it.
+let boxOpen = false;
+function fold() {
+  const keep = boxOpen || $("q").value.trim() || pending.length || !$("attach-menu").hidden;
+  $("composer").classList.toggle("folded", !keep);
+}
+const inside = t => t && t.closest && t.closest("#composer, #attach-menu");
+document.addEventListener("pointerdown", e => { boxOpen = !!inside(e.target); fold(); }, true);
+document.addEventListener("focusin", e => { boxOpen = !!inside(e.target); fold(); });
+$("composer").addEventListener("click", e => { if (e.target === $("composer") || e.target.classList.contains("tools")) $("q").focus(); });
 $("q").addEventListener("input", e => { e.target.style.height = ""; e.target.style.height = e.target.scrollHeight + "px"; });
 $("newchat").addEventListener("click", () => {
   if (busy) return;
