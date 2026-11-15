@@ -375,18 +375,13 @@ form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
 .sform-toggle[hidden] { display: none; }
 /* Scenario is a switch in the question box's bottom row, right of the + (where Claude's model picker sits). Off means
    Guidelines. */
-.scen { display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; color: var(--mist);
-  font: 700 0.84rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.06em; transition: color 0.2s; gap: 9px; }
+.scen { display: flex; align-items: center; height: 34px; padding: 0 12px; border-radius: 999px; cursor: pointer; user-select: none;
+  color: var(--steel); font: 600 0.86rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.02em;
+  transition: color 0.15s, background 0.15s; }
 .scen input { position: absolute; opacity: 0; pointer-events: none; }
-.scen .sw { position: relative; width: 34px; height: 19px; border-radius: 999px; background: rgba(255, 255, 255, 0.1);
-  border: 1px solid var(--rule); transition: background 0.2s, border-color 0.2s; }
-.scen .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; border-radius: 50%;
-  background: var(--steel); transition: transform 0.2s, background 0.2s; }
-.scen:hover { color: var(--ink); }
-.scen:has(input:checked) { color: var(--navy); }
-.scen:has(input:checked) .sw { background: rgba(192, 143, 44, 0.25); border-color: rgba(192, 143, 44, 0.6); }
-.scen:has(input:checked) .sw::after { transform: translateX(15px); background: var(--navy); }
-.scen:has(input:focus-visible) .sw { outline: 2px solid var(--navy); outline-offset: 2px; }
+.scen:hover { color: var(--ink); background: rgba(255, 255, 255, 0.06); }
+.scen:has(input:checked) { color: var(--navy); background: rgba(192, 143, 44, 0.14); }
+.scen:has(input:focus-visible) { outline: 2px solid var(--navy); outline-offset: 2px; }
 .sform-toggle { font: 600 0.8rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.06em; color: var(--mist);
   background: none; border: 0; padding: 2px 0; cursor: pointer; display: flex; align-items: center; gap: 5px; }
 .sform-toggle:hover, .sform-toggle[aria-expanded=true] { color: var(--navy); }
@@ -428,7 +423,8 @@ form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
 /* + in the question box, like Claude's: camera (phones), photos, files. Attachments show above the text. */
 .composer { flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 12px 10px; }
 .composer textarea { padding: 2px 6px; min-height: 30px; }
-.tools { display: flex; align-items: center; gap: 14px; }
+.tools { display: flex; align-items: center; gap: 4px; }
+.tools .sform-toggle { margin-left: 8px; }
 .tools .send { margin-left: auto; }
 .plus { flex: none; width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border: 1px solid var(--rule);
   border-radius: 50%; background: none; color: var(--steel); cursor: pointer; transition: color 0.15s, border-color 0.15s, transform 0.2s; }
@@ -637,7 +633,7 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
       <input type="file" id="f-photos" accept="image/*" multiple hidden>
       <input type="file" id="f-files" accept="application/pdf,image/*" multiple hidden>
       <input type="radio" name="mode" value="ask" checked hidden>
-      <label class="scen" title="Scenario: max LTV for a borrower's deal. Off is Guidelines."><input type="radio" name="mode" value="deal"><span class="sw"></span>Scenario</label>
+      <label class="scen" title="Scenario: max LTV for a borrower's deal. Off is Guidelines."><input type="radio" name="mode" value="deal">Scenario</label>
       <button type="button" class="sform-toggle" id="sform-toggle" aria-expanded="false" aria-controls="sform" hidden>
       Fill in a form<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
       <button class="send" id="send" aria-label="Send" title="Send (Enter)">
