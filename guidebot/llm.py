@@ -205,6 +205,56 @@ def _backup_json(system: str, user: str, schema, retries: int):
     return _ollama_json(system, user, schema, config.LOCAL_MODEL, retries)
 
 
+# ---------- attachments (attachments.py): a photo or scan copied out as text ----------
+
+TRANSCRIBE = ("Transcribe all the text in the attached file exactly, top to bottom. If it's a photo of a document or a "
+              "screen, read the document. Keep tables as rows with cells separated by |. Keep numbers, dates and "
+              "names exactly as written. Don't summarize, explain, correct or add anything. Write [unreadable] for "
+              "any part you can't read. If there is no text, describe what the image shows in one sentence.")
+
+
+def _claude_transcribe(files: list[tuple[str, bytes]], model: str) -> str:
+    import base64
+    blocks = [{"type": "document" if mime == "application/pdf" else "image",
+               "source": {"type": "base64", "media_type": mime, "data": base64.b64encode(data).decode()}}
+              for mime, data in files]
+    resp = _anthropic().messages.create(model=model, max_tokens=8000,
+                                        messages=[{"role": "user", "content": [*blocks, {"type": "text", "text": TRANSCRIBE}]}])
+    usage.add("claude", usage.cost(usage.claude_tokens(resp.usage), resp.model))
+    return "".join(b.text for b in resp.content if b.type == "text")
+
+
+def _backup_transcribe(files: list[tuple[str, bytes]], local_images=None) -> str:
+    if gemini.available():
+        try:
+            text, spent = gemini.transcribe(TRANSCRIBE, files)
+            usage.add("gemini", spent)
+            return text
+        except Exception as g:
+            sys.stderr.write(f"Gemini couldn't read the attachment ({type(g).__name__}: {g})\n")
+    images = local_images() if local_images else [d for m, d in files if m != "application/pdf"]
+    usage.add("local")
+    resp = ollama.chat(model=config.LOCAL_MODEL, messages=[{"role": "user", "content": TRANSCRIBE, "images": images}],
+                       options={**config.CHAT_OPTIONS, "temperature": 0, "num_predict": config.LOCAL_MAX_ANSWER})
+    return resp["message"]["content"] or ""
+
+
+def transcribe(files: list[tuple[str, bytes]], local_images=None, model: str = config.CHAT_MODEL) -> str:
+    """The text of photos or a scanned PDF, copied out by a model. Same order as answers: Claude, Gemini, local.
+    local_images gives page images for the local model, which can't take a PDF."""
+    if not _is_claude(model):
+        return _backup_transcribe(files, local_images)
+    if claude_status.out():
+        return _backup_transcribe(files, local_images)
+    try:
+        return _claude_transcribe(files, model)
+    except Exception as e:
+        if not _down(e):
+            raise
+        _fallback_note(e)
+        return _backup_transcribe(files, local_images)
+
+
 def ask_json(system: str, user: str, schema, model: str = config.CHAT_MODEL, retries: int = 2):
     """Structured output: the reply must match the pydantic schema."""
     if not _is_claude(model):

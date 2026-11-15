@@ -62,6 +62,15 @@ def stream(messages: list[dict], max_tokens: int = 16000):
     return _spent(meta)
 
 
+def transcribe(prompt: str, files: list[tuple[str, bytes]]) -> tuple[str, dict]:
+    """(text, spent) for photos or a PDF sent inline with the prompt (llm.transcribe)."""
+    from google.genai import types
+    parts = [types.Part.from_bytes(data=data, mime_type=mime) for mime, data in files]
+    resp = _client().models.generate_content(model=config.GEMINI_MODEL, contents=[*parts, prompt],
+                                             config=types.GenerateContentConfig(max_output_tokens=8000))
+    return resp.text or "", _spent(resp.usage_metadata)
+
+
 def ask_json(system: str, user: str, schema):
     """(parsed, spent): structured output matching the pydantic schema."""
     from google.genai import types

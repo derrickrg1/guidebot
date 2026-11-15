@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from guidebot import admin, agency, chat, claude_status, config, history, updates, usage
+from guidebot import admin, agency, attachments, chat, claude_status, config, history, updates, usage
 
 PORT = 8600
 PAGE = config.ROOT / "ui" / "guidebot.html"
@@ -149,7 +149,10 @@ class Handler(BaseHTTPRequestHandler):
         if not (self.headers.get("Content-Type") or "").startswith("application/json"):
             return self._json({"error": "json only"}, 415)
         try:
-            body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+            size = int(self.headers.get("Content-Length") or 0)
+            if size > 75 * 1024 * 1024:   # 5 attachments of 10 MB, base64, plus the chat
+                return self._json({"error": "Those attachments are too big together. Send fewer at a time."}, 413)
+            body = json.loads(self.rfile.read(size) or b"{}")
         except json.JSONDecodeError:
             return self._json({"error": "bad json"}, 400)
 
@@ -176,15 +179,20 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/chat":
             question = (body.get("question") or "").strip()
-            if not question:
+            try:
+                atts = attachments.decode(body.get("attachments") or [])
+            except attachments.AttachmentError as e:
+                return self._json({"error": str(e)}, 400)
+            if not question and not atts:
                 return self._json({"error": "empty question"}, 400)
+            question = question or ATTACHED_ONLY
             turns = [{"role": m["role"], "content": m["content"]} for m in body.get("history", [])
                      if m.get("role") in ("user", "assistant")]
             program = body.get("program") or ""
             section = body.get("section") if body.get("section") in chat.SECTIONS else ""
             model = _test_model(self.headers, body)
-            events = chat.respond(question, turns, program, bool(body.get("mode_program")), bool(body.get("mode_scenario")),
-                                  section=section, model=model)
+            events = _with_attachments(atts, question, lambda q: chat.respond(
+                q, turns, program, bool(body.get("mode_program")), bool(body.get("mode_scenario")), section=section, model=model))
             # a chat across a whole section is saved under the section's name, so reopening it lands on that tab
             self._stream(_saving(events, str(body.get("chat_id") or "")[:64], history.user(self.headers), question,
                                  program or section, "scenario" if body.get("mode_scenario") else "guidelines",
@@ -216,6 +224,25 @@ def _test_model(headers, body) -> str:
     return model if local and model in TEST_MODELS else ""
 
 
+ATTACHED_ONLY = "What does this say, and what do the guidelines require for it?"
+
+
+def _with_attachments(atts, question, answer):
+    """Attachments are read into text first ("asked" tells the page the full question for follow-ups), then the
+    question with that text is answered like any other."""
+    if atts:
+        yield {"status": "Reading the attachment…" if len(atts) == 1 else f"Reading {len(atts)} attachments…"}
+        try:
+            question += attachments.block(atts)
+        except Exception as e:   # a broken PDF, or no model could read the photo
+            sys.stderr.write(f"Attachment read failed ({type(e).__name__}: {e})\n")
+            msg = str(e) if isinstance(e, attachments.AttachmentError) else "The attachment couldn't be read. Try again in a minute."
+            yield {"error": msg}
+            return
+        yield {"asked": question}
+    yield from answer(question)
+
+
 def _saving(events, chat_id, email, question, program, mode, model=""):
     """Passes the answer's events through, then saves the finished turn to that person's chat history, and a
     trace of every answer (stress runs included) for working out why one went wrong."""
@@ -223,6 +250,8 @@ def _saving(events, chat_id, email, question, program, mode, model=""):
     text, sources, t0, fallback = "", [], time.time(), False
     usage.begin()   # llm.py adds each model call's cost; recorded below with the engine that answered
     for ev in events:
+        if "asked" in ev:   # the question with its attachments' text: that's what is saved and traced
+            question = ev["asked"]
         fallback = fallback or bool(ev.get("fallback"))
         if "text" in ev:
             text += ev["text"]
@@ -231,6 +260,8 @@ def _saving(events, chat_id, email, question, program, mode, model=""):
         if "sources" in ev:
             sources = ev["sources"]
         yield ev
+        if "error" in ev and not text:
+            return   # nothing answered (an attachment couldn't be read): nothing to save
     history.save_turn(chat_id, email, question, text, program, mode, sources)
     run = usage.end()
     if run and run["calls"]:   # Python-only answers (deal lookups, calculators) call no model and cost nothing

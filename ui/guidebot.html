@@ -426,6 +426,37 @@ form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
   backdrop-filter: blur(12px); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
 }
 .composer:focus-within { border-color: rgba(192, 143, 44, 0.55); }
+/* + in the question box, like Claude's: camera (phones), photos, files. Attachments show above the text. */
+.composer { flex-wrap: wrap; padding-left: 10px; }
+.plus { flex: none; width: 34px; height: 34px; padding: 0; display: grid; place-items: center; border: 1px solid var(--rule);
+  border-radius: 50%; background: none; color: var(--steel); cursor: pointer; transition: color 0.15s, border-color 0.15s, transform 0.2s; }
+.plus:hover, .plus[aria-expanded=true] { color: var(--navy); border-color: rgba(192, 143, 44, 0.55); }
+.plus[aria-expanded=true] { transform: rotate(45deg); }
+.plus svg { width: 17px; height: 17px; }
+.attach-menu { position: fixed; z-index: 70; min-width: 210px; padding: 6px; border-radius: 12px; background: #1a1c1f;
+  border: 1px solid rgba(200, 204, 210, 0.16); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55); }
+.attach-menu[hidden] { display: none; }
+.attach-menu button { display: flex; align-items: center; gap: 11px; width: 100%; padding: 9px 10px; border: 0; border-radius: 8px;
+  background: none; color: var(--ink); cursor: pointer; text-align: left; font: 0.88rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
+.attach-menu button:hover { background: rgba(255, 255, 255, 0.06); }
+.attach-menu button svg { width: 18px; height: 18px; color: var(--steel); flex: none; }
+.attach-menu button[hidden] { display: none; }
+.pending { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px; padding: 0 0 4px 4px; }
+.pending:empty { display: none; }
+.att { position: relative; display: flex; align-items: center; gap: 8px; height: 52px; max-width: 220px; padding: 0 28px 0 0;
+  border: 1px solid var(--rule); border-radius: 10px; background: rgba(0, 0, 0, 0.25); overflow: hidden;
+  font: 0.76rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: var(--steel); }
+.att img { width: 52px; height: 52px; object-fit: cover; flex: none; }
+.att .ic { width: 52px; height: 52px; display: grid; place-items: center; flex: none; background: rgba(192, 143, 44, 0.12);
+  color: var(--navy); font-weight: 700; font-size: 0.68rem; letter-spacing: 0.08em; }
+.att .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.att .rm { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6); color: var(--ink); cursor: pointer; font-size: 0.9rem; line-height: 1; }
+.att.busy { opacity: 0.55; }
+/* In a sent question: the attachments as small chips (photos as thumbnails while this page is open). */
+.msg.user .atts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; margin-top: 8px; white-space: normal; }
+.msg.user .atts .att { height: 40px; max-width: 200px; padding-right: 10px; }
+.msg.user .atts .att img, .msg.user .atts .att .ic { width: 40px; height: 40px; }
 textarea {
   flex: 1; resize: none; min-height: 52px; max-height: 220px; padding: 4px 0; border: 0; background: transparent;
   font: 400 1rem/1.6 var(--serif); outline: none;
@@ -600,6 +631,12 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
       <button type="button" class="run" id="f-run">Run scenario</button>
     </div>
     <div class="composer">
+      <div class="pending" id="pending"></div>
+      <button type="button" class="plus" id="plus" aria-label="Add photos or files" aria-haspopup="menu" aria-expanded="false" title="Add photos or files">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+      <input type="file" id="f-camera" accept="image/*" capture="environment" hidden>
+      <input type="file" id="f-photos" accept="image/*" multiple hidden>
+      <input type="file" id="f-files" accept="application/pdf,image/*" multiple hidden>
       <textarea id="q" rows="2" placeholder="Ask about a guideline, or give me a scenario"></textarea>
       <button class="send" id="send" aria-label="Send" title="Send (Enter)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
@@ -608,6 +645,11 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
   </form>
 </main>
 <div id="scrim"></div>
+<div class="attach-menu" id="attach-menu" role="menu" hidden>
+  <button type="button" role="menuitem" data-pick="f-camera" id="m-camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>Camera</button>
+  <button type="button" role="menuitem" data-pick="f-photos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-9 9"/></svg>Photos</button>
+  <button type="button" role="menuitem" data-pick="f-files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Files</button>
+</div>
 <section id="viewer" aria-label="Guideline viewer" aria-hidden="true">
   <div class="vbar">
     <div class="vtitle"><b id="vname"></b><span id="vpage"></span></div>
@@ -1009,6 +1051,7 @@ async function stream(url, payload, box) {
       if (ev.sources) sources = ev.sources;
       if (ev.choices) choices = ev.choices;
       if (ev.fallback) backup = true;
+      if (ev.asked) payload.asked = ev.asked;
       if (ev.error) throw new Error(ev.error);
       if (ev.status) draw();
     }
@@ -1148,7 +1191,7 @@ async function openChat(id) {
   $("log").innerHTML = "";
   let asked = "";
   for (const m of c.messages) {
-    if (m.role === "user") { asked = m.content; addMsg("user", esc(m.content)); }
+    if (m.role === "user") { asked = m.content; addMsg("user", userHtml(m.content)); }
     else addWrong(addMsg("bot", `<div class="md">${md(clean(m.content))}</div>` + (m.sources.length ? sourcesHtml(m.sources) : "")),
                   asked, clean(m.content));
   }
@@ -1159,18 +1202,101 @@ $("ask").addEventListener("submit", e => {
   e.preventDefault();
   send($("q").value.trim());
 });
+// ---------- attachments: the + menu (attachments.py on the server reads them into text) ----------
+const ATT_MAX = 5, ATT_BYTES = 10 * 1024 * 1024, ATT_MARK = "\n\n[Attachment: ";
+let pending = [];   // {id, name, type, data (base64), url (photo preview), ready (a promise)}
+const touch = matchMedia("(pointer: coarse)").matches;
+$("m-camera").hidden = !touch;   // a computer's file picker can't open the camera anyway
+function attachMenu(open) {
+  const m = $("attach-menu"), b = $("plus");
+  m.hidden = !open; b.setAttribute("aria-expanded", open);
+  if (!open) return;
+  const r = b.getBoundingClientRect();
+  m.style.left = Math.max(8, r.left) + "px";
+  m.style.bottom = innerHeight - r.top + 8 + "px";
+}
+$("plus").addEventListener("click", e => { e.stopPropagation(); attachMenu($("attach-menu").hidden); });
+document.addEventListener("click", e => { if (!e.target.closest("#attach-menu")) attachMenu(false); });
+document.addEventListener("keydown", e => { if (e.key === "Escape") attachMenu(false); });
+$("attach-menu").addEventListener("click", e => {
+  const b = e.target.closest("[data-pick]");
+  if (!b) return;
+  attachMenu(false);
+  $(b.dataset.pick).click();
+});
+for (const id of ["f-camera", "f-photos", "f-files"])
+  $(id).addEventListener("change", e => { addFiles([...e.target.files]); e.target.value = ""; });
+const b64 = buf => { let s = ""; const a = new Uint8Array(buf); for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode(...a.subarray(i, i + 0x8000)); return btoa(s); };
+// Photos are redrawn as JPEG, at most 2000 px a side: an iPhone photo (often HEIC, 3-5 MB) goes up small and in a
+// format every model reads.
+async function shrink(file) {
+  const img = await createImageBitmap(file);
+  const k = Math.min(1, 2000 / Math.max(img.width, img.height));
+  const c = Object.assign(document.createElement("canvas"), { width: Math.round(img.width * k), height: Math.round(img.height * k) });
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  const blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.85));
+  return { type: "image/jpeg", data: b64(await blob.arrayBuffer()), url: URL.createObjectURL(blob) };
+}
+function addFiles(files) {
+  for (const f of files) {
+    if (pending.length >= ATT_MAX) { alert(`Up to ${ATT_MAX} attachments at a time.`); break; }
+    const pdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+    if (!pdf && !f.type.startsWith("image/")) { alert(`${f.name}: only photos and PDFs can be attached.`); continue; }
+    if (pdf && f.size > ATT_BYTES) { alert(`${f.name} is over 10 MB.`); continue; }
+    const a = { id: Math.random().toString(36).slice(2), name: f.name || "photo.jpg", type: pdf ? "application/pdf" : "image/jpeg" };
+    a.ready = (pdf ? f.arrayBuffer().then(buf => ({ data: b64(buf) })) : shrink(f))
+      .then(r => Object.assign(a, r))
+      .catch(() => { alert(`${a.name} couldn't be read. Try a different photo or file.`); removeAtt(a.id); });
+    pending.push(a);
+  }
+  drawPending();
+}
+function removeAtt(id) {
+  const a = pending.find(x => x.id === id);
+  if (a?.url) URL.revokeObjectURL(a.url);
+  pending = pending.filter(x => x.id !== id);
+  drawPending();
+}
+const attHtml = (a, rm) => `<span class="att${a.data ? "" : " busy"}" title="${esc(a.name)}">${a.url ? `<img src="${a.url}" alt="">`
+  : `<span class="ic">${a.type === "application/pdf" ? "PDF" : "IMG"}</span>`}<span class="nm">${esc(a.name)}</span>${rm ? `<button type="button" class="rm" data-rm="${a.id}" aria-label="Remove ${esc(a.name)}">×</button>` : ""}</span>`;
+function drawPending() {
+  $("pending").innerHTML = pending.map(a => attHtml(a, true)).join("");
+  pending.forEach(a => a.ready?.then(() => drawPendingSoon()));
+}
+let drawTimer = 0;
+const drawPendingSoon = () => { clearTimeout(drawTimer); drawTimer = setTimeout(() => $("pending").innerHTML = pending.map(a => attHtml(a, true)).join(""), 30); };
+$("pending").addEventListener("click", e => { const b = e.target.closest("[data-rm]"); if (b) removeAtt(b.dataset.rm); });
+// A pasted screenshot or a file dropped on the box attaches too.
+$("q").addEventListener("paste", e => { const fs = [...(e.clipboardData?.files || [])]; if (fs.length) { e.preventDefault(); addFiles(fs); } });
+$("ask").addEventListener("dragover", e => e.preventDefault());
+$("ask").addEventListener("drop", e => { if (e.dataTransfer?.files?.length) { e.preventDefault(); addFiles([...e.dataTransfer.files]); } });
+// A question bubble: the typed words, then its attachments (the text read out of them stays hidden).
+function userHtml(content, atts) {
+  const i = content.indexOf(ATT_MARK), typed = i >= 0 ? content.slice(0, i) : content;
+  const names = atts ? atts : i < 0 ? [] : [...content.slice(i).matchAll(/\n\n\[Attachment: ([^\]\n]+)\]/g)]
+    .map(m => ({ name: m[1], type: /\.pdf$/i.test(m[1]) ? "application/pdf" : "image/jpeg", data: 1 }));
+  return esc(typed) + (names.length ? `<div class="atts">${names.map(a => attHtml(a, false)).join("")}</div>` : "");
+}
 async function send(question, over = {}) {
-  if (!question || busy) return;
+  if (busy || (!question && !pending.length)) return;
+  const files = pending;
+  if (files.length) {
+    await Promise.all(files.map(a => a.ready));
+    if (files.some(a => !a.data)) return;
+  }
+  pending = []; drawPending();
   const { program, choice } = mode(), scenario = over.scenario ?? mode().scenario;
   $("q").value = ""; $("q").style.height = "";
-  addMsg("user", esc(question));
+  addMsg("user", userHtml(question, files));
   const box = addMsg("bot", `<div class="status">Thinking…</div>`);
   setBusy(true);
   chatId = chatId || newId();
   try {
-    const answer = await stream("/api/chat", { question, history, program: choice, mode_program: program,
-                                               mode_scenario: scenario, section, chat_id: chatId }, box);
-    history.push({ role: "user", content: question }, { role: "assistant", content: answer });
+    const payload = { question, history, program: choice, mode_program: program, mode_scenario: scenario, section, chat_id: chatId,
+                      attachments: files.map(a => ({ name: a.name, type: a.type, data: a.data })) };
+    const answer = await stream("/api/chat", payload, box);
+    // With attachments, the server sends back the question with their text ("asked"), so follow-ups can see it.
+    history.push({ role: "user", content: payload.asked || question }, { role: "assistant", content: answer });
     addWrong(box, question, answer);
     loadChats();
   } catch (err) {

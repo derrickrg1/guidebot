@@ -104,6 +104,9 @@ national floor/ceiling only (HUD's county file wasn't downloadable).
   * Section-wide deals lead with "**Best fit: X% max LTV** on ..." and rank programs by LTV (`comparison_md`).
   * The money line ("Max LTV/CLTV: 75%", "Best fit: ...") shows as a big gold headline (`heroize`).
   * Pinned chats (`chats.pinned`, POST `/api/chats/pin`) sit under "Pinned" at the top of the sidebar.
+  * Attachments: a + in the question box (like Claude's) opens Camera (touch screens only), Photos, Files; paste and drop work too. Up to 5, PDFs and photos, 10 MB each; photos are redrawn as JPEG at most 2000 px on the page (iPhone HEIC included). `guidebot/attachments.py` turns each into text before anything else: a PDF with a text layer is read in Python (pypdfium2), photos and scans go to `llm.transcribe` (Claude, Gemini, local; told to copy text exactly, never summarize). The text is appended to the question after `
+
+[Attachment: name]`, so routing, the deal reader and the lookup run unchanged; the server sends `{"asked": full question}` so follow-ups see it and saves that. Bubbles hide everything after the marker and show name chips. Derrick chose this with no warning in the UI (2026-11-15), knowing attachments can carry borrower data. Tests in `tests/test_attachments.py`.
   * "What's new" banner (`guidebot/updates.py`, GET `/api/updates?section=`): NDM sheets new or changed since the server's first look (baseline 2026-11-15 in `data/sheets_seen.json`) and agency files after their first load, last 30 days, dismissed per browser.
   * The page never scrolls, only the chat and the chat list, so the header and sidebar stay put.
 * Answers that aren't deals end with "*Checked: ...*" naming every sheet/guide page cited (`chat.checked_line`).
@@ -223,7 +226,7 @@ so the bot no longer calls its own earlier citation wrong.
 
 ## Current status
 
-* 261 tests passing (48 are Hypothesis property runs). Every Express/Ignite matrix parses with clean headers; one test per layout shape.
+* 266 tests passing (48 are Hypothesis property runs). Every Express/Ignite matrix parses with clean headers; one test per layout shape.
 * Overlay rules live in `overlays/<Program>.json` for all five Ignite programs (quotes checked word for word by a
 test) and must be approved on the Verify page before Python applies them. None approved yet, so deal answers stop
 at the matrix cell. Express programs have no rules files yet. The race (`tools/compare_models.py`) has hand-worked
