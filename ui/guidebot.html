@@ -248,7 +248,9 @@ body.nocolors .pdot, body.nocolors .md a.cite[data-prog]::before, body.nocolors 
 body.nocolors .md li.row[data-prog] { background: none; padding-left: 0; }
 hr { border: 0; border-top: 1px solid var(--rule); margin: 0; width: 100%; }
 
-main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; }
+/* 100dvh is the visible height: on an iPad 100vh counts the space behind the browser bars, which pushed the question box below the fold. */
+main { flex: 1; min-width: 0; display: flex; flex-direction: column; height: 100vh; height: 100dvh; }
+aside { max-height: 100dvh; }
 /* Column width: normal reads like Claude; "wide" (the header toggle) gives tables and long answers the room. */
 :root { --col: 780px; --gut: 32px; }
 body.wide { --col: 1240px; --gut: 20px; }
