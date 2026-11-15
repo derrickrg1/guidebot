@@ -373,7 +373,21 @@ details.src summary { cursor: pointer; color: var(--steel); }
 form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
 /* Scenario form: fields that build the deal sentence, so the reader never misreads it. Scenario mode only. */
 .sform-bar { display: flex; justify-content: flex-start; margin-bottom: 6px; }
-.sform-bar[hidden] { display: none; }
+.sform-bar { align-items: center; gap: 16px; }
+.sform-toggle[hidden] { display: none; }
+/* Scenario is a switch by the question box (2026-11-15; it was a button in the sidebar). Off means Guidelines. */
+.scen { display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; color: var(--mist);
+  font: 700 0.74rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.06em; transition: color 0.2s; }
+.scen input { position: absolute; opacity: 0; pointer-events: none; }
+.scen .sw { position: relative; width: 26px; height: 15px; border-radius: 999px; background: rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--rule); transition: background 0.2s, border-color 0.2s; }
+.scen .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 9px; height: 9px; border-radius: 50%;
+  background: var(--steel); transition: transform 0.2s, background 0.2s; }
+.scen:hover { color: var(--ink); }
+.scen:has(input:checked) { color: var(--navy); }
+.scen:has(input:checked) .sw { background: rgba(192, 143, 44, 0.25); border-color: rgba(192, 143, 44, 0.6); }
+.scen:has(input:checked) .sw::after { transform: translateX(11px); background: var(--navy); }
+.scen:has(input:focus-visible) .sw { outline: 2px solid var(--navy); outline-offset: 2px; }
 .sform-toggle { font: 600 0.74rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.06em; color: var(--mist);
   background: none; border: 0; padding: 2px 0; cursor: pointer; display: flex; align-items: center; gap: 5px; }
 .sform-toggle:hover, .sform-toggle[aria-expanded=true] { color: var(--navy); }
@@ -519,11 +533,6 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
     <div><span class="mark">ASK<span class="who">NICK<svg class="strike" viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M-2 12 C 25 7, 60 15, 102 8"/><path pathLength="1" d="M2 16 C 35 11, 70 17, 98 11"/></svg><span class="sam-word" aria-hidden="true">SAM</span></span><span class="plus">++</span></span><span class="tag-line">(GUIDELINE ASSISTANT)</span></div>
     <button id="hideside" type="button" title="Hide sidebar" aria-label="Hide sidebar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/></svg></button></div>
   <hr>
-  <div class="label">WHAT DO YOU NEED?</div>
-  <div class="modes">
-    <label hidden><input type="radio" name="mode" value="ask" checked><b>Guidelines</b><small>How a rule works, what's allowed</small></label>
-    <label><input type="radio" name="mode" value="deal"><b>Scenario</b><small>Max LTV for a borrower's scenario. Tap again to turn off.</small></label>
-  </div>
   <div class="label">PROGRAM</div>
   <select id="program" hidden></select>
   <div class="picker" id="picker">
@@ -575,7 +584,10 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
     <div class="empty" id="empty"></div>
   </div>
   <form id="ask">
-    <div class="sform-bar" id="sform-bar" hidden><button type="button" class="sform-toggle" id="sform-toggle" aria-expanded="false" aria-controls="sform">
+    <div class="sform-bar" id="sform-bar">
+      <input type="radio" name="mode" value="ask" checked hidden>
+      <label class="scen" title="Scenario: max LTV for a borrower's deal. Off is Guidelines."><input type="radio" name="mode" value="deal"><span class="sw"></span>Scenario</label>
+      <button type="button" class="sform-toggle" id="sform-toggle" aria-expanded="false" aria-controls="sform" hidden>
       Fill in a form<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button></div>
     <div class="sform" id="sform" hidden>
       <label>FICO<input id="f-fico" inputmode="numeric" placeholder="720"></label>
@@ -662,7 +674,7 @@ function renderSidebar() {
   store.set("mode", m); store.set("program", choice);
   document.querySelectorAll("#sections button").forEach(b => b.setAttribute("aria-selected", b.dataset.sec === section));
   $("msec").value = section;   // the phone's product dropdown
-  $("sform-bar").hidden = m !== "deal";
+  $("sform-toggle").hidden = m !== "deal";
   if (m !== "deal") showForm(false);
   if (newsFor !== section) loadNews();
   const p = programs.find(x => x.name === choice);
@@ -780,7 +792,7 @@ async function loadPrograms() {
   renderSidebar();
 }
 document.querySelectorAll("input[name=mode], #program").forEach(el => el.addEventListener("change", renderSidebar));
-// Guidelines is the default and has no button; Scenario is a toggle. Tapping it while on goes back to Guidelines.
+// Guidelines is the default and has no switch of its own; Scenario is a switch. Tapping it while on goes back to Guidelines.
 document.querySelector("input[name=mode][value=deal]").closest("label").addEventListener("click", e => {
   const deal = document.querySelector("input[name=mode][value=deal]");
   if (e.target === deal || !deal.checked) return;   // the label's own click on the input bubbles back through here
