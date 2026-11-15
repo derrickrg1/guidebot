@@ -10,13 +10,13 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,500&family=Caveat:wght@700&family=Lato:ital,wght@0,400;0,700;0,900;1,400&display=swap">
 <style>
-/* One theme: Inked Japan black, silver from the tin rim, burnt orange accents (--navy is the accent slot). */
+/* One theme: Inked Japan black, silver from the tin rim, prospector gold accents #c08f2c, was burnt orange until 2026-11-15 (--navy is the accent slot). */
 :root {
   color-scheme: dark;
   --serif: Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   --ink: #e6e8ea; --steel: #b3b9be; --mist: #7d878c; --rule: rgba(200, 204, 210, 0.1);
-  --navy: #d9661f; --gold: #c8ccd2; --page: #131c1e; --side: rgba(0, 0, 0, 0.5);
-  --card: rgba(0, 0, 0, 0.24); --user: rgba(217, 102, 31, 0.18); --user-ink: #f6ece4; --warn: #e2b866;
+  --navy: #c08f2c; --gold: #c8ccd2; --page: #131c1e; --side: rgba(0, 0, 0, 0.5);
+  --card: rgba(0, 0, 0, 0.24); --user: rgba(192, 143, 44, 0.18); --user-ink: #f6ece4; --warn: #e2b866;
   --warn-bg: rgba(226, 184, 102, 0.1); --bad: #e08080; --ok: #7cc48a;
 }
 /* Black overlay over the paint: lit in the middle, falling off to black at the edges like the photo. */
@@ -121,7 +121,7 @@ aside {
 .modes small { display: block; color: var(--mist); font-size: 0.7rem; max-height: 0; opacity: 0; overflow: hidden;
   transition: max-height 0.2s, opacity 0.2s; }
 .modes label:hover small, .modes label:has(input:focus-visible) small { max-height: 4em; opacity: 1; }
-.modes label:hover { border-color: rgba(217, 102, 31, 0.4); }
+.modes label:hover { border-color: rgba(192, 143, 44, 0.4); }
 /* The picked mode shows as an orange word, no box. Guidelines is the default, so it stays plain. */
 .modes label:has(input[value=deal]:checked) b { color: var(--navy); }
 .modes label:has(input:focus-visible) { outline: 2px solid var(--navy); outline-offset: 2px; }
@@ -138,7 +138,7 @@ select option { background: #131c1e; }
   border: 1px solid var(--rule); border-radius: 8px; background: var(--card); font-size: 0.85rem;
   transition: border-color 0.15s;
 }
-.picker-btn:hover, .picker-btn[aria-expanded=true] { border-color: rgba(217, 102, 31, 0.5); }
+.picker-btn:hover, .picker-btn[aria-expanded=true] { border-color: rgba(192, 143, 44, 0.5); }
 .picker-btn:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
 .picker-val { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .picker-btn svg { width: 16px; height: 16px; color: var(--mist); flex: none; transition: transform 0.15s; }
@@ -159,16 +159,16 @@ select option { background: #131c1e; }
 .picker-opt.off { color: var(--mist); font-style: italic; cursor: default; }
 .picker-opt.off:hover { background: none; }
 .tag { font-size: 0.68rem; color: var(--mist); border: 1px solid var(--rule); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
-.picker-opt.sel .tag { color: inherit; border-color: rgba(217, 102, 31, 0.4); }
+.picker-opt.sel .tag { color: inherit; border-color: rgba(192, 143, 44, 0.4); }
 /* Chat history */
 /* New chat is a round + beside the CHATS label (was a full-width "New chat" pill). */
 .chats-head { display: flex; align-items: center; justify-content: space-between; }
 .newchat {
   display: grid; place-items: center; width: 30px; height: 30px; padding: 0; cursor: pointer; flex: none;
-  border: 1px solid rgba(217, 102, 31, 0.45); border-radius: 50%; background: rgba(217, 102, 31, 0.08);
+  border: 1px solid rgba(192, 143, 44, 0.45); border-radius: 50%; background: rgba(192, 143, 44, 0.08);
   color: var(--navy); transition: background 0.15s;
 }
-.newchat:hover { background: rgba(217, 102, 31, 0.2); }
+.newchat:hover { background: rgba(192, 143, 44, 0.2); }
 .newchat svg { width: 16px; height: 16px; }
 .chats { display: flex; flex-direction: column; gap: 1px; min-height: 60px; overflow-y: auto; }   /* scrolls on short windows instead of running under the footer */
 .chats .when { font: 600 0.62rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.2em; color: var(--mist);
@@ -181,7 +181,7 @@ select option { background: #131c1e; }
 .chat-item { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-radius: 7px; cursor: pointer;
   font-size: 0.8rem; color: var(--steel); }
 .chat-item:hover { background: rgba(255, 255, 255, 0.05); color: var(--ink); }
-.chat-item.on { background: rgba(217, 102, 31, 0.1); color: var(--ink); }
+.chat-item.on { background: rgba(192, 143, 44, 0.1); color: var(--ink); }
 .chat-item .t { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-item .x { opacity: 0; border: 0; background: none; color: var(--mist); cursor: pointer; padding: 0 2px; font-size: 1rem; line-height: 1; }
 .chat-item:hover .x { opacity: 1; }
@@ -199,9 +199,9 @@ select option { background: #131c1e; }
 .acct { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 1px solid var(--rule);
   border-radius: 10px; background: rgba(255, 255, 255, 0.03); color: var(--ink); cursor: pointer; text-align: left;
   font: 500 0.8rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
-.acct:hover, .acct[aria-expanded=true] { border-color: rgba(217, 102, 31, 0.5); }
+.acct:hover, .acct[aria-expanded=true] { border-color: rgba(192, 143, 44, 0.5); }
 .acct-av { width: 24px; height: 24px; flex: none; display: grid; place-items: center; border-radius: 50%;
-  background: rgba(217, 102, 31, 0.2); color: var(--navy); font-weight: 700; font-size: 0.72rem; text-transform: uppercase; }
+  background: rgba(192, 143, 44, 0.2); color: var(--navy); font-weight: 700; font-size: 0.72rem; text-transform: uppercase; }
 .acct-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .acct svg, #hsettings svg { width: 16px; height: 16px; flex: none; color: var(--mist); }
 .settings { position: fixed; z-index: 80; width: 280px; padding: 14px; border: 1px solid rgba(200, 204, 210, 0.16);
@@ -214,7 +214,7 @@ select option { background: #131c1e; }
 .seg button { flex: 1; padding: 5px 0; border: 0; border-radius: 6px; background: none; color: var(--steel); cursor: pointer;
   font: 500 0.78rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; }
 .seg button:hover { color: var(--ink); }
-.seg button.on { background: rgba(217, 102, 31, 0.18); color: var(--navy); }
+.seg button.on { background: rgba(192, 143, 44, 0.18); color: var(--navy); }
 .seg button[data-v="0.9"] { font-size: 0.7rem; } .seg button[data-v="1.12"] { font-size: 0.86rem; }
 .seg button[data-v="1.25"] { font-size: 0.95rem; }
 .set-note { color: var(--mist); font-size: 0.72rem; }
@@ -230,7 +230,7 @@ select option { background: #131c1e; }
    sidebar hidden the header carries the settings gear, since the account row went with it. */
 #hideside { margin-left: auto; align-self: flex-start; width: 30px; height: 30px; display: grid; place-items: center;
   border: 1px solid transparent; border-radius: 8px; background: none; color: var(--mist); cursor: pointer; flex: none; }
-#hideside:hover, #showside:hover, #hsettings:hover { color: var(--navy); border-color: rgba(217, 102, 31, 0.5); }
+#hideside:hover, #showside:hover, #hsettings:hover { color: var(--navy); border-color: rgba(192, 143, 44, 0.5); }
 #hideside svg, #showside svg { width: 17px; height: 17px; }
 body.noside aside { display: none; }
 body.noside { --gut: 64px; }
@@ -254,7 +254,7 @@ body.wide { --col: 1240px; --gut: 20px; }
 header { position: relative; padding: 20px max(var(--gut), calc((100% - var(--col)) / 2)) 12px; border-bottom: 1px solid var(--rule); }
 #widen { position: absolute; top: 18px; right: 16px; width: 32px; height: 32px; display: grid; place-items: center;
   border: 1px solid var(--rule); border-radius: 8px; background: rgba(255, 255, 255, 0.04); color: var(--mist); cursor: pointer; }
-#widen:hover { color: var(--navy); border-color: rgba(217, 102, 31, 0.5); }
+#widen:hover { color: var(--navy); border-color: rgba(192, 143, 44, 0.5); }
 #widen svg { width: 16px; height: 16px; }
 #widen .in, body.wide #widen .out { display: none; }
 body.wide #widen .in { display: block; }
@@ -269,7 +269,7 @@ h1 { margin: 0; color: var(--navy); font-weight: 600; }
 .sections button { display: flex; align-items: center; gap: 7px; flex: none; padding: 6px 14px; border: 1px solid var(--rule);
   border-radius: 999px; background: none; color: var(--steel); cursor: pointer; letter-spacing: 0.1em;
   font: 700 0.72rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; text-transform: uppercase; }
-.sections button:hover { color: var(--ink); border-color: rgba(217, 102, 31, 0.4); }
+.sections button:hover { color: var(--ink); border-color: rgba(192, 143, 44, 0.4); }
 .sections button[aria-selected=true] { color: var(--navy); }   /* the word only, no filled pill */
 #offline { display: none; margin-top: 10px; }
 #offline code { background: var(--card); padding: 1px 5px; border-radius: 4px; }
@@ -288,7 +288,7 @@ h1 { margin: 0; color: var(--navy); font-weight: 600; }
 .err { color: var(--bad); }
 .choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .choices button { font: 600 0.8rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: var(--user-ink); cursor: pointer;
-  background: var(--user); border: 1px solid rgba(217, 102, 31, 0.45); border-radius: 999px; padding: 6px 14px; }
+  background: var(--user); border: 1px solid rgba(192, 143, 44, 0.45); border-radius: 999px; padding: 6px 14px; }
 .choices button:hover { border-color: var(--navy); }
 .wrong { margin-top: 8px; text-align: right; font: 0.75rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: var(--mist); }
 .wrong button { font: inherit; color: inherit; background: none; border: 0; padding: 2px 0; cursor: pointer; text-decoration: underline dotted; }
@@ -307,7 +307,7 @@ h1 { margin: 0; color: var(--navy); font-weight: 600; }
   background: rgba(255, 255, 255, 0.05); color: var(--mist); font: 500 0.66em/1.6 Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   text-decoration: none; white-space: nowrap; vertical-align: 0.12em; transition: color 0.15s, border-color 0.15s;
 }
-.md a.cite:hover { color: var(--navy); border-color: rgba(217, 102, 31, 0.5); }
+.md a.cite:hover { color: var(--navy); border-color: rgba(192, 143, 44, 0.5); }
 .md li + li { margin-top: 0.45em; }
 .md td a.cite { margin: 1px 2px 1px 0; }
 /* Guideline feel: bold-only lines become ruled section labels, "Term: rule" bullets become a two-column
@@ -348,7 +348,7 @@ form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
   border: 1px solid rgba(200, 204, 210, 0.16); border-radius: 20px; background: rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(12px); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
 }
-.composer:focus-within { border-color: rgba(217, 102, 31, 0.55); }
+.composer:focus-within { border-color: rgba(192, 143, 44, 0.55); }
 textarea {
   flex: 1; resize: none; min-height: 52px; max-height: 220px; padding: 4px 0; border: 0; background: transparent;
   font: 400 1rem/1.6 var(--serif); outline: none;
@@ -375,7 +375,7 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
 .vtitle span { font-size: 0.72rem; color: var(--mist); }
 .vbtn { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; cursor: pointer;
   border: 1px solid var(--rule); background: var(--card); color: var(--steel); text-decoration: none; }
-.vbtn:hover { color: var(--navy); border-color: rgba(217, 102, 31, 0.5); }
+.vbtn:hover { color: var(--navy); border-color: rgba(192, 143, 44, 0.5); }
 .vbtn svg { width: 16px; height: 16px; }
 #viewer iframe { flex: 1; width: 100%; min-width: 320px; border: 0; background: #2a2f33; }
 /* Pages drawn by PDF.js: one white sheet per page, stacked, drawn only when scrolled near. */
@@ -387,15 +387,15 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
 .vpg canvas { display: block; width: 100%; height: 100%; border-radius: 3px; }
 .vpg .num { position: absolute; right: 8px; bottom: -18px; font-size: 0.66rem; color: var(--mist); }
 /* The lines the answer cites: a soft orange marker, pulsing once when it lands. */
-.vhl { position: absolute; border-radius: 3px; background: rgba(217, 102, 31, 0.28);
-  box-shadow: 0 0 0 1.5px rgba(217, 102, 31, 0.85); mix-blend-mode: multiply; pointer-events: none;
+.vhl { position: absolute; border-radius: 3px; background: rgba(192, 143, 44, 0.28);
+  box-shadow: 0 0 0 1.5px rgba(192, 143, 44, 0.85); mix-blend-mode: multiply; pointer-events: none;
   animation: land 1.2s ease-out 1; }
-@keyframes land { 0% { box-shadow: 0 0 0 10px rgba(217, 102, 31, 0); background: rgba(217, 102, 31, 0.55); } }
+@keyframes land { 0% { box-shadow: 0 0 0 10px rgba(192, 143, 44, 0); background: rgba(192, 143, 44, 0.55); } }
 /* Agency documents mark in the agency's color: Fannie blue, Freddie green, FHA green, VA red. */
 #viewer[data-prog=fannie] .vhl, #viewer[data-prog=freddie] .vhl, #viewer[data-prog=fha] .vhl, #viewer[data-prog=va] .vhl {
   background: color-mix(in srgb, var(--pc) 30%, transparent); box-shadow: 0 0 0 1.5px var(--pc); animation: none; }
 .vmsg { color: var(--mist); font-size: 0.8rem; text-align: center; padding: 30px 10px; }
-.md a.cite.on { color: var(--navy); border-color: var(--navy); background: rgba(217, 102, 31, 0.12); }
+.md a.cite.on { color: var(--navy); border-color: var(--navy); background: rgba(192, 143, 44, 0.12); }
 /* Below 1600px there isn't room for sidebar, chat and panel together, so the sidebar steps aside while the
    panel is open (Claude does the same with artifacts). Closing the panel brings it back. */
 @media (min-width: 761px) and (max-width: 1600px) {
