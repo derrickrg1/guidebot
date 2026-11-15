@@ -378,10 +378,10 @@ form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
 .scen { display: flex; align-items: center; height: 34px; padding: 0 12px; border-radius: 999px; cursor: pointer; user-select: none;
   color: var(--steel); font: 600 0.86rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.02em;
   background: rgba(255, 255, 255, 0.07); transition: color 0.15s, background 0.15s; }
-.scen input { position: absolute; opacity: 0; pointer-events: none; }
+.scen { border: 0; }
 .scen:hover { color: var(--ink); background: rgba(255, 255, 255, 0.11); }
-.scen:has(input:checked) { color: var(--navy); background: rgba(192, 143, 44, 0.16); }
-.scen:has(input:focus-visible) { outline: 2px solid var(--navy); outline-offset: 2px; }
+.scen[aria-pressed=true] { color: var(--navy); background: rgba(192, 143, 44, 0.16); }
+.scen:focus-visible { outline: 2px solid var(--navy); outline-offset: 2px; }
 .sform-toggle { font: 600 0.8rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.06em; color: var(--mist);
   background: none; border: 0; padding: 2px 0; cursor: pointer; display: flex; align-items: center; gap: 5px; }
 .sform-toggle:hover, .sform-toggle[aria-expanded=true] { color: var(--navy); }
@@ -643,7 +643,8 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
       <input type="file" id="f-photos" accept="image/*" multiple hidden>
       <input type="file" id="f-files" accept="application/pdf,image/*" multiple hidden>
       <input type="radio" name="mode" value="ask" checked hidden>
-      <label class="scen" title="Scenario: max LTV for a borrower's deal. Off is Guidelines."><input type="radio" name="mode" value="deal">Scenario</label>
+      <input type="radio" name="mode" value="deal" hidden>
+      <button type="button" class="scen" id="scen" aria-pressed="false" title="Scenario: max LTV for a borrower's deal. Off is Guidelines.">Scenario</button>
       <button type="button" class="sform-toggle" id="sform-toggle" aria-expanded="false" aria-controls="sform" hidden>
       Fill in a form<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>
       <button class="send" id="send" aria-label="Send" title="Send (Enter)">
@@ -726,6 +727,7 @@ function renderSidebar() {
   document.querySelectorAll("#sections button").forEach(b => b.setAttribute("aria-selected", b.dataset.sec === section));
   $("msec").value = section;   // the phone's product dropdown
   $("sform-toggle").hidden = m !== "deal";
+  $("scen").setAttribute("aria-pressed", m === "deal");
   if (m !== "deal") showForm(false);
   if (newsFor !== section) loadNews();
   const p = programs.find(x => x.name === choice);
@@ -843,14 +845,11 @@ async function loadPrograms() {
   renderSidebar();
 }
 document.querySelectorAll("input[name=mode], #program").forEach(el => el.addEventListener("change", renderSidebar));
-// Guidelines is the default and has no switch of its own; Scenario is a switch. Tapping it while on goes back to Guidelines.
-document.querySelector("input[name=mode][value=deal]").closest("label").addEventListener("click", e => {
-  const deal = document.querySelector("input[name=mode][value=deal]");
-  if (e.target === deal || !deal.checked) return;   // the label's own click on the input bubbles back through here
-  e.preventDefault();
-  const ask = document.querySelector("input[name=mode][value=ask]");
-  ask.checked = true;
-  ask.dispatchEvent(new Event("change"));
+// Guidelines is the default and has no switch of its own; the Scenario chip flips between the two.
+$("scen").addEventListener("click", () => {
+  const to = document.querySelector(`input[name=mode][value=${mode().m === "deal" ? "ask" : "deal"}]`);
+  to.checked = true;
+  to.dispatchEvent(new Event("change"));
 });
 
 // ---------- program picker ----------
@@ -1346,17 +1345,21 @@ function fold() {
 const inside = t => t && t.closest && t.closest("#composer, #attach-menu, #sform");
 document.addEventListener("pointerdown", e => { boxOpen = !!inside(e.target); fold(); }, true);
 document.addEventListener("focusin", e => { boxOpen = !!inside(e.target); fold(); });
-// While you're typing, the box's buttons (+, Scenario, Fill in a form) don't take focus from the text: the keyboard
-// stays up and nothing moves. mousedown is where a tap moves focus, on phones too.
-$("composer").addEventListener("mousedown", e => {
-  if (e.target !== $("q") && e.target.closest(".tools") && document.activeElement === $("q")) e.preventDefault();
-});
-// A label hands focus to its (hidden) radio on click; give it straight back if you were typing.
-let typing = false;
-document.addEventListener("pointerdown", () => { typing = document.activeElement === $("q"); }, true);
-document.querySelector("label.scen").addEventListener("click", () => {
-  if (typing) setTimeout(() => $("q").focus({ preventScroll: true }), 0);
-});
+// While you're typing, the box's buttons (+, Scenario, Fill in a form) never take focus from the text, so a phone
+// keyboard stays up and nothing moves or blinks. A tap is handled here instead of letting the browser move focus:
+// touchstart is cancelled and the button is clicked on touchend; a mouse press is cancelled on mousedown.
+let tapBtn = null;
+const boxBtn = t => document.activeElement === $("q") && t.closest && t.closest(".tools button:not(.send)");
+$("composer").addEventListener("touchstart", e => { tapBtn = boxBtn(e.target); if (tapBtn) e.preventDefault(); }, { passive: false });
+$("composer").addEventListener("touchend", e => {
+  if (!tapBtn) return;
+  e.preventDefault();
+  const t = e.changedTouches[0], hit = document.elementFromPoint(t.clientX, t.clientY);
+  if (hit && tapBtn.contains(hit)) tapBtn.click();
+  tapBtn = null;
+}, { passive: false });
+$("composer").addEventListener("mousedown", e => { if (boxBtn(e.target)) e.preventDefault(); });
+
 $("composer").addEventListener("click", e => { if (e.target === $("composer") || e.target.classList.contains("tools")) $("q").focus(); });
 $("q").addEventListener("input", e => { e.target.style.height = ""; e.target.style.height = e.target.scrollHeight + "px"; });
 $("newchat").addEventListener("click", () => {
