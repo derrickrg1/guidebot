@@ -161,13 +161,15 @@ select option { background: #131c1e; }
 .tag { font-size: 0.68rem; color: var(--mist); border: 1px solid var(--rule); border-radius: 999px; padding: 1px 7px; white-space: nowrap; }
 .picker-opt.sel .tag { color: inherit; border-color: rgba(217, 102, 31, 0.4); }
 /* Chat history */
+/* New chat is a round + beside the CHATS label (was a full-width "New chat" pill). */
+.chats-head { display: flex; align-items: center; justify-content: space-between; }
 .newchat {
-  display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; padding: 8px 12px; cursor: pointer;
-  border: 1px solid rgba(217, 102, 31, 0.45); border-radius: 999px; background: rgba(217, 102, 31, 0.08);
-  color: var(--navy); font-weight: 600; font-size: 0.82rem; transition: background 0.15s;
+  display: grid; place-items: center; width: 30px; height: 30px; padding: 0; cursor: pointer; flex: none;
+  border: 1px solid rgba(217, 102, 31, 0.45); border-radius: 50%; background: rgba(217, 102, 31, 0.08);
+  color: var(--navy); transition: background 0.15s;
 }
-.newchat:hover { background: rgba(217, 102, 31, 0.16); }
-.newchat svg { width: 15px; height: 15px; }
+.newchat:hover { background: rgba(217, 102, 31, 0.2); }
+.newchat svg { width: 16px; height: 16px; }
 .chats { display: flex; flex-direction: column; gap: 1px; min-height: 60px; overflow-y: auto; }   /* scrolls on short windows instead of running under the footer */
 .chats .when { font: 600 0.62rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0.2em; color: var(--mist);
   text-transform: uppercase; padding: 10px 8px 4px; display: flex; align-items: center; gap: 6px; width: 100%;
@@ -461,9 +463,9 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
   </div>
   <div id="docnote" class="note" hidden>Some docs unverified. LTV numbers blocked until they're approved.</div>
   <hr>
-  <button class="newchat" id="newchat" type="button">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-    New chat</button>
+  <div class="chats-head"><div class="label">CHATS</div>
+    <button class="newchat" id="newchat" type="button" title="New chat" aria-label="New chat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></div>
   <div id="chats" class="chats"></div>
   <div class="foot">
     <div><span id="model"></span><br><span id="spend"></span><br>by Derrick Garcia</div>
