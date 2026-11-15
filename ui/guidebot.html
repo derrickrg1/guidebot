@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
-<title>AskNick</title>
+<title>AskNICK</title>
 <link rel="icon" type="image/png" href="logo.png?v=6">
 <!-- Closest free match to Claude's type: serif for answers, clean sans for the interface. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -716,7 +716,7 @@ function renderSidebar() {
   if (fam) sub = `${fam.join(" and ")}, side by side`;
   $("title").textContent = title;
   $("subtitle").textContent = sub;
-  document.title = `${title} · AskNick`;
+  document.title = "AskNICK";   // the tab always reads just the name
   if ($("empty")) $("empty").textContent = empty;
   $("q").placeholder = VIEWS[m].hint;
   // Plain text on the button (no tag pill), so it truncates cleanly in the narrow sidebar.
