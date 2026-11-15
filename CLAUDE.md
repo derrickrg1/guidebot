@@ -130,6 +130,13 @@ wide chat column (remembered per browser).
 * Settings (account row, bottom left; header gear on a phone or with the sidebar hidden): text size (scales chat
 messages via `--ts`; sizes inside messages are in em), chat width, program colors on/off. The sidebar collapses
 (panel icon by the logo). All kept per browser in localStorage (`asknick.*`).
+* Badge: Nick on every tab but VA, which shows Uncle Sam (Derrick's art `art/uncle-sam.png`). One ring, two people:
+  `tools/make_badge.py` builds `ui/badge/` ring, mask, nick (lifted off `logo.png`, whose disc is flat 26,24,22) and
+  sam layers in Nick's geometry (center 128,159, radius 96, pop-out above y 125), plus the still `ui/logo-va.png`.
+  The page stacks the ring and a masked stage, so a figure leaving the circle is cut off by it. Clicking VA plays the
+  2 s takeover inside the ring (Sam strides in, shoulder-checks Nick out, wobbles, jabs the point, ends on the still;
+  CSS `sam-in`/`nick-out`, `showBadge` in `guidebot.html`); leaving VA, Nick hops back in. Off with reduced motion.
+  Favicon and admin stay `logo.png`.
 * Fonts: Lato everywhere (both pages), Bodoni Moda only for the ASKNICK wordmark. Matte page: soft vignette plus
 an SVG grain; flat translucent answer cards; the sidebar casts a shadow over the chat; section tabs centered.
 * Admin console: `/admin` (`ui/admin.html`, `guidebot/admin.py`) replaces the Streamlit Verify page: doc

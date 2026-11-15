@@ -116,6 +116,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, (PAGE.parent / path[1:]).read_bytes(), "text/javascript; charset=utf-8")
         elif path == "/logo.png":
             self._send(200, (PAGE.parent / "logo.png").read_bytes(), "image/png")
+        elif path == "/logo-va.png":   # Uncle Sam's still badge (tools/make_badge.py)
+            self._send(200, (PAGE.parent / "logo-va.png").read_bytes(), "image/png")
+        elif path in ("/badge/ring.png", "/badge/mask.png", "/badge/nick.png", "/badge/sam.png"):
+            self._send(200, (PAGE.parent / path[1:]).read_bytes(), "image/png")   # the animated badge's layers
         elif path == "/api/chats":
             self._json({"chats": history.list_chats(history.user(self.headers))})
         elif path.startswith("/api/chats/"):
