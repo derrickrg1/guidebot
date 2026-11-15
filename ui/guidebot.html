@@ -19,6 +19,11 @@
   --card: rgba(0, 0, 0, 0.24); --user: rgba(192, 143, 44, 0.18); --user-ink: #f6ece4; --warn: #e2b866;
   --warn-bg: rgba(226, 184, 102, 0.1); --bad: #e08080; --ok: #7cc48a;
 }
+/* Each tab tints the page (2026-11-15): NonQM charcoal, Conventional olive, FHA blue, VA oxblood, all near black. */
+:root[data-sec=NonQM] { --page: #161616; }
+:root[data-sec=Conventional] { --page: #181c12; }
+:root[data-sec=FHA] { --page: #0f1622; }
+:root[data-sec=VA] { --page: #1f1013; }
 /* Black overlay over the paint: lit in the middle, falling off to black at the edges like the photo. */
 html {
   background:
@@ -716,6 +721,7 @@ function fillPrograms(keep) {
 }
 // Uncle Sam stands in for Nick on the VA tab; a click into or out of VA plays the swap (CSS .go / .back).
 function showBadge(animate = false) {
+  document.documentElement.dataset.sec = section;   // the page tint for this tab
   const b = $("badge"), va = section === "VA", was = b.classList.contains("va");
   for (const el of [b, b.closest(".brand")]) {   // the brand row carries it too, for the red pen over NICK
     el.classList.toggle("va", va);
