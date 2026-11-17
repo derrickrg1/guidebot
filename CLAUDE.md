@@ -109,6 +109,16 @@ national floor/ceiling only (HUD's county file wasn't downloadable).
 [Attachment: name]`, so routing, the deal reader and the lookup run unchanged; the server sends `{"asked": full question}` so follow-ups see it and saves that. Bubbles hide everything after the marker and show name chips. Derrick chose this with no warning in the UI (2026-11-15), knowing attachments can carry borrower data. Tests in `tests/test_attachments.py`.
   * "What's new" banner (`guidebot/updates.py`, GET `/api/updates?section=`): NDM sheets new or changed since the server's first look (baseline 2026-11-15 in `data/sheets_seen.json`) and agency files after their first load, last 30 days, dismissed per browser.
   * The page never scrolls, only the chat and the chat list, so the header and sidebar stay put.
+* Added 2026-11-16 (Derrick: "do them all"):
+  * Answer cache (`guidebot/answer_cache.py`, `data/answer_cache.db`): a chat's first question (no history, no attachments) on the same tab/program/mode/model replays its last answer, marked "Saved answer". The key includes a fingerprint (size + mtime of every file in docs/, verified/, overlays/, agency/, guidebot/ and `revo_overlays.json`), so any guide, approval or code change misses. Backup-model and errored answers aren't saved. "This is wrong" drops that question's entries. Stress/regression runs send no chat id and are never cached. Hits trace with model "cache".
+  * Revo rules (`guidebot/revo_rules.py`, `revo_overlays.json` at the repo root, admin "Revo rules" tab): Derrick's own rules on top of NDM's. Python adds a matching rule under the answer word for word as "**Revo overlay**" (scope = tab, program or program prefix, or *; a keyword must be in the question, whole words). No model picks or rewords them. Claude doesn't write rules; Derrick does.
+  * Regression check (`guidebot/regress.py`, `data/regress/`): a server thread looks hourly (first 15 min after start) for new NDM sheet events and agency updates and reruns that tab's stress cases through the server, graded by `stress_check.check`; a case clean last time with a problem now is "newly broken" on the admin Updates tab. Deal cases only (Python, free) unless `GUIDEBOT_AUTO_REGRESS_PAID=1` or the "include guideline cases" box. First look is the baseline. Conventional baseline 2026-11-16: 44/44 clean.
+  * Usage tab (`guidebot/analytics.py`, admin): questions, people, cache hits, backup-model answers, marked wrong, median/p90 seconds, asked most (grouped by normalized question), possible gaps (guideline answers with no citation), by person and program. Real chats only (traces with a chat id).
+  * Share (`guidebot/shares.py`, table `shares` in chats.db, page `ui/share.html` at `/s/<token>`): freezes the question, answer and chips; behind Cloudflare Access like the app. Phones use the share sheet, computers copy the link.
+  * What if… under a deal answer: `/api/deal-facts` (Python's `said_scenario` plus value, ZIP and property from the words) fills the Scenario form; scenario chats carry a "Deal" tag in the sidebar.
+  * Clear a condition (+ menu): the next message is sent as `Clear this condition: "..."` plus a fixed ask (which documents satisfy it, what each needs, what won't clear it), in Guidelines mode, so it uses the same guides and citations.
+  * Loan file (MISMO) (+ menu, `guidebot/mismo.py`): a MISMO 3.x XML is read in Python into the scenario form's sentence (qualifying score = each borrower's middle score, then the lowest; loan, price/value, occupancy, purpose, property, units, ZIP). Names, SSNs and income never leave the file. DOCTYPE/ENTITY rejected. Fannie 3.2 (.fnm) and live LOS APIs (Encompass, Arive) aren't done: those need credentials.
+  * The What's new banner also lists the tracker's releases (`updates.changes`, from `data/agency_changes.jsonl`) with "What changed (N)" folded under each and the effective date.
 * Answers that aren't deals end with "*Checked: ...*" naming every sheet/guide page cited (`chat.checked_line`).
 * "This is wrong" button under each answer saves to `feedback` in `data/chats.db` (admin Feedback tab);
 `tools/stress_bank.py` turns each report into a stress case (`fb-N`). Every answer also writes a trace row
@@ -175,6 +185,18 @@ newer than the handbook wins over it; NDM's sheet wins over all (`RULES`). Fanni
 handbook out and the 500 MDCS floor went missing), and each handbook page brings the next one along (that rule
 starts on p. 176, the standard is on p. 177). A newer letter is flagged "Newer agency guidance (supersedes
 handbook)", never "Overlay". The top 3 handbook hits also bring the previous page (FHA gift donor list starts a page early); HUD pages outside forward origination rank last (`agency.off_topic`, Title I/HECM answered a gifts question once). Every VA Circular loaded is in force and beats the Pamphlet chapter (Ch. 8 fee table predates Circular 26-23-6), and a circular brings its exhibits (`_exhibits`). Shortened citations get their full filename back (`_fix_agency_cites`); filenames carry no commas (`_safe`). First load 2026-11-12: 127 files, 2,551 pages (4000.1 Update 18 is 1,872).
+* Change tracker (`guidebot/tracker/`, 2026-11-16): agency releases as plain rule changes in `data/agency_changes.jsonl`
+(one JSON object a release: id, agency FHA/Fannie/Freddie/VA, title, url, published, effective, summary,
+changes [{topic, old, new, section, effective}], fetched_at; the in-app "What changed" feed reads it, keep it exact).
+`agency.check()` hands every file it read to the tracker after the index update and outside its lock: a new
+Mortgagee Letter or Circular is summarized whole, a new 4000.1 / 26-7 chapter / Freddie guide from its page diff.
+Fannie's Selling Guide announcements (SEL-) and Lender Letters (LL-) come from singlefamily.fanniemae.com's sitemap
+(robots.txt allows it, the PDFs download), feed only, never indexed. Freddie's bulletins sit on guide.freddiemac.com,
+whose robots.txt bars bots, so Freddie changes arrive with the guide PDF Derrick saves monthly. Model via
+`llm.ask_json` (Claude, Gemini, local); releases with nothing for origination go to `data/tracker_state.json`
+"skipped", failures to "errors" and retry next check. `python -m guidebot.tracker --days N` runs it standalone (reads
+agency/, never writes it or the index); `scripts/run_tracker.ps1` has the Task Scheduler line. Tests in
+`tests/test_tracker.py`, fixtures in `tests/fixtures/tracker/`.
 * Chat history: `guidebot/history.py`, SQLite at `data/chats.db` (git-ignored), keyed to the Cloudflare Access
 email ("local" on this PC). The server saves each turn after the answer finishes; people see only their own.
 * Search index (ChromaDB in `db/`): update it only through the admin Index tab, never from a second process

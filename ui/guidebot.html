@@ -321,6 +321,12 @@ header .sections { margin-bottom: 0; }
 .wrong { display: flex; justify-content: flex-end; gap: 14px; margin-top: 8px; text-align: right; font: 0.75rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: var(--mist); }
 .wrong button { font: inherit; color: inherit; background: none; border: 0; padding: 2px 0; cursor: pointer; text-decoration: underline dotted; }
 .wrong button:hover { color: var(--navy); }
+.chat-item .dealtag { flex: none; font: 700 0.56rem Lato, "Segoe UI", Arial, sans-serif; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--navy); border: 1px solid rgba(192, 143, 44, 0.45); border-radius: 4px; padding: 1px 4px; margin-left: 4px; }
+.wrong .saved { margin-right: auto; color: var(--mist); font-style: italic; }
+.wrong .whatif { color: var(--navy); }
+.att.cond { max-width: none; height: 36px; } .att.cond .ic { width: 36px; height: 36px; }
+.composer.cond { border-color: rgba(192, 143, 44, 0.55); }
 .md > :first-child { margin-top: 0; }
 .md > :last-child { margin-bottom: 0; }
 .md h1, .md h2, .md h3, .md h4 { color: var(--navy); font-size: 1em; margin: 1em 0 0.4em; text-transform: none; letter-spacing: 0; }
@@ -409,6 +415,11 @@ form { padding: 8px max(var(--gut), calc((100% - var(--col)) / 2)) 20px; }
 .news ul { list-style: none; margin: 0; padding: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
 .news a { color: var(--ink); text-decoration: none; } .news a:hover { color: var(--navy); }
 .news .d { color: var(--mist); margin-left: 6px; }
+.news .chg { display: inline; margin-left: 8px; }
+.news .chg summary { display: inline; cursor: pointer; color: var(--navy); list-style: none; }
+.news .chg summary::-webkit-details-marker { display: none; }
+.news .chg[open] { display: block; margin: 2px 0 4px; max-height: 30vh; overflow-y: auto; }
+.news .chg ul { list-style: disc; margin: 2px 0 0 18px; padding: 0; display: block; color: var(--steel); font-size: 0.95em; }
 .news .x { border: 0; background: none; color: var(--mist); cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 2px; }
 .news .x:hover { color: var(--ink); }
 /* The money line of a deal answer as the headline: "Max LTV/CLTV: 75%" or "Best fit: 80% max LTV". */
@@ -641,7 +652,7 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
       <input type="file" id="f-camera" accept="image/*" capture="environment" hidden>
       <input type="file" id="f-photos" accept="image/*" multiple hidden>
-      <input type="file" id="f-files" accept="application/pdf,image/*" multiple hidden>
+      <input type="file" id="f-files" accept="application/pdf,image/*,.xml,application/xml,text/xml" multiple hidden>
       <input type="radio" name="mode" value="ask" checked hidden>
       <input type="radio" name="mode" value="deal" hidden>
       <button type="button" class="scen" id="scen" aria-pressed="false" title="Scenario: max LTV for a borrower's deal. Off is Guidelines.">Scenario</button>
@@ -659,6 +670,8 @@ body.viewing #viewer { width: clamp(380px, 100vw - 840px, 820px); border-left-co
   <button type="button" role="menuitem" data-pick="f-camera" id="m-camera"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>Camera</button>
   <button type="button" role="menuitem" data-pick="f-photos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-9 9"/></svg>Photos</button>
   <button type="button" role="menuitem" data-pick="f-files"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>Files</button>
+  <button type="button" role="menuitem" data-pick="f-files" data-loan="1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg>Loan file (MISMO)</button>
+  <button type="button" role="menuitem" id="m-cond"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 12l2 2 4-4"/></svg>Clear a condition</button>
 </div>
 <section id="viewer" aria-label="Guideline viewer" aria-hidden="true">
   <div class="vbar">
@@ -755,6 +768,34 @@ $("f-run").addEventListener("click", () => {
   showForm(false);
   send(parts.join(", "));
 });
+// "What if…" under a deal answer: the scenario form opens filled with that deal (Python's read of it, /api/deal-facts),
+// so changing one thing and running it again is a tap. It runs in the same chat.
+const OCC = { "Primary Residence": "primary residence", "Second Home": "second home", "Investment Property": "investment property" };
+const PURP = { "Purchase": "purchase", "Rate/Term Refinance": "rate and term refinance", "Cash Out Refinance": "cash-out refinance" };
+function propOpt(p) {
+  p = (p || "").toLowerCase();
+  if (/non[- ]warrantable/.test(p)) return "non-warrantable condo";
+  if (/condo/.test(p)) return "condo";
+  if (/pud/.test(p)) return "PUD";
+  const u = p.match(/([234])[- ]unit/);
+  return u ? `${u[1]}-unit` : "single family";
+}
+async function whatIf(question, before) {
+  let f = {};
+  try {
+    f = await (await fetch(API + "/api/deal-facts", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, history: before || [] }) })).json();
+  } catch {}
+  if (mode().m !== "deal") $("scen").click();
+  const num = n => n ? Number(n).toLocaleString("en-US") : "";
+  $("f-fico").value = f.fico || ""; $("f-loan").value = num(f.loan); $("f-value").value = num(f.value); $("f-zip").value = f.zip || "";
+  if (OCC[f.occupancy]) $("f-occ").value = OCC[f.occupancy];
+  if (PURP[f.purpose]) $("f-purpose").value = PURP[f.purpose];
+  $("f-prop").value = propOpt(f.property);
+  boxOpen = true;
+  showForm(true);
+  fold();
+}
 // ---------- what changed lately on this tab (server: updates.py). Dismissed items stay gone in this browser. ----------
 let newsFor = null;
 const MONTH = d => new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -767,7 +808,8 @@ async function loadNews() {
   items = items.filter(u => !gone.has(u.id)).slice(0, 3);
   $("news").hidden = !items.length;
   $("news").innerHTML = items.length ? `<b>What's new</b><ul>${items.map(u =>
-    `<li><a href="${API}/pdf/${encodeURIComponent(u.file)}" target="_blank" rel="noopener">${esc(u.title)}</a> ${u.kind === "new" ? "added" : "updated"}<span class="d">${MONTH(u.date)}</span></li>`).join("")}</ul>
+    `<li><a href="${u.url ? esc(u.url) : API + "/pdf/" + encodeURIComponent(u.file)}" target="_blank" rel="noopener">${esc(u.title)}</a> ${u.kind === "new" ? "added" : "updated"}<span class="d">${MONTH(u.date)}${u.effective ? ` · effective ${MONTH(u.effective)}` : ""}</span>${
+      u.changes?.length ? `<details class="chg"><summary>What changed (${u.changes.length})</summary><ul>${u.changes.map(c => `<li>${esc(c)}</li>`).join("")}</ul></details>` : ""}</li>`).join("")}</ul>
     <button class="x" type="button" aria-label="Dismiss" title="Dismiss">×</button>` : "";
   $("news").querySelector(".x")?.addEventListener("click", () => {
     store.set("asknick.news", [...gone, ...items.map(u => u.id)].filter(Boolean).slice(-200).join("\n"));
@@ -1060,11 +1102,13 @@ async function stream(url, payload, box) {
       if (ev.choices) choices = ev.choices;
       if (ev.fallback) backup = true;
       if (ev.asked) payload.asked = ev.asked;
+      if (ev.cached) box.dataset.cached = "1";
       if (ev.error) throw new Error(ev.error);
       if (ev.status) draw();
     }
   }
   done = true; refreshModel(backup); draw();
+  box._sources = sources;
   return clean(text);
 }
 // A deal asked in Guidelines mode with no program picked: the server asks which way to go.
@@ -1105,11 +1149,27 @@ function heroize(box) {
   const p = box.querySelector(".md > p"), s = p && p.firstElementChild;
   if (s && s.tagName === "STRONG" && p.firstChild === s && /^(Max LTV\/CLTV|Best fit):\s*\d/.test(s.textContent)) p.classList.add("hero");
 }
-function addWrong(box, question, answer) {
+function addWrong(box, question, answer, before) {
   heroize(box);
-  const d = document.createElement("div");
+  const d = document.createElement("div"), deal = /Max LTV\/CLTV|Best fit|Not eligible|matrix/i.test(answer) && /\d{3}\s*FICO|FICO\s*\d{3}|\$\s*\d/i.test(question);
+  const earlier = before || history.slice(0, -2);
   d.className = "wrong";
-  d.innerHTML = `<button type="button" class="copy">Copy for notes</button><button type="button" class="bad">This is wrong</button>`;
+  d.innerHTML = (box.dataset.cached ? `<span class="saved" title="Asked before with the same guides. Ask in a new way to get a fresh answer.">Saved answer</span>` : "")
+    + (deal ? `<button type="button" class="whatif">What if…</button>` : "")
+    + `<button type="button" class="share">Share</button><button type="button" class="copy">Copy for notes</button><button type="button" class="bad">This is wrong</button>`;
+  d.querySelector(".share").onclick = async e => {
+    const b = e.target;
+    try {
+      const r = await (await fetch(API + "/api/share", { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question, answer, sources: box._sources || [], program: mode().choice || section }) })).json();
+      if (!r.path) throw new Error(r.error);
+      const url = location.origin + r.path;
+      if (navigator.share && matchMedia("(pointer: coarse)").matches) { try { await navigator.share({ title: "AskNICK", url }); return; } catch {} }
+      b.textContent = (await copyText(url)) ? "Link copied" : url;
+    } catch { b.textContent = "Couldn't share"; }
+    setTimeout(() => b.textContent = "Share", 2200);
+  };
+  d.querySelector(".whatif")?.addEventListener("click", () => whatIf(question, earlier));
   d.querySelector(".copy").onclick = async e => {
     const b = e.target, ok = await copyText(notesText(question, answer));
     b.textContent = ok ? "Copied" : "Couldn't copy"; setTimeout(() => b.textContent = "Copy for notes", 1600);
@@ -1147,7 +1207,7 @@ async function loadChats() {
     const head = w !== last ? `<button type="button" class="when${shut ? " shut" : ""}" data-when="${w}" aria-expanded="${!shut}">${w}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>` : "";
     last = w;
     return head + `<div class="chat-item${c.id === chatId ? " on" : ""}${c.pinned ? " pinned" : ""}" data-id="${esc(c.id)}" data-when="${w}" title="${esc(c.title)}"${shut ? " hidden" : ""}>
-      <span class="t">${esc(c.title)}</span><button class="pin" type="button" aria-label="${c.pinned ? "Unpin" : "Pin"} chat" title="${c.pinned ? "Unpin" : "Pin to top"}">${PIN}</button><button class="x" type="button" aria-label="Delete chat" title="Delete">×</button></div>`;
+      <span class="t">${esc(c.title)}</span>${c.mode === "scenario" ? `<span class="dealtag" title="A saved deal: open it and tap What if… to change one thing">Deal</span>` : ""}<button class="pin" type="button" aria-label="${c.pinned ? "Unpin" : "Pin"} chat" title="${c.pinned ? "Unpin" : "Pin to top"}">${PIN}</button><button class="x" type="button" aria-label="Delete chat" title="Delete">×</button></div>`;
   }).join("");
 }
 // Chat groups fold by their heading. Today and Yesterday start open, This week and Earlier start folded;
@@ -1200,8 +1260,11 @@ async function openChat(id) {
   let asked = "";
   for (const m of c.messages) {
     if (m.role === "user") { asked = m.content; addMsg("user", userHtml(m.content)); }
-    else addWrong(addMsg("bot", `<div class="md">${md(clean(m.content))}</div>` + (m.sources.length ? sourcesHtml(m.sources) : "")),
-                  asked, clean(m.content));
+    else {
+      const b = addMsg("bot", `<div class="md">${md(clean(m.content))}</div>` + (m.sources.length ? sourcesHtml(m.sources) : ""));
+      b._sources = m.sources;
+      addWrong(b, asked, clean(m.content), c.messages.slice(0, c.messages.indexOf(m) - 1).map(x => ({ role: x.role, content: x.content })));
+    }
   }
   renderSidebar();
   loadChats();
@@ -1227,11 +1290,24 @@ $("plus").addEventListener("click", e => { e.stopPropagation(); attachMenu($("at
 document.addEventListener("click", e => { if (!e.target.closest("#attach-menu")) attachMenu(false); });
 document.addEventListener("keydown", e => { if (e.key === "Escape") attachMenu(false); });
 $("attach-menu").addEventListener("click", e => {
+  if (e.target.closest("#m-cond")) { attachMenu(false); return condition(true); }
   const b = e.target.closest("[data-pick]");
   if (!b) return;
   attachMenu(false);
   $(b.dataset.pick).click();
 });
+// "Clear a condition": the next message is an underwriting condition. It's sent as a guideline question asking which
+// documents clear it, so it goes through the same guides and citations as any other answer.
+let condMode = false;
+function condition(on) {
+  condMode = on;
+  $("composer").classList.toggle("cond", on);
+  $("q").placeholder = on ? "Paste the condition, e.g. \"Provide 2 months bank statements for large deposit\"" : VIEWS[mode().m].hint;
+  drawPending();
+  if (on) $("q").focus();
+}
+const condQuestion = c => `Clear this condition: "${c.replace(/^"+|"+$/g, "")}"\nWhat documents satisfy it under the guidelines, `
+  + `what does each one need (how recent, signed, how many months, who provides it), and what would not clear it?`;
 for (const id of ["f-camera", "f-photos", "f-files"])
   $(id).addEventListener("change", e => { addFiles([...e.target.files]); e.target.value = ""; });
 const b64 = buf => { let s = ""; const a = new Uint8Array(buf); for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode(...a.subarray(i, i + 0x8000)); return btoa(s); };
@@ -1248,11 +1324,11 @@ async function shrink(file) {
 function addFiles(files) {
   for (const f of files) {
     if (pending.length >= ATT_MAX) { alert(`Up to ${ATT_MAX} attachments at a time.`); break; }
-    const pdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
-    if (!pdf && !f.type.startsWith("image/")) { alert(`${f.name}: only photos and PDFs can be attached.`); continue; }
-    if (pdf && f.size > ATT_BYTES) { alert(`${f.name} is over 10 MB.`); continue; }
-    const a = { id: Math.random().toString(36).slice(2), name: f.name || "photo.jpg", type: pdf ? "application/pdf" : "image/jpeg" };
-    a.ready = (pdf ? f.arrayBuffer().then(buf => ({ data: b64(buf) })) : shrink(f))
+    const pdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name), xml = /xml/.test(f.type) || /\.xml$/i.test(f.name);
+    if (!pdf && !xml && !f.type.startsWith("image/")) { alert(`${f.name}: only photos, PDFs and MISMO loan files (.xml) can be attached.`); continue; }
+    if ((pdf || xml) && f.size > ATT_BYTES) { alert(`${f.name} is over 10 MB.`); continue; }
+    const a = { id: Math.random().toString(36).slice(2), name: f.name || "photo.jpg", type: pdf ? "application/pdf" : xml ? "application/xml" : "image/jpeg" };
+    a.ready = (pdf || xml ? f.arrayBuffer().then(buf => ({ data: b64(buf) })) : shrink(f))
       .then(r => Object.assign(a, r))
       .catch(() => { alert(`${a.name} couldn't be read. Try a different photo or file.`); removeAtt(a.id); });
     pending.push(a);
@@ -1266,15 +1342,19 @@ function removeAtt(id) {
   drawPending();
 }
 const attHtml = (a, rm) => `<span class="att${a.data ? "" : " busy"}" title="${esc(a.name)}">${a.url ? `<img src="${a.url}" alt="">`
-  : `<span class="ic">${a.type === "application/pdf" ? "PDF" : "IMG"}</span>`}<span class="nm">${esc(a.name)}</span>${rm ? `<button type="button" class="rm" data-rm="${a.id}" aria-label="Remove ${esc(a.name)}">×</button>` : ""}</span>`;
+  : `<span class="ic">${a.type === "application/pdf" ? "PDF" : /xml/.test(a.type) || /\.xml$/i.test(a.name) ? "LOAN" : "IMG"}</span>`}<span class="nm">${esc(a.name)}</span>${rm ? `<button type="button" class="rm" data-rm="${a.id}" aria-label="Remove ${esc(a.name)}">×</button>` : ""}</span>`;
 function drawPending() {
   setTimeout(fold, 0);
-  $("pending").innerHTML = pending.map(a => attHtml(a, true)).join("");
+  $("pending").innerHTML = (condMode ? `<span class="att cond"><span class="ic">✓</span><span class="nm">Clear a condition</span><button type="button" class="rm" data-cond="off" aria-label="Cancel condition">×</button></span>` : "")
+    + pending.map(a => attHtml(a, true)).join("");
   pending.forEach(a => a.ready?.then(() => drawPendingSoon()));
 }
 let drawTimer = 0;
 const drawPendingSoon = () => { clearTimeout(drawTimer); drawTimer = setTimeout(() => $("pending").innerHTML = pending.map(a => attHtml(a, true)).join(""), 30); };
-$("pending").addEventListener("click", e => { const b = e.target.closest("[data-rm]"); if (b) removeAtt(b.dataset.rm); });
+$("pending").addEventListener("click", e => {
+  if (e.target.closest("[data-cond]")) return condition(false);
+  const b = e.target.closest("[data-rm]"); if (b) removeAtt(b.dataset.rm);
+});
 // A pasted screenshot or a file dropped on the box attaches too.
 $("q").addEventListener("paste", e => { const fs = [...(e.clipboardData?.files || [])]; if (fs.length) { e.preventDefault(); addFiles(fs); } });
 $("ask").addEventListener("dragover", e => e.preventDefault());
@@ -1293,8 +1373,10 @@ async function send(question, over = {}) {
     await Promise.all(files.map(a => a.ready));
     if (files.some(a => !a.data)) return;
   }
+  const cond = condMode && !!question;
+  if (cond) { question = condQuestion(question); condition(false); }
   pending = []; drawPending();
-  const { program, choice } = mode(), scenario = over.scenario ?? mode().scenario;
+  const { program, choice } = mode(), scenario = cond ? false : over.scenario ?? mode().scenario;
   $("q").value = ""; $("q").style.height = "";
   addMsg("user", userHtml(question, files));
   const box = addMsg("bot", `<div class="status">Thinking…</div>`);
@@ -1339,7 +1421,7 @@ if (window.visualViewport) {
 }
 let boxOpen = false;
 function fold() {
-  const keep = boxOpen || $("q").value.trim() || pending.length || !$("attach-menu").hidden || !$("sform").hidden;
+  const keep = boxOpen || condMode || $("q").value.trim() || pending.length || !$("attach-menu").hidden || !$("sform").hidden;
   $("composer").classList.toggle("folded", !keep);
 }
 const inside = t => t && t.closest && t.closest("#composer, #attach-menu, #sform");

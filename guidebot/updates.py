@@ -14,6 +14,8 @@ from datetime import date, timedelta
 from guidebot import agency, config, library
 
 SEEN = config.ROOT / "data" / "sheets_seen.json"
+CHANGES = config.ROOT / "data" / "agency_changes.jsonl"   # the agency tracker's plain-English rule changes
+AGENCY_TAB = {"FHA": "FHA", "VA": "VA", "Fannie": "Conventional", "Freddie": "Conventional"}
 DAYS = 30
 _lock = threading.Lock()
 
@@ -60,4 +62,27 @@ def recent(section: str, sections: dict, days: int = DAYS, today: date | None = 
             for u in state["updates"]
             if u["date"] >= since and u["date"] != first and u["kind"] in ("new", "changed")
             and u["file"].split("/", 1)[0] == section]
+    out += [u for u in changes(since) if u.pop("section") == section]
     return sorted(out, key=lambda u: u["date"], reverse=True)[:6]
+
+
+def changes(since: str = "") -> list[dict]:
+    """The tracker's write-ups (data/agency_changes.jsonl, one release a line): what each release changed, in a
+    line per rule. A bad line is skipped, never fatal."""
+    if not CHANGES.exists():
+        return []
+    out = []
+    for line in CHANGES.read_text(encoding="utf-8").splitlines():
+        try:
+            r = json.loads(line)
+            day = str(r.get("published") or r.get("fetched_at") or "")[:10]
+            if day < since or r.get("agency") not in AGENCY_TAB:
+                continue
+            items = [f"{c.get('topic') or 'Change'}: {c.get('new') or ''}".strip(": ") for c in r.get("changes") or []]
+            out.append({"id": f"chg-{r['id']}", "date": day, "title": f"{r['agency']}: {r.get('title') or 'update'}",
+                        "kind": "changed", "url": r.get("url") or "", "summary": r.get("summary") or "",
+                        "effective": r.get("effective") or "", "changes": [i for i in items if i][:6],
+                        "section": AGENCY_TAB[r["agency"]]})
+        except (json.JSONDecodeError, KeyError, TypeError, AttributeError):
+            continue
+    return out

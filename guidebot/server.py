@@ -9,11 +9,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from guidebot import admin, agency, attachments, chat, claude_status, config, history, updates, usage
+from guidebot import (admin, agency, analytics, answer_cache, attachments, chat, claude_status, config, history,
+                      regress, revo_rules, shares, updates, usage)
 
 PORT = 8600
 PAGE = config.ROOT / "ui" / "guidebot.html"
 ADMIN_PAGE = config.ROOT / "ui" / "admin.html"
+SHARE_PAGE = config.ROOT / "ui" / "share.html"
 
 
 def _page(path) -> bytes:
@@ -91,6 +93,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._json({"chats": history.list_chats(None, limit=500)})
         if path == "/admin/api/feedback":
             return self._json({"feedback": history.list_feedback()})
+        if path == "/admin/api/analytics":
+            return self._json(analytics.report(int(query.get("days", ["30"])[0] or 30)))
+        if path == "/admin/api/revo":
+            return self._json({"rules": revo_rules.load()})
+        if path == "/admin/api/regress":
+            return self._json(regress.overview())
         if path == "/admin/api/claude":
             return self._json(_claude(self.headers))
         if path == "/admin/api/chat":
@@ -120,6 +128,11 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, (PAGE.parent / "logo-va.png").read_bytes(), "image/png")
         elif path in ("/badge/ring.png", "/badge/mask.png", "/badge/nick.png", "/badge/sam.png"):
             self._send(200, (PAGE.parent / path[1:]).read_bytes(), "image/png")   # the animated badge's layers
+        elif path.startswith("/s/"):   # a shared answer (shares.py); the page fetches it below
+            self._send(200, _page(SHARE_PAGE), "text/html; charset=utf-8")
+        elif path.startswith("/api/share/"):
+            sh = shares.get(path.rsplit("/", 1)[1])
+            self._json(sh) if sh else self._json({"error": "That link doesn't exist."}, 404)
         elif path == "/api/chats":
             self._json({"chats": history.list_chats(history.user(self.headers))})
         elif path.startswith("/api/chats/"):
@@ -173,6 +186,16 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/admin/api/claude/check":
                 claude_status.stale()
                 return self._json(_claude(self.headers))
+            if path == "/admin/api/revo/save":
+                return self._json(revo_rules.save(body.get("rule") or {}, history.user(self.headers)))
+            if path == "/admin/api/revo/delete":
+                return self._json(revo_rules.delete(str(body.get("id") or "")))
+            if path == "/admin/api/regress/run":
+                sec = body.get("section") if body.get("section") in chat.SECTIONS else ""
+                if not sec:
+                    return self._json({"error": "pick a tab"}, 400)
+                regress.start(sec, "run by hand", paid=bool(body.get("paid")))
+                return self._json({"ok": True})
             if path == "/admin/api/agency/reviewed":
                 return self._json(agency.mark_reviewed(str(body.get("id") or "")))
             return self._json({"error": "not found"}, 404)
@@ -191,20 +214,40 @@ class Handler(BaseHTTPRequestHandler):
             program = body.get("program") or ""
             section = body.get("section") if body.get("section") in chat.SECTIONS else ""
             model = _test_model(self.headers, body)
-            events = _with_attachments(atts, question, lambda q: chat.respond(
-                q, turns, program, bool(body.get("mode_program")), bool(body.get("mode_scenario")), section=section, model=model))
+            chat_id = str(body.get("chat_id") or "")[:64]
+            mp, ms = bool(body.get("mode_program")), bool(body.get("mode_scenario"))
+            events = revo_rules.adding(_with_attachments(atts, question, lambda q: chat.respond(
+                q, turns, program, mp, ms, section=section, model=model)), question, program, section)
+            # A chat's first question is cached (answer_cache.py); stress runs send no chat id and never are.
+            ck, hit = "", None
+            if chat_id and not turns and not atts:
+                ck = answer_cache.key(question, program, section, mp, ms, model)
+                hit = answer_cache.get(ck)
+            if hit:
+                events = answer_cache.replay(hit)
+            elif ck:
+                events = answer_cache.caching(events, ck, question)
             # a chat across a whole section is saved under the section's name, so reopening it lands on that tab
-            self._stream(_saving(events, str(body.get("chat_id") or "")[:64], history.user(self.headers), question,
-                                 program or section, "scenario" if body.get("mode_scenario") else "guidelines",
-                                 model or config.CHAT_MODEL))
+            self._stream(_saving(events, chat_id, history.user(self.headers), question,
+                                 program or section, "scenario" if ms else "guidelines",
+                                 "cache" if hit else model or config.CHAT_MODEL))
         elif path == "/api/feedback":
             note = str(body.get("note") or "").strip()
             if not note or not str(body.get("question") or "").strip():
                 return self._json({"error": "say what's wrong"}, 400)
+            answer_cache.forget(str(body["question"]))   # the next person gets a fresh answer, not the wrong one
             fid = history.save_feedback(history.user(self.headers), str(body["question"]), str(body.get("answer") or ""),
                                         note, str(body.get("chat_id") or ""), str(body.get("program") or ""),
                                         str(body.get("section") or ""), str(body.get("mode") or ""))
             self._json({"ok": True, "id": fid})
+        elif path == "/api/share":
+            q, a = str(body.get("question") or ""), str(body.get("answer") or "")
+            if not q.strip() or not a.strip():
+                return self._json({"error": "nothing to share"}, 400)
+            token = shares.create(history.user(self.headers), q, a, body.get("sources") or [], str(body.get("program") or ""))
+            self._json({"ok": True, "path": f"/s/{token}"})
+        elif path == "/api/deal-facts":   # "What if": the deal as stated so far, to prefill the scenario form
+            self._json(_deal_facts(str(body.get("question") or ""), body.get("history") or []))
         elif path == "/api/chats/pin":
             self._json({"ok": history.pin_chat(str(body.get("id") or ""), history.user(self.headers), bool(body.get("pinned")))})
         elif path == "/api/chats/delete":
@@ -273,6 +316,28 @@ def _saving(events, chat_id, email, question, program, mode, model=""):
         sys.stderr.write(f"trace not saved: {e}\n")
 
 
+def _deal_facts(question: str, turns: list) -> dict:
+    """Python's read of the deal (no model): the same fill-in the deal reader does, plus value and ZIP."""
+    from guidebot import answer
+    turns = [{"role": m.get("role"), "content": str(m.get("content") or "")} for m in turns[-8:]
+             if isinstance(m, dict) and m.get("role") in ("user", "assistant")]
+    raw = answer.said_scenario(question, turns)
+    said = " ".join([m["content"] for m in turns if m["role"] == "user"] + [question])
+    zips = re.findall(r"\bZIP\s*(?:code\s*)?(\d{5})\b|\b(\d{5})(?:-\d{4})?\s*$", said, re.I)
+    val = re.findall(r"(?:value|price|worth|appraised)[^$\d]{0,20}\$?\s*(\d[\d,.]*)\s*([km])?", said, re.I)
+    value = None
+    if val:
+        n, unit = val[-1]
+        try:
+            value = int(float(n.replace(",", "")) * {"k": 1e3, "m": 1e6}.get(unit.lower(), 1))
+        except ValueError:
+            value = None
+    prop = re.findall(r"non[- ]warrantable condo|condo|pud|[234][- ]unit|single family|sfr", said, re.I)
+    return {"fico": raw.fico, "loan": raw.loan_amount, "occupancy": raw.occupancy, "purpose": raw.purpose,
+            "property": prop[-1].lower() if prop else "", "value": value,
+            "zip": next((a or b for a, b in reversed(zips)), "")}
+
+
 def _logged(job):
     """Runs job(log) on its own thread, yielding each log line as a status event. Returns the lines."""
     import queue
@@ -324,6 +389,7 @@ def _claude(headers) -> dict:
 def main():
     server = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
     agency.start_scheduler(on_index=chat.reset_retriever, log=lambda m: print(m, flush=True))
+    regress.watch(chat.SECTIONS, log=lambda m: print(m, flush=True))   # reruns the stress cases when a guide changes
     print(f"Guidebot running at http://localhost:{PORT}  (Ctrl+C to stop)")
     try:
         server.serve_forever()

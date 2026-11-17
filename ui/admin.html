@@ -64,6 +64,11 @@ button.act { font: 600 0.85rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-s
   border: 1px solid var(--accent); background: var(--accent); color: #fff; }
 button.act.ghost { background: transparent; color: var(--accent); }
 button.act:disabled { opacity: 0.4; cursor: not-allowed; }
+.utable { border-collapse: collapse; width: 100%; margin-top: 8px; font-size: 0.85rem; }
+.utable th, .utable td { border-bottom: 1px solid var(--rule); padding: 6px 8px; text-align: left; vertical-align: top; }
+.utable td:not(:first-child), .utable th:not(:first-child) { white-space: nowrap; width: 1%; }
+input.field { display: block; margin-top: 4px; background: rgba(0, 0, 0, 0.35); color: var(--ink); border: 1px solid var(--rule);
+  border-radius: 7px; padding: 7px 9px; font: 0.9rem Lato, "Segoe UI", Arial, sans-serif; text-transform: none; letter-spacing: 0; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 table { border-collapse: collapse; width: 100%; font-size: 0.78rem; }
 th, td { border: 1px solid var(--rule); padding: 4px 6px; text-align: left; vertical-align: top; }
@@ -79,8 +84,8 @@ textarea { width: 100%; min-height: 280px; resize: vertical; background: rgba(0,
 .muted { color: var(--mist); font-size: 0.78rem; }
 .empty { color: var(--steel); font: 1rem/1.65 var(--serif); margin-top: 18vh; text-align: center; }
 label.toggle { display: flex; gap: 8px; align-items: center; font-size: 0.85rem; color: var(--steel); cursor: pointer; }
-.tabs { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--rule); border-radius: 999px; background: var(--card); }
-.tabs button { flex: 1; padding: 6px 4px; border: 0; border-radius: 999px; background: none; color: var(--steel);
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border: 1px solid var(--rule); border-radius: 14px; background: var(--card); }
+.tabs button { flex: 1 0 auto; padding: 6px 8px; border: 0; border-radius: 999px; background: none; color: var(--steel); white-space: nowrap;
   font: 600 0.75rem Lato, "Segoe UI", "Helvetica Neue", Arial, sans-serif; cursor: pointer; }
 .tabs button:hover { color: var(--ink); }
 .tabs button.on { background: rgba(217, 102, 31, 0.16); color: var(--accent); }
@@ -193,6 +198,8 @@ button.act.small { padding: 5px 12px; font-size: 0.75rem; }
     <button type="button" data-tab="docs" class="on">Documents</button>
     <button type="button" data-tab="chats">Chats</button>
     <button type="button" data-tab="feedback">Feedback</button>
+    <button type="button" data-tab="usage">Usage</button>
+    <button type="button" data-tab="revo">Revo rules</button>
     <button type="button" data-tab="index">Index</button>
     <button type="button" data-tab="updates">Updates<span class="badge" id="upd-count" hidden></span></button>
   </nav>
@@ -219,6 +226,8 @@ function showTab(t) {
   if (t === "index") indexTab();
   if (t === "updates") updatesTab();
   if (t === "feedback") feedbackTab();
+  if (t === "usage") usageTab();
+  if (t === "revo") revoTab();
 }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 const setMain = html => { document.getElementById("main").innerHTML = html; };
@@ -270,6 +279,100 @@ async function openChat(id) {
 }
 
 // ---------- index ----------
+// ---------- usage: what people ask, where answers come back empty or get marked wrong (analytics.py) ----------
+const who = e => e === "local" ? "This PC" : e.replace(/@.*/, "");
+async function usageTab(days = 30) {
+  const r = await fetch("/admin/api/analytics?days=" + days);
+  const side = document.getElementById("side");
+  if (!r.ok) { side.innerHTML = `<div class="note bad">Admin only.</div>`; return; }
+  const a = await r.json(), t = a.totals;
+  if (tab !== "usage") return;
+  side.innerHTML = `<div class="muted">Real people only: stress and regression runs aren't counted.</div>
+    <div class="row">${[7, 30, 90].map(d => `<button class="act${d === days ? "" : " ghost"}" data-days="${d}">${d} days</button>`).join("")}</div>
+    <div class="label">By person</div>${a.by_person.map(([e, n]) => `<div class="src"><b>${esc(who(e))}</b> ${n}</div>`).join("") || `<div class="muted">Nobody yet.</div>`}
+    <div class="label">By program</div>${a.by_program.map(([p, n]) => `<div class="src"><b>${esc(p)}</b> ${n}</div>`).join("")}`;
+  side.querySelectorAll("[data-days]").forEach(b => b.onclick = () => usageTab(+b.dataset.days));
+  const when = ts => new Date(ts * 1000).toLocaleDateString();
+  const tile = (n, label, cls = "") => `<div class="tile ${cls}"><span class="big">${n}</span><span class="muted">${label}</span></div>`;
+  setMain(`<h1>Usage</h1><div class="sub">Last ${a.days} days.</div>
+    <div class="tiles">${tile(t.questions, "questions")}${tile(t.people, "people")}${tile(t.scenario, "scenarios")}
+      ${tile(t.cached, "answered from cache", "ok")}${tile(t.wrong, "marked wrong", t.wrong ? "warn" : "")}${tile(t.backup, "backup model", t.backup ? "warn" : "")}
+      ${tile(t.median_secs + "s", "median answer")}${tile(t.p90_secs + "s", "slowest 10%")}</div>
+    <div class="panel"><div class="label">Asked most</div>${a.top.length ? `<table class="utable"><tr><th>Question</th><th>Times</th><th>People</th><th>Last</th></tr>
+      ${a.top.map(q => `<tr><td>${esc(q.q)}</td><td>${q.n}</td><td>${q.people}</td><td>${when(q.last)}</td></tr>`).join("")}</table>` : `<div class="muted">Nothing yet.</div>`}</div>
+    <div class="panel"><div class="label">Possible gaps</div><div class="muted">Guideline answers with no citation: often nothing in the guides answered it.</div>
+      ${a.gaps.length ? `<ul>${a.gaps.map(g => `<li>${esc(g.q)} <span class="muted">· ${esc(g.program || "All")} · ${esc(who(g.email))} · ${when(g.ts)}</span></li>`).join("")}</ul>` : `<div class="muted">None.</div>`}</div>
+    <div class="panel"><div class="label">Marked wrong</div>
+      ${a.wrong.length ? `<ul>${a.wrong.map(w => `<li>${esc(w.q)}<div class="muted">${esc(w.note)} · ${esc(w.program || "All")} · ${esc(who(w.email))} · ${when(w.ts)}</div></li>`).join("")}</ul>` : `<div class="muted">None.</div>`}</div>
+    <div class="muted">Answer cache: ${a.cache.entries} saved answers, reused ${a.cache.hits} times.</div>`);
+}
+// ---------- Revo rules: Revo's own overlays on top of the investor guide (revo_rules.py) ----------
+async function revoTab(edit) {
+  const r = await fetch("/admin/api/revo");
+  const side = document.getElementById("side");
+  if (!r.ok) { side.innerHTML = `<div class="note bad">Admin only.</div>`; return; }
+  const {rules} = await r.json();
+  if (tab !== "revo") return;
+  side.innerHTML = `<div class="muted">Revo's own rules, on top of NDM's and the agencies'. When a question is about a
+    rule's program (or tab) and has one of its keywords, the rule is added under the answer word for word as
+    "Revo overlay". Nothing is added by a model.</div><div class="muted">${rules.length} rule${rules.length === 1 ? "" : "s"}.</div>`;
+  const e = edit || {};
+  setMain(`<h1>Revo rules</h1><div class="sub">Write the rule the way you'd tell an LO. Scope is a tab (NonQM, Conventional,
+      FHA, VA), a program name or the start of one (Express, Ignite 1099), or * for everything.</div>
+    <div class="panel" id="revo-form"><div class="row">
+      <label class="label">Scope <input class="field" id="r-scope" value="${esc(e.scope || "*")}" style="width:180px"></label>
+      <label class="label">Topic <input class="field" id="r-topic" value="${esc(e.topic || "")}" placeholder="Non-warrantable condos" style="width:260px"></label></div>
+      <label class="label" style="display:block;margin-top:10px">Keywords, comma separated
+        <input class="field" id="r-keys" value="${esc((e.keywords || []).join(", "))}" placeholder="condo, non-warrantable" style="width:100%"></label>
+      <label class="label" style="display:block;margin-top:10px">Rule
+        <textarea id="r-rule" style="min-height:90px" placeholder="Revo requires...">${esc(e.rule || "")}</textarea></label>
+      <div class="row" style="margin-top:10px"><button class="act" id="r-save">${e.id ? "Save changes" : "Add rule"}</button>
+        ${e.id ? `<button class="act ghost" id="r-cancel">Cancel</button>` : ""}<span id="r-msg" class="muted"></span></div></div>
+    ${rules.map(x => `<div class="panel"><div class="row" style="justify-content:space-between"><b>${esc(x.topic)}</b>
+        <span class="muted">${esc(x.scope === "*" ? "All programs" : x.scope)} · added ${esc(x.added)}${x.updated !== x.added ? `, changed ${esc(x.updated)}` : ""}</span></div>
+      <div style="margin:6px 0">${esc(x.rule)}</div><div class="muted">Keywords: ${esc(x.keywords.join(", "))}</div>
+      <div class="row" style="margin-top:8px"><button class="act ghost" data-edit="${esc(x.id)}">Edit</button>
+        <button class="act ghost" data-del="${esc(x.id)}">Delete</button></div></div>`).join("")}`);
+  const val = id => document.getElementById(id).value;
+  document.getElementById("r-save").onclick = async () => {
+    const res = await post("/admin/api/revo/save", {rule: {id: e.id || "", scope: val("r-scope"), topic: val("r-topic"),
+      keywords: val("r-keys"), rule: val("r-rule")}});
+    if (res.error) document.getElementById("r-msg").textContent = res.error; else revoTab();
+  };
+  document.getElementById("r-cancel")?.addEventListener("click", () => revoTab());
+  document.querySelectorAll("[data-edit]").forEach(b => b.onclick = () => revoTab(rules.find(x => x.id === b.dataset.edit)));
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = async () => {
+    const x = rules.find(y => y.id === b.dataset.del);
+    if (!confirm(`Delete the Revo rule "${x.topic}"? Answers stop showing it.`)) return;
+    const res = await post("/admin/api/revo/delete", {id: x.id});
+    if (res.error) alert(res.error); else revoTab();
+  });
+}
+// ---------- regression checks (regress.py): shown at the top of the Updates tab ----------
+async function regressPanel() {
+  const r = await fetch("/admin/api/regress");
+  if (!r.ok) return "";
+  const {runs, running} = await r.json();
+  const run = x => `<div class="note ${x.broke?.length ? "bad" : "ok"}"><b>${esc(x.section)}</b> · ${esc(x.when || "")} · ${esc(x.why)}<br>
+    ${x.skipped ? esc(x.skipped) : `${x.clean}/${x.cases} clean, ${x.broke.length} newly broken, ${x.fixed.length} fixed${x.paid ? "" : " (deal cases only)"}`}
+    ${x.broke?.length ? `<ul>${x.broke.map(b => `<li><b>${esc(b.id)}</b> ${esc(b.q)}<div class="muted">${b.problems.map(esc).join("<br>")}</div></li>`).join("")}</ul>` : ""}</div>`;
+  return `<div class="panel"><div class="label">Regression checks</div>
+    <div class="muted">When a sheet or agency guide changes, the stress cases for that tab rerun, and anything that was right
+      before and isn't now shows here. Deal cases only (free) unless you include guideline cases.</div>
+    ${running.length ? `<div class="note warn">Running: ${running.map(esc).join(", ")}</div>` : ""}
+    <div class="row" style="margin:10px 0">${["NonQM", "Conventional", "FHA", "VA"].map(s =>
+      `<button class="act ghost" data-regress="${s}">Rerun ${s}</button>`).join("")}
+      <label class="muted"><input type="checkbox" id="regress-paid"> include guideline cases (costs money)</label></div>
+    ${runs.slice(0, 6).map(run).join("") || `<div class="muted">No runs yet.</div>`}</div>`;
+}
+function wireRegress() {
+  document.querySelectorAll("[data-regress]").forEach(b => b.onclick = async () => {
+    const paid = document.getElementById("regress-paid").checked;
+    if (paid && !confirm(`Run every ${b.dataset.regress} case, guideline answers included? Those call the model and cost money.`)) return;
+    const res = await post("/admin/api/regress/run", {section: b.dataset.regress, paid});
+    if (res.error) alert(res.error); else { b.textContent = "Started"; b.disabled = true; setTimeout(updatesTab, 4000); }
+  });
+}
 function indexTab() {
   document.getElementById("side").innerHTML = `<div class="muted">The search index feeds "All programs" questions and long
     guides like NonQM Shared. Matrix lookups and single-program answers don't need it.</div>`;
@@ -337,7 +440,9 @@ async function updatesTab() {
       ${s.manual ? `<div class="muted">Download by hand (Fannie blocks automated downloads)</div>` : ""}
       ${s.error ? `<div class="note bad">${esc(s.error)}</div>` : ""}</div>`).join("");
   const open = a.updates.filter(u => !u.reviewed), done = a.updates.filter(u => u.reviewed);
-  setMain(`<h1>Agency guide updates</h1><div class="sub">Last checked ${esc(ago(a.last_check))}.
+  const reg = await regressPanel();
+  if (tab !== "updates") return;
+  setMain(reg + `<h1>Agency guide updates</h1><div class="sub">Last checked ${esc(ago(a.last_check))}.
       ${a.open ? `${a.open} to review.` : "Nothing to review."}</div>
     <div class="panel"><div class="row"><button class="act" id="agency-check" ${a.running ? "disabled" : ""}>${a.running ? "Checking…" : "Check now"}</button>
       ${a.open > 1 ? `<button class="act ghost" id="review-all">Mark all ${a.open} reviewed</button>` : ""}</div>
@@ -348,6 +453,7 @@ async function updatesTab() {
     ${open.map(updateCard).join("")}
     ${done.length ? `<details><summary>${done.length} reviewed</summary>${done.slice(0, 40).map(updateCard).join("")}</details>` : ""}`);
   document.getElementById("agency-check").onclick = runAgencyCheck;
+  wireRegress();
   const all = document.getElementById("review-all");
   if (all) all.onclick = async () => {
     if (!confirm(`Mark all ${a.open} updates reviewed? Answers stop saying "not yet reviewed" for these guides.`)) return;

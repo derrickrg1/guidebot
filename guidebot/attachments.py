@@ -9,11 +9,12 @@ rest of AskNick (routing, search, the deal reader, the matrix lookup) works on i
 import base64
 import io
 
-from guidebot import llm
+from guidebot import llm, mismo
 from guidebot.extract_pdf import PDFIUM_LOCK
 
 IMAGES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 PDF = "application/pdf"
+XML = "application/xml"   # a MISMO loan file (mismo.py): read in Python, only the deal facts come out
 MAX_FILES = 5
 MAX_BYTES = 10 * 1024 * 1024
 MAX_PAGES = 30          # text pages read from one PDF
@@ -34,8 +35,10 @@ def decode(items: list) -> list[dict]:
     for it in items:
         name = str(it.get("name") or "attachment")[:120].replace("]", ")")
         kind = str(it.get("type") or "")
-        if kind not in IMAGES and kind != PDF:
-            raise AttachmentError(f"{name}: only photos (JPEG, PNG, WebP, GIF) and PDFs can be attached.")
+        if kind in ("text/xml", XML) or name.lower().endswith(".xml"):
+            kind = XML
+        if kind not in IMAGES and kind not in (PDF, XML):
+            raise AttachmentError(f"{name}: only photos (JPEG, PNG, WebP, GIF), PDFs and MISMO loan files (.xml) can be attached.")
         try:
             data = base64.b64decode(str(it.get("data") or ""), validate=True)
         except ValueError:
@@ -84,6 +87,11 @@ def _pdf_images(data: bytes, limit: int) -> list[tuple[str, bytes]]:
 
 def read(att: dict) -> str:
     """One attachment's text."""
+    if att["type"] == XML:
+        try:
+            return mismo.read(att["data"])
+        except mismo.NotMismo as e:
+            raise AttachmentError(f"{att['name']} isn't a MISMO loan file ({e}).")
     if att["type"] == PDF:
         try:
             texts, n = _pdf_pages(att["data"], MAX_PAGES)

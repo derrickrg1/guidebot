@@ -1,5 +1,6 @@
 """The "What's new" banner: NDM sheet changes after the first look, agency files after their first load."""
 import json
+import os
 from datetime import date
 
 from guidebot import updates
@@ -19,6 +20,7 @@ def test_first_look_is_the_baseline_then_changes_are_news(tmp_path, monkeypatch)
     today = date(2026, 11, 15)
     assert updates.recent("NonQM", sections, today=today) == []          # what's there on the first look isn't news
     sheet.write_bytes(b"two")
+    os.utime(sheet, (sheet.stat().st_atime, sheet.stat().st_mtime + 5))   # same size: two writes in one clock tick look unchanged
     news = updates.recent("NonQM", sections, today=today)
     assert [(u["title"], u["kind"], u["date"]) for u in news] == [("Ignite DSCR sheet", "changed", "2026-11-15")]
     assert [u["title"] for u in updates.recent("FHA", sections, today=today)] == ["ML 2026-12"]   # not the first load
