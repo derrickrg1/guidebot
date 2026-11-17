@@ -218,3 +218,55 @@ def test_agency_check_feeds_the_tracker(tmp_path, tmp_feed, fake_model, monkeypa
 def test_real_sources_include_fannie_news_but_check_skips_its_files():
     src = next(s for s in agency.SOURCES if s["key"] == "fannie-news")
     assert src["releases"] and "items" not in src
+
+
+# ---------- Fannie Lender Letters saved and indexed ----------
+def test_lender_letters_from_sitemap(tmp_feed):
+    got = agency.fannie_lender_letters([SITEMAP_PAGE], today=date(2026, 11, 17))
+    assert [i["rel"].rsplit("/", 1)[-1] for i in got] == ["Fannie Mae Lender Letter LL-2026-04.pdf",
+                                                          "Fannie Mae Lender Letter LL-2026-09.pdf"]
+    assert all(i["rel"].startswith(agency.LL_FOLDER + "/") for i in got)
+    ll04 = got[0]
+    assert ll04["date"] == "2026-10-21" and ll04["version"].endswith("#2026-10-21")   # the reissue is the copy kept
+    feed.skip("fannie-ll-2026-04", "LL-2026-04", "nothing for origination")      # tracker: nothing for originators
+    got = agency.fannie_lender_letters([SITEMAP_PAGE], today=date(2026, 11, 17))
+    assert [i["rel"].rsplit(" ", 1)[-1] for i in got] == ["LL-2026-09.pdf"]
+    assert agency.fannie_lender_letters([SITEMAP_PAGE], today=date(2028, 1, 5)) == []   # older than last year
+    servicing = SITEMAP_PAGE.replace("lender-letter-ll-2026-09-manual-underwriting-eligibility",
+                                     "lender-letter-ll-2026-09-updates-retention-workout-options")
+    assert agency.fannie_lender_letters([servicing], today=date(2026, 11, 17)) == []       # servicers only
+
+
+def test_lender_letters_are_a_fannie_source_of_their_own(tmp_path, tmp_feed, monkeypatch):
+    """Saved under the Fannie folder (so only Fannie programs get them), but the Selling Guide's notice and its
+    edition date ignore them, and the model is told a newer letter wins."""
+    d = tmp_path / "agency"
+    monkeypatch.setattr(agency, "DIR", d)
+    monkeypatch.setattr(agency, "TEXT_DIR", d / "_text")
+    monkeypatch.setattr(agency, "STATE", d / "state.json")
+    monkeypatch.setattr(agency, "ARCHIVE", tmp_path / "archive")
+    indexed = []
+    monkeypatch.setattr(indexer, "sync_index", lambda log=print: indexed.append(1))
+    monkeypatch.setattr(agency, "_download", lambda url: (b"%PDF-1.4 " + url.encode(), ""))
+    monkeypatch.setattr(agency, "extract", lambda path: ["Lender Letter LL-2026-09\nNovember 4, 2026\n" + LONG])
+    guide = {"manual": True, "title": "Fannie Mae Selling Guide", "url": "https://fannie/guide", "version": "2026-11-04",
+             "date": "2026-11-04"}
+    fannie = {"key": "fannie", "name": "Selling Guide", "section": "Conventional", "folder": "Conventional/Fannie Mae",
+              "items": lambda: [guide], "manages": False}
+    ll = {"key": "fannie-ll", "name": "Lender Letters", "section": "Conventional", "folder": agency.LL_FOLDER,
+          "items": lambda: agency.fannie_lender_letters([SITEMAP_PAGE], today=date(2026, 11, 17)), "manages": True}
+    monkeypatch.setattr(agency, "SOURCES", [fannie, ll])
+    new = agency.check(log=lambda m: None)
+    state = agency.load_state()
+    assert sorted(u["file"].rsplit(" ", 1)[-1] for u in new) == ["LL-2026-04.pdf", "LL-2026-09.pdf"] and indexed
+    assert "fannie" in state["notices"]                                    # letters don't count as the guide
+    rel = f"{agency.LL_FOLDER}/Fannie Mae Lender Letter LL-2026-09.pdf"
+    assert agency.source_of(rel) is ll and agency.source_of("Conventional/Fannie Mae/Selling Guide.pdf") is fannie
+    assert "Lender Letter" in agency.label({"rel": rel, **state["files"][rel]})
+    assert "Lender Letter" not in agency.label({"rel": "Conventional/Fannie Mae/Selling Guide.pdf"})
+    assert {s["key"]: s["files"] for s in agency.overview()["sources"]} == {"fannie": 0, "fannie-ll": 2}
+
+    feed.skip("fannie-ll-2026-04", "LL-2026-04", "nothing for origination")   # tracker left it out: archived
+    agency.check(log=lambda m: None)
+    assert not (d / agency.LL_FOLDER / "Fannie Mae Lender Letter LL-2026-04.pdf").exists()
+    assert (d / rel).exists()

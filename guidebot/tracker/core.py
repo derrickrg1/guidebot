@@ -6,7 +6,8 @@ Where releases come from:
     hand) is summarized from the lines it added and removed. Fannie's whole guide is left out: its announcements
     say the same thing better.
   * Fannie Mae Selling Guide announcements (SEL-) and Lender Letters (LL-), found in singlefamily.fanniemae.com's
-    sitemap (robots.txt allows it) and read here. They never go in agency/ or the index.
+    sitemap (robots.txt allows it) and read here. The Lender Letters are also saved into agency/ and indexed by
+    agency.py's "fannie-ll" source; the announcements never are.
   * Freddie Mac bulletins: guide.freddiemac.com's robots.txt shuts out every bot but search engines, so nothing
     here fetches them. Freddie's changes arrive with the guide PDF Derrick saves each month.
 

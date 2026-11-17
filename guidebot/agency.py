@@ -274,6 +274,37 @@ def fannie_selling_guide() -> list[dict]:
              "version": published, "date": published}]
 
 
+LL_FOLDER = "Conventional/Fannie Mae/Lender Letters"
+# Lender Letters for servicers only (the tracker hasn't read the older ones; their sitemap slugs say it).
+LL_SERVICING = re.compile(r"servic|foreclosure|workout|loss mitigation|insurance termination|delinquen|forbearance",
+                          re.I)
+
+
+def fannie_lender_letters(xml_pages: list[str] | None = None, today: date | None = None) -> list[dict]:
+    """Fannie Lender Letters from this year and last, found in singlefamily.fanniemae.com's sitemap (robots.txt
+    allows it, the PDFs download). A reissued letter ("Updated <date>") replaces the copy here. Letters the change
+    tracker found nothing for an originator in (data/tracker_state.json "skipped") are left out. They sit under the
+    Fannie folder, so only Fannie programs get them, like the Selling Guide."""
+    from guidebot.tracker import core, feed
+    keep_from = str((today or date.today()).year - 1)
+    skipped = feed.load_state()["skipped"]
+    best = {}
+    for r in core.fannie_releases(xml_pages if xml_pages is not None else core.fannie_sitemap()):
+        m = re.match(r"fannie-(ll-(\d{4})-\d{2})", r["id"])
+        if (not m or m[2] < keep_from or r["id"] in skipped or f"fannie-{m[1]}" in skipped
+                or LL_SERVICING.search(r["title"])):
+            continue
+        code = m[1].upper()
+        if code not in best or r["published"] > best[code]["published"]:
+            best[code] = r
+    out = []
+    for code, r in sorted(best.items()):
+        out.append({"rel": f"{LL_FOLDER}/Fannie Mae Lender Letter {code}.pdf", "title": r["title"], "url": r["url"],
+                    "version": f"{r['url']}#{r['published']}", "date": r["published"],
+                    "fetch": lambda url=r["url"]: _download(url)})
+    return out
+
+
 def freddie_guide(today: date | None = None) -> list[dict]:
     """Freddie rebuilds its one-PDF guide with each bulletin, about monthly. guide.freddiemac.com's robots.txt shuts
     out everything but search engines, so nothing here touches it: from the 10th of each month the notice asks for a
@@ -299,8 +330,10 @@ SOURCES = [
      "items": fannie_selling_guide, "manages": False},
     {"key": "freddie", "name": "Freddie Mac Seller/Servicer Guide", "section": "Conventional",
      "folder": "Conventional/Freddie Mac", "items": freddie_guide, "manages": False},
+    {"key": "fannie-ll", "name": "Fannie Mae Lender Letters", "section": "Conventional", "folder": LL_FOLDER,
+     "items": fannie_lender_letters, "manages": True},
     # Feed only (guidebot/tracker): Selling Guide announcements and Lender Letters, summarized into
-    # data/agency_changes.jsonl. Nothing saved in agency/, nothing indexed.
+    # data/agency_changes.jsonl. The Lender Letters are also saved and indexed by "fannie-ll" above.
     {"key": "fannie-news", "name": "Fannie Mae announcements and Lender Letters", "section": "Conventional",
      "folder": "", "releases": True, "manages": False},
 ]
@@ -345,7 +378,16 @@ def label(rec: dict) -> str:
     parts.append(f"updated here {rec.get('downloaded', '?')}")
     if not rec.get("reviewed"):
         parts.append("not yet reviewed")
+    if rec.get("rel", "").startswith(LL_FOLDER + "/"):
+        parts.append("a Lender Letter: where it is dated after the Selling Guide and they differ, it wins (newer "
+                     "agency guidance)")
     return ", ".join(parts)
+
+
+def source_of(rel: str) -> dict | None:
+    """The source whose folder holds the file; the deepest one wins (Lender Letters sit inside the Fannie folder)."""
+    hits = [s for s in SOURCES if s["folder"] and rel.startswith(s["folder"] + "/")]
+    return max(hits, key=lambda s: len(s["folder"])) if hits else None
 
 
 # ---------- text and change write-ups ----------
@@ -486,7 +528,7 @@ def check(log=print, on_index=None) -> list[dict]:
                     # notice went up, dated from its own first page).
                     have = max([state["sources"].get(src["key"], {}).get("have_version") or ""]
                                + [r.get("date") or "" for rel, r in state["files"].items()
-                                  if rel.startswith(src["folder"] + "/")])
+                                  if source_of(rel) is src])
                     if have < it["version"] and src["key"] not in state["notices"]:
                         state["notices"][src["key"]] = {"title": it["title"], "version": it["version"],
                                                         "url": it["url"], "folder": src["folder"], "seen": today}
@@ -596,7 +638,7 @@ def _process(state: dict, today: str, moved: list[str], log, pending: list | Non
         except Exception as e:
             log(f"{path.name}: couldn't read it ({e})")
             continue
-        src = next((s for s in SOURCES if rel.startswith(s["folder"] + "/")), None)
+        src = source_of(rel)
         if src and not src["manages"]:   # saved by hand: it answers the "new edition" notice
             notice = state["notices"].pop(src["key"], None)
             if notice:
@@ -652,7 +694,7 @@ def overview() -> dict:
     state = load_state()
     srcs = [{"key": s["key"], "name": s["name"], "section": s["section"], "manual": not s["manages"],
              **state["sources"].get(s["key"], {}),
-             "files": sum(1 for r in state["files"] if r.startswith(s["folder"] + "/"))} for s in SOURCES]
+             "files": sum(1 for r in state["files"] if source_of(r) is s)} for s in SOURCES]
     return {"last_check": state["last_check"], "running": _run_lock.locked(), "sources": srcs,
             "notices": list(state["notices"].values()), "updates": state["updates"][:100],
             "open": sum(1 for u in state["updates"] if not u["reviewed"])}

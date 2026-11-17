@@ -191,12 +191,16 @@ changes [{topic, old, new, section, effective}], fetched_at; the in-app "What ch
 `agency.check()` hands every file it read to the tracker after the index update and outside its lock: a new
 Mortgagee Letter or Circular is summarized whole, a new 4000.1 / 26-7 chapter / Freddie guide from its page diff.
 Fannie's Selling Guide announcements (SEL-) and Lender Letters (LL-) come from singlefamily.fanniemae.com's sitemap
-(robots.txt allows it, the PDFs download), feed only, never indexed. Freddie's bulletins sit on guide.freddiemac.com,
+(robots.txt allows it, the PDFs download). Announcements are feed only. Lender Letters from this year and last are
+also saved by agency source "fannie-ll" into `agency/Conventional/Fannie Mae/Lender Letters/` and indexed (Fannie
+programs only, by folder), minus servicing-only titles (`LL_SERVICING`) and letters the tracker skipped; their
+label tells the model a letter newer than the Selling Guide wins. `agency.source_of` picks the deepest folder, so
+they never answer the Selling Guide's notice (2026-11-17). Freddie's bulletins sit on guide.freddiemac.com,
 whose robots.txt bars bots, so Freddie changes arrive with the guide PDF Derrick saves monthly. Model via
 `llm.ask_json` (Claude, Gemini, local); releases with nothing for origination go to `data/tracker_state.json`
 "skipped", failures to "errors" and retry next check. `python -m guidebot.tracker --days N` runs it standalone (reads
 agency/, never writes it or the index); `scripts/run_tracker.ps1` has the Task Scheduler line. Tests in
-`tests/test_tracker.py`, fixtures in `tests/fixtures/tracker/`. How it works and the SOP: `guidebot/tracker/README.md`.
+`tests/test_tracker.py`, fixtures in `tests/fixtures/tracker/`. Design: `guidebot/tracker/DESIGN.md`, steps: `guidebot/tracker/SOP.md`.
 * Chat history: `guidebot/history.py`, SQLite at `data/chats.db` (git-ignored), keyed to the Cloudflare Access
 email ("local" on this PC). The server saves each turn after the answer finishes; people see only their own.
 * Search index (ChromaDB in `db/`): update it only through the admin Index tab, never from a second process
