@@ -190,6 +190,10 @@ def check(doc: dict, repo: Path | None = None) -> list[dict] | None:
         # different releases: nothing to compare, and not a reason to block
         return [{"status": "none", "source": f"{site[0]['source']}, effective {site[0]['effective']}", "diffs": []}
                 for _ in mats]
+    if len(site) == 1 < len(mats) and len(bands := split_bands(site[0]["df"])) == len(mats):
+        # the site shows the PDF's grids side by side in one table (Express DSCR since site v6, 2026-11-04)
+        return [{"status": "mismatch" if (d := compare_keyed(m, b)) else "match",
+                 "source": f"{site[0]['source']}, {b.attrs['band']}", "diffs": d} for m, b in zip(mats, bands)]
     if len(site) != len(mats):
         return [{"status": "mismatch", "source": site[0]["source"] if site else "Revo site",
                  "diffs": [f"Parsed {len(mats)} matrices, the site page has {len(site)}"]} for _ in mats]
@@ -285,6 +289,51 @@ def compare(mine: pd.DataFrame, site: pd.DataFrame) -> list[str]:
             band = " ".join(str(v) for v in mine.iloc[i - 1][list(mine.attrs.get("dims") or mine.columns[:2])])
             diffs.append(f"Row {i} ({band}): parsed {' | '.join(x[2])}  vs site  {' | '.join(y[2])}"
                          if x[:2] == y[:2] else f"Row {i}: parsed {x[:2]} vs site {y[:2]}")
+    return diffs
+
+
+def split_bands(site: pd.DataFrame) -> list[pd.DataFrame]:
+    """A side-by-side site table ("DSCR > 1.00 / Purchase" ... "DSCR .75 to .99** / Cash Out") as one frame per
+    band, each with the band prefix dropped from its column names. [] when the columns don't split that way."""
+    dims = list(site.attrs.get("dims") or site.columns[:2])
+    groups = {}
+    for c in site.columns:
+        if c in dims:
+            continue
+        if " / " not in c:
+            return []
+        band, rest = c.split(" / ", 1)
+        groups.setdefault(band, []).append((c, rest))
+    if len(groups) < 2:
+        return []
+    out = []
+    for band, cols in groups.items():
+        df = site[dims + [c for c, _ in cols]].copy()
+        df.columns = dims + [r for _, r in cols]
+        df.attrs.update(dims=dims, band=band)
+        out.append(df)
+    return out
+
+
+def compare_keyed(mine: pd.DataFrame, site: pd.DataFrame) -> list[str]:
+    """Every row of guidebot's grid must be in the site's, matched by loan amount band top and FICO, with the same
+    cells. Rows only the site has are fine: a side-by-side table repeats the wider grid's rows for the narrower one
+    (N/A, or the next FICO's numbers). The band's bottom isn't compared ($100,000 vs $150,000 minimums sit in the
+    same row there)."""
+    def keyed(df):
+        dims = list(df.attrs.get("dims") or df.columns[:2])
+        vals = [c for c in df.columns if c not in dims]
+        return {(_nums(r[dims[0]])[-1:], _nums(r[dims[1]])): tuple(_cell(r[c]) for c in vals)
+                for _, r in df.iterrows()}
+    a, b = keyed(mine), keyed(site)
+    diffs = []
+    if len(mine.columns) != len(site.columns):
+        diffs.append(f"{len(mine.columns)} columns parsed, site has {len(site.columns)}")
+    for k, v in a.items():
+        if k not in b:
+            diffs.append(f"Row {k}: not on the site")
+        elif v != b[k]:
+            diffs.append(f"Row {k}: parsed {' | '.join(v)}  vs site  {' | '.join(b[k])}")
     return diffs
 
 

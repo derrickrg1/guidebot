@@ -196,7 +196,7 @@ whose robots.txt bars bots, so Freddie changes arrive with the guide PDF Derrick
 `llm.ask_json` (Claude, Gemini, local); releases with nothing for origination go to `data/tracker_state.json`
 "skipped", failures to "errors" and retry next check. `python -m guidebot.tracker --days N` runs it standalone (reads
 agency/, never writes it or the index); `scripts/run_tracker.ps1` has the Task Scheduler line. Tests in
-`tests/test_tracker.py`, fixtures in `tests/fixtures/tracker/`.
+`tests/test_tracker.py`, fixtures in `tests/fixtures/tracker/`. How it works and the SOP: `guidebot/tracker/README.md`.
 * Chat history: `guidebot/history.py`, SQLite at `data/chats.db` (git-ignored), keyed to the Cloudflare Access
 email ("local" on this PC). The server saves each turn after the answer finishes; people see only their own.
 * Search index (ChromaDB in `db/`): update it only through the admin Index tab, never from a second process
@@ -272,6 +272,7 @@ A mismatch blocks numbers and approval. Every Express/Ignite grid matches except
     from the PDF (2026-11-13). If the PDF is right, Re-read the PDF and re-approve Express 1099.
   * Express DSCR Units+: the approved JSON was mangled (FICO is the merged cell there, the parser used to fill loan
     amount instead). Parser fixed (`_fill_lead`); Derrick needs to "Re-read the PDF" and re-approve.
+  * Express DSCR (2026-11-17): since site v6 the site shows its two DSCR bands side by side in one table; `site_grids.split_bands` splits it and `compare_keyed` checks every PDF row by band top + FICO (site-only rows ignored). Before this, "2 matrices vs 1" blocked Express DSCR numbers.
   The site's Express "originals" are Revo-branded copies, not NDM's files, so the site is a check, never the source.
 * `header_problems` blocks numbers from matrices with shifted/numbered headers. Approved JSONs saved by the old
 parser (Ignite Express DSCR, Express P\&L) need re-verifying with "Re-read the PDF".

@@ -616,3 +616,21 @@ def test_comparison_leads_with_the_best_fit_and_ranks_by_ltv():
     md = answer.comparison_md(comp)
     assert md.startswith("**Best fit: 80% max LTV** on Ignite DSCR and Ignite P&L. 3 of 4 programs take this deal.")
     assert md.index("| Ignite DSCR |") < md.index("| Express DSCR |")
+
+
+def test_side_by_side_site_table_splits_into_the_pdfs_grids():
+    import pandas as pd
+    site = pd.DataFrame([["$100,000* to $1,000,000", "720", "80%", "75%", "75%", "70%"],
+                         ["$100,000* to $1,000,000", "700", "80%", "75%", "75%", "70%"],
+                         ["$100,000* to $1,000,000", "660", "75%", "70%", "N/A", "N/A"]],
+                        columns=["Loan Amount", "FICO", "DSCR > 1.00 / Purchase", "DSCR > 1.00 / Cash Out",
+                                 "DSCR .75 to .99** / Purchase", "DSCR .75 to .99** / Cash Out"])
+    site.attrs["dims"] = ["Loan Amount", "FICO"]
+    hi, lo = site_grids.split_bands(site)
+    assert hi.attrs["band"] == "DSCR > 1.00" and list(lo.columns) == ["Loan Amount", "FICO", "Purchase", "Cash Out"]
+    mine = pd.DataFrame([["$150,000 to $1,000,000", "700", "75%", "70%"]],
+                        columns=["Loan Amount", "FICO", "Purchase", "Cash Out"])
+    mine.attrs["dims"] = ["Loan Amount", "FICO"]
+    assert site_grids.compare_keyed(mine, lo) == []                 # site-only rows and the $150k floor don't count
+    mine.iloc[0, 3] = "65%"
+    assert site_grids.compare_keyed(mine, lo) == ["Row ((1000000,), (700,)): parsed 75% | 65%  vs site  75% | 70%"]
