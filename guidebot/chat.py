@@ -149,7 +149,7 @@ def _agency_hits(question: str, sec: str, k: int = 6, k_letters: int = 3, folder
     if config.RERANK:   # GPU cross-encoder: the page that states the rule ranks first 50/60 vs 45/60 (search_eval)
         from guidebot import rerank
         pool = [pool[i] for i in rerank.order(question, [h["text"] for h in pool])]
-    letter = lambda h: re.search(r"Mortgagee Letter|Circular", h["file"]) is not None
+    letter = lambda h: re.search(r"Mortgagee Letter|Circular|Lender Letter", h["file"]) is not None
     books = sorted((h for h in pool if not letter(h)), key=lambda h: agency.off_topic(h["text"]))   # stable
     found = books[:k] + [h for h in pool if letter(h)][:k_letters]
     out = []

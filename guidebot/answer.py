@@ -47,7 +47,7 @@ RULES = """Rules:
   GUIDELINE, agency guide": HUD Handbook 4000.1 and Mortgagee Letters (FHA), VA Pamphlet 26-7 and VA Circulars
   (VA), the Fannie Mae Selling Guide (Conventional). Each header gives the document's date. Where they differ:
   a Mortgagee Letter dated after the handbook's revision date wins over the handbook (older letters are usually
-  already folded in). Every VA Circular you're given is still in force, and it wins over the Pamphlet 26-7
+  already folded in), and a Fannie Lender Letter dated after the Selling Guide wins over it. Every VA Circular you're given is still in force, and it wins over the Pamphlet 26-7
   chapter, even when the chapter's web page was edited more recently: VA edits those pages without updating
   every table (Chapter 8's funding fee table predates Circular 26-23-6). Flag it as "**Newer agency guidance
   (supersedes handbook):**" and cite both. "Overlay" means NDM's own rules only, never an
