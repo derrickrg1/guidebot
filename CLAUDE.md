@@ -270,10 +270,9 @@ built HTML matrices in the GitHub site repo (`config.SITE_REPO`, `revo-funding-s
 classed `grid pg-ex|pg-ig`), compared by position only when both effective dates match. The old hand-typed
 grids (`../site/tools/matrices/build_*.py`, matched by PDF hash) answer only where the HTML has nothing.
 A mismatch blocks numbers and approval. Every Express/Ignite grid matches except (2026-11-12):
-  * Express 1099 row $2,000,001-$3,000,000 / 700, Primary Cash Out: NDM PDF (printed 7/31/2026, "Adding AR") says
-    65%, the site's copy of the 3.2.2026 sheet says 60%. Waiting on Derrick (`KNOWN_SITE_DIFFS` in tests).
-    The approved JSON also says 60% (the bot answers 60%), while a fresh pdfplumber read and Docling both read 65%
-    from the PDF (2026-11-13). If the PDF is right, Re-read the PDF and re-approve Express 1099.
+  * Express 1099 row $2,000,001-$3,000,000 / 700, Primary Cash Out: settled 2026-11-17 as 65% (NDM's PDF; the site's
+    original copy had 60%, below the 680 row's 65%). Site fixed in revo-funding-site#598. The approved JSON still says
+    60%, so crosscheck blocks Express 1099 numbers until Derrick Re-reads the PDF and re-approves it.
   * Express DSCR Units+: the approved JSON was mangled (FICO is the merged cell there, the parser used to fill loan
     amount instead). Parser fixed (`_fill_lead`); Derrick needs to "Re-read the PDF" and re-approve.
   * Express DSCR (2026-11-17): since site v6 the site shows its two DSCR bands side by side in one table; `site_grids.split_bands` splits it and `compare_keyed` checks every PDF row by band top + FICO (site-only rows ignored). Before this, "2 matrices vs 1" blocked Express DSCR numbers.

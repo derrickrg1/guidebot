@@ -520,7 +520,7 @@ def test_unverified_docs_forbid_ltv_in_full_doc_answers():
 # Known differences between NDM's PDF and the site's built matrix, waiting on Derrick. They stay blocked in the app.
 # Express 1099 row 10 ($2,000,001 - $3,000,000, 700) Primary Cash Out: NDM's PDF (printed 7/31/2026, "Adding AR")
 # says 65%, the site's copy of the same 3.2.2026 sheet says 60%.
-KNOWN_SITE_DIFFS = {"NonQM-1099-Matrix.pdf": ["Row 10 ($2,000,001 - $3,000,000* 700): parsed 70% | 70% | 65%"]}
+KNOWN_SITE_DIFFS = {}   # Express 1099 $2M-$3M 700 cash-out: site fixed to 65% 2026-11-17 (revo-funding-site#598)
 
 
 def test_real_pdfs_match_revo_site():
