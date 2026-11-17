@@ -54,6 +54,18 @@ NOT_SINGLE_FAMILY = re.compile(r"multifamily|lihtc|tax credit|section 2(?:02|21|
                                r"221\(d\)|map guide|hecm|home equity conversion|"
                                r"healthcare|health care|hospital|residential care|nursing|public housing|"
                                r"rental assistance|\brad\b", re.I)
+# Some titles don't say it ("Build-To-Rent Developments Underwriting Eligibility", ML 2026-12): the letter's "To:"
+# line does. A single family letter goes to "All FHA-Approved Mortgagees" and DE underwriters; one only for
+# "All FHA-Approved Multifamily Mortgagees" (or healthcare, HECM...) is left out like a title that says so.
+_ML_TO = re.compile(r"\bTO:(.*?)\bSUBJECT\b", re.I | re.S)
+_SINGLE_FAMILY_TO = re.compile(r"FHA-Approved Mortgagees|Direct Endorsement", re.I)
+
+
+def addressed_elsewhere(first_page: str) -> bool:
+    """True when a Mortgagee Letter's addressees are only multifamily, healthcare, HECM and the like."""
+    m = _ML_TO.search(first_page[:3000])
+    to = m[1] if m else ""
+    return bool(to and NOT_SINGLE_FAMILY.search(to) and not _SINGLE_FAMILY_TO.search(to))
 
 
 # ---------- small helpers ----------
@@ -480,6 +492,8 @@ def check(log=print, on_index=None) -> list[dict]:
                                                         "url": it["url"], "folder": src["folder"], "seen": today}
                         log(f"New {it['title']} published {it['version']}: download it into agency/{src['folder']}/")
                     continue
+                if it["url"] in state.get("not_single_family", {}):
+                    continue   # read once, addressed to multifamily (or the like) only
                 path, rec = DIR / it["rel"], state["files"].get(it["rel"], {})
                 if path.exists() and rec.get("version") == it["version"]:
                     continue
@@ -546,6 +560,17 @@ def _feed(pending: list[dict], log):
         log(f"Change feed failed: {type(e).__name__}: {e}")
 
 
+ML_FOLDER = "FHA/Mortgagee Letters"
+
+
+def _not_single_family(path: Path) -> bool:
+    try:
+        texts = pages(path)
+    except Exception:
+        return False   # _process logs the read failure
+    return bool(texts) and addressed_elsewhere(texts[0])
+
+
 def _process(state: dict, today: str, moved: list[str], log, pending: list | None = None) -> list[dict]:
     """Every agency PDF whose bytes changed since last time (downloaded or saved by hand) gets its text re-read,
     compared with the old text, and an update entry. Each one also goes on `pending` for the change feed."""
@@ -553,6 +578,14 @@ def _process(state: dict, today: str, moved: list[str], log, pending: list | Non
     for path in files():
         rel = path.relative_to(DIR).as_posix()
         rec, h = state["files"].get(rel, {}), _hash(path)
+        if rel.startswith(ML_FOLDER + "/") and _not_single_family(path):
+            state.setdefault("not_single_family", {})[rec.get("url") or rel] = {
+                "title": rec.get("title") or path.stem, "at": today}
+            _archive(path, today)
+            if rec:
+                moved.append(rel)
+            log(f"{path.name}: addressed to multifamily (or the like) only, archived")
+            continue
         if rec.get("hash") == h:
             continue
         tp = _text_path(rel)

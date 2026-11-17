@@ -142,6 +142,59 @@ def test_mortgagee_letters_single_family_only(monkeypatch):
     assert got == ["FHA/Mortgagee Letters/FHA Mortgagee Letter 2026-12.pdf"]
 
 
+SF_TO = ("Mortgagee Letter 2026-11 To: All FHA-Approved Mortgagees All Direct Endorsement Underwriters All FHA-Approved "
+         "Title I Lenders Subject Updated Minimum Decision Credit Score Methodology")
+MF_TO = ("MORTGAGEE LETTER 2026 -12 TO: All FHA-Approved Multifamily Mortgagees SUBJECT: Build-To-Rent Developments "
+         "Underwriting Eligibility. HUD will accept applications for multifamily rental properties")
+
+
+def test_letters_addressed_to_multifamily_only():
+    assert agency.addressed_elsewhere(MF_TO)
+    assert not agency.addressed_elsewhere(SF_TO)
+    assert not agency.addressed_elsewhere("A guide page with no To: line, all about multifamily")
+
+
+def test_check_archives_a_multifamily_letter_and_never_refetches_it(tmp_agency, monkeypatch, tmp_path):
+    d, archive, indexed = tmp_agency
+    pdf = tmp_path / "ml.pdf"
+    pdf.write_bytes(b"%PDF-1.4 test")
+    fetched = []
+
+    def item(n):
+        def fetch():
+            fetched.append(n)
+            return pdf.read_bytes() + n.encode(), ""
+        return {"rel": f"FHA/Mortgagee Letters/FHA Mortgagee Letter {n}.pdf", "title": f"ML {n}",
+                "url": f"https://x/{n}.pdf", "version": f"https://x/{n}.pdf", "date": "", "fetch": fetch}
+
+    items = [item("2026-11"), item("2026-12")]
+    monkeypatch.setattr(agency, "SOURCES", [_source(lambda: items, folder="FHA/Mortgagee Letters", key="hud-ml")])
+    monkeypatch.setattr(agency, "pages", lambda path: [MF_TO if "2026-12" in path.name else SF_TO])
+    new = agency.check(log=lambda m: None)
+    state = agency.load_state()
+    assert [u["file"].rsplit(" ", 1)[-1] for u in new] == ["2026-11.pdf"]
+    assert "FHA/Mortgagee Letters/FHA Mortgagee Letter 2026-12.pdf" not in state["files"]
+    assert list(archive.rglob("FHA Mortgagee Letter 2026-12.pdf"))
+    assert "https://x/2026-12.pdf" in state["not_single_family"]
+
+    fetched.clear()
+    agency.check(log=lambda m: None)
+    assert fetched == []                                                 # neither is downloaded again
+
+
+def test_a_multifamily_letter_already_loaded_is_archived_and_unindexed(tmp_agency, monkeypatch, tmp_path):
+    d, archive, indexed = tmp_agency
+    rel = "FHA/Mortgagee Letters/FHA Mortgagee Letter 2026-12.pdf"
+    (d / rel).parent.mkdir(parents=True)
+    (d / rel).write_bytes(b"%PDF-1.4 mf")
+    state = agency.load_state()
+    state["files"][rel] = {"hash": agency._hash(d / rel), "title": "ML 2026-12", "url": "https://x/12.pdf"}
+    monkeypatch.setattr(agency, "pages", lambda path: [MF_TO])
+    agency._process(state, "2026-11-17", moved := [], lambda m: None)
+    assert rel not in state["files"] and moved == [rel] and not (d / rel).exists()
+    assert any(u["kind"] == "removed" and u["file"] == rel for u in state["updates"])
+
+
 def test_unreviewed_agency_pages_get_a_note(monkeypatch):
     recs = {"FHA HUD 4000.1 Handbook.pdf": {"rel": "x", "title": "HUD Handbook 4000.1 (Update 18)",
                                             "downloaded": "2026-11-12", "reviewed": False}}
