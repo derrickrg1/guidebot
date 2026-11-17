@@ -287,6 +287,10 @@ SOURCES = [
      "items": fannie_selling_guide, "manages": False},
     {"key": "freddie", "name": "Freddie Mac Seller/Servicer Guide", "section": "Conventional",
      "folder": "Conventional/Freddie Mac", "items": freddie_guide, "manages": False},
+    # Feed only (guidebot/tracker): Selling Guide announcements and Lender Letters, summarized into
+    # data/agency_changes.jsonl. Nothing saved in agency/, nothing indexed.
+    {"key": "fannie-news", "name": "Fannie Mae announcements and Lender Letters", "section": "Conventional",
+     "folder": "", "releases": True, "manages": False},
 ]
 
 
@@ -452,6 +456,8 @@ def check(log=print, on_index=None) -> list[dict]:
         moved = []
         for src in SOURCES:
             log(f"Checking {src['name']}…")
+            if src.get("releases"):
+                continue   # read by the tracker after the files are done
             try:
                 items = src["items"]()
                 if not items:
@@ -504,7 +510,8 @@ def check(log=print, on_index=None) -> list[dict]:
                                             "checked": time.time(), "count": len(items)}
             if got:
                 log(f"{src['name']}: {got} new or changed")
-        new = _process(state, today, moved, log)
+        pending = []
+        new = _process(state, today, moved, log, pending)
         state["last_check"] = time.time()
         _save(state)
         if new or moved:
@@ -514,14 +521,34 @@ def check(log=print, on_index=None) -> list[dict]:
             if on_index:
                 on_index()
         log(f"Done. {len(new)} new or changed, {len(moved)} archived." if new or moved else "Done. Nothing changed.")
-        return new
     finally:
         _run_lock.release()
+    # after the lock: model write-ups take minutes and Mark reviewed shouldn't wait on them
+    _feed(pending, log)
+    return new
 
 
-def _process(state: dict, today: str, moved: list[str], log) -> list[dict]:
+def _feed(pending: list[dict], log):
+    """The "What changed" feed (guidebot/tracker): every file just read, plus Fannie's announcements and Lender
+    Letters. A model writes each up, so it runs after the state and the index are saved, and a failure here never
+    fails the check (the release is retried next time)."""
+    keys = {s["key"] for s in SOURCES}
+    if not pending and "fannie-news" not in keys:
+        return
+    try:
+        from guidebot import tracker
+        tracker.from_check(pending, log=log)
+        if "fannie-news" in keys:
+            tracker.poll_fannie(log=log)
+            from guidebot.tracker import feed
+            feed.touch_poll()
+    except Exception as e:
+        log(f"Change feed failed: {type(e).__name__}: {e}")
+
+
+def _process(state: dict, today: str, moved: list[str], log, pending: list | None = None) -> list[dict]:
     """Every agency PDF whose bytes changed since last time (downloaded or saved by hand) gets its text re-read,
-    compared with the old text, and an update entry."""
+    compared with the old text, and an update entry. Each one also goes on `pending` for the change feed."""
     new = []
     for path in files():
         rel = path.relative_to(DIR).as_posix()
@@ -553,6 +580,8 @@ def _process(state: dict, today: str, moved: list[str], log) -> list[dict]:
                  "pages": len(texts), "diff": page_diff(old, texts) if old is not None else None, "reviewed": False}
         state["updates"].insert(0, entry)
         new.append(entry)
+        if pending is not None and src:
+            pending.append({"key": src["key"], "rel": rel, "rec": dict(state["files"][rel]), "pages": texts, "old": old})
     for rel in moved:
         rec = state["files"].pop(rel, None)
         state["updates"].insert(0, {"id": f"{today}-{hashlib.sha1(rel.encode()).hexdigest()[:8]}-gone", "date": today,
