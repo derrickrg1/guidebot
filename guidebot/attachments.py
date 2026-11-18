@@ -3,7 +3,7 @@
 Each attachment becomes text before anything else happens, and that text rides along with the question, so the
 rest of AskNick (routing, search, the deal reader, the matrix lookup) works on it unchanged:
   * PDFs with a text layer are read here in Python (pypdfium2), no model involved.
-  * Photos and scanned PDFs are transcribed by a model (llm.transcribe: Claude, then Gemini, then the local model).
+  * Photos and scanned PDFs are transcribed by a model (llm.transcribe: Claude, then the local model).
     The model is told to copy the text out exactly, never to summarize or interpret it.
 """
 import base64

@@ -2,7 +2,7 @@
 
 A token count is free and fails the same way an answer does (out of credits, bad key, unreachable), so status()
 asks for one at most every 5 minutes. While it says Claude is down, answers skip Claude and go straight to the next
-in line (Gemini, then the local model), so no question pays for a failed Claude call first. Any answer that falls
+in line (the local model), so no question pays for a failed Claude call first. Any answer that falls
 back makes the next status() check again (stale). Same as AppraisAI's review.status().
 
 This replaced (2026-11-14) the 9 AM / 12 PM / 3 PM re-checks and the hand-entered balance estimate: the API has no
@@ -22,10 +22,7 @@ def is_credit_error(e: Exception) -> bool:
     return "credit balance" in str(e).lower()
 
 
-def backup() -> tuple[str | None, str | None]:
-    from guidebot import gemini
-    if gemini.available():
-        return "gemini", config.GEMINI_MODEL
+def backup() -> tuple[str, str]:
     return "local", config.LOCAL_MODEL
 
 

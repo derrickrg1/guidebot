@@ -14,7 +14,7 @@ import sys
 import time
 from pathlib import Path
 
-from guidebot import chat, claude_status, config, usage
+from guidebot import chat, config, usage
 from tools.backup_keys import KEYS, misses
 from tools.stress_bank import bank
 from tools.stress_check import check
@@ -54,19 +54,9 @@ def cases(only: int = 0) -> list[dict]:
     return out
 
 
-def _gemini(model: str):
-    """Race a Gemini model the way the server uses it: Claude marked down, so every call goes to Gemini."""
-    config.GEMINI_FALLBACK, config.GEMINI_MODEL = True, model
-    claude_status._status.update(at=time.time() + 10**9, claude={"ok": False, "out": True, "why": "race"})
-    return config.CHAT_MODEL
-
-
 def run(model: str, ctx: int, only: int = 0):
-    if model.startswith("gemini"):
-        name, model = model, _gemini(model)
-    else:
-        name = model
-        config.CHAT_OPTIONS["num_ctx"] = ctx
+    name = model
+    config.CHAT_OPTIONS["num_ctx"] = ctx
     cases_ = cases(only)
     out = _file(name, ctx)
     done = {json.loads(l)["id"] for l in out.read_text(encoding="utf-8").splitlines() if l} if out.exists() else set()
@@ -75,9 +65,6 @@ def run(model: str, ctx: int, only: int = 0):
             if c["id"] in done:
                 continue
             r = ask(c, model)
-            if name.startswith("gemini") and r["engine"] != "gemini":
-                print(f"{i}/{len(cases_)} {c['id']} fell back to {r['engine']}, not saved (run again for it)", flush=True)
-                continue
             f.write(json.dumps(r) + "\n")
             f.flush()
             print(f"{i}/{len(cases_)} {c['id']} {r['secs']}s ${r['usd']:.3f} {r['engine']} "

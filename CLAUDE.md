@@ -49,38 +49,22 @@ GLM / DeepSeek are cloud only on Ollama, not tried. `GUIDEBOT_MODEL` / `GUIDEBOT
 override. `nomic-embed-text` (embeddings, Ollama). When the fallback answers, the chat shows nothing about it: the server strips
 `FALLBACK_SHOWN` and sends `{"fallback": true}`, and the bottom-left label reads "Model: backup (Claude unavailable)" (not
 shown on a phone). The page shows only the progress line until an answer is done, then the whole answer at once; "credit balance is too low" counts as down (`_down`).
-* Fallback order (2026-11-14, same pattern as AppraisAI): Claude, then Gemini (`guidebot/gemini.py`, google-genai SDK,
-  api_version v1beta, one cached client per key), then the local model. Gemini gets the same system prompt and
-  messages Claude gets; structured replies use response_mime_type application/json with the pydantic schema.
-  `gemini.stream` yields text only and returns its cost as the generator's return value. A Gemini failure before its
-  first chunk falls through to the local model.
-  * Env vars: `GEMINI_API_KEY` (in `.env`, never print or log it), `GUIDEBOT_GEMINI=0` turns Gemini off,
-    `GUIDEBOT_GEMINI_MODEL` (default `gemini-3.8-flash`).
-  * **Gemini must not get borrower data unless the key's Google project has billing linked (paid tier).** On the free
-    tier Google may use prompts to train its models. Sandbox phase: no borrower data goes in AskNick anyway.
+* Fallback order: Claude, then the local model. Gemini (google-genai, 2026-11-14) was removed 2026-11-18 when the
+  Revo Claude Console org got credits; `GEMINI_API_KEY` in `.env` is ignored now. Rows before that in
+  `data/usage.jsonl` still say engine "gemini".
   * Status (`guidebot/claude_status.py`): a free `messages.count_tokens` call fails with the credit-balance error when
     credits are out. Cached 5 minutes; any answer that falls back resets it (`stale`). While it says Claude is down,
-    answers start at Gemini with no failed Claude call first. Replaced the 9/12/3 re-checks and the hand-entered balance
-    estimate. Admin's "Check now" resets the cache.
+    answers go to the local model with no failed Claude call first. Admin's "Check now" resets the cache.
   * Model line (sidebar footer, polled from `/api/status` every 5 minutes and after each answer): "Model: Claude
-    Sonnet 5.5" when Claude answers; in orange (#e0a060) "Model: Gemini 3.5 Flash backup (Claude credits out)" or
-    "(Claude unavailable)", or "local backup" with Gemini off. Under it "This month: $X.XX · N runs" (everyone's for
-    admin, your own for others).
-  * Spend (`guidebot/usage.py`, `data/usage.jsonl`): one row per answer with the engine that answered (claude, gemini
-    or local, the furthest down the line any call went), model, tokens and dollars. No question or answer text. Prices
-    per million tokens in `PRICES` (gemini-3.8-flash $0.75 in / $3.75 out to Dec 31 then double, gemini-4-carbon/argon $2 / $10 to Nov 30 then double, 3.5 Flash $1.50 / $9 unconfirmed, gemini-3.1-pro-preview $2 / $12); Gemini's
-    thinking tokens bill as output. Python-only answers (deal lookups, calculators) aren't recorded.
-  * Tests: `tests/conftest.py` turns Gemini off, answers the status check "ok" without a call, and sends spend to a temp
-  file. `tests/test_claude_status.py` runs the fallback with a fake Gemini client.
-  * Out of Claude credit since 2026-11-13.
-  * Billing linked on the Gemini key's project 2026-11-14 (paid tier; the same key AppraisAI uses). Before that, on
-    the free tier, Gemini 4 Argon/Carbon had a quota of 0 and 4 Hydrogen stopped at 20 requests a day. Calls retry
-    408/429/5xx 4 times (`gemini._client`; 3.8 Flash answered 503 "high demand" once).
-  * Backup picked 2026-11-14 by `tools/backup_race.py run gemini-<model> 0 12` (answers that fell back aren't saved),
-    12 keyed questions across all four sections, cut from 37 to save money: 3.8 Flash 11/12, 3 grounding problems,
-    $0.74; 4 Carbon 11/12, 31 grounding problems (cites filenames in backticks, so chips don't open), $1.67. Both
-    missed only conv-guide-06 (gave HomeReady's 80% AMI, not the 50% the key also wants). gemma4 12/12 on the same
-    12, 20 grounding problems, free but about 77 s. Hydrogen and Argon dropped before finishing.
+    Sonnet 5.5" when Claude answers; in orange (#e0a060) "Model: local backup (Claude credits out)" or
+    "(Claude unavailable)". Under it "This month: $X.XX · N runs" (everyone's for admin, your own for others).
+  * Spend (`guidebot/usage.py`, `data/usage.jsonl`): one row per answer with the engine that answered (claude or
+    local, the furthest down the line any call went), model, tokens and dollars. No question or answer text. Prices
+    per million tokens in `PRICES`. Python-only answers (deal lookups, calculators) aren't recorded.
+  * Tests: `tests/conftest.py` answers the status check "ok" without a call and sends spend to a temp file.
+    `tests/test_claude_status.py` runs the fallback with fakes, no real calls.
+  * Claude API billing: Revo's Claude Console org (Vanessa has the Billing role), $200 with auto-reload at $40 back to
+    $200, set up 2026-11-18.
 * pdfplumber, pandas, ChromaDB + BM25 (hybrid search), Streamlit UI.
 * GPU (RTX 5070 Ti, 16 GB): torch cu128 in `.venv` (Docling's install swapped it to CPU once; reinstall cu128 with
 `--force-reinstall --no-deps` if `torch.cuda.is_available()` is False). Reranker `guidebot/rerank.py`
@@ -104,7 +88,7 @@ national floor/ceiling only (HUD's county file wasn't downloadable).
   * Section-wide deals lead with "**Best fit: X% max LTV** on ..." and rank programs by LTV (`comparison_md`).
   * The money line ("Max LTV/CLTV: 75%", "Best fit: ...") shows as a big gold headline (`heroize`).
   * Pinned chats (`chats.pinned`, POST `/api/chats/pin`) sit under "Pinned" at the top of the sidebar.
-  * Attachments: a + in the question box (like Claude's) opens Camera (touch screens only), Photos, Files; paste and drop work too. Up to 5, PDFs and photos, 10 MB each; photos are redrawn as JPEG at most 2000 px on the page (iPhone HEIC included). `guidebot/attachments.py` turns each into text before anything else: a PDF with a text layer is read in Python (pypdfium2), photos and scans go to `llm.transcribe` (Claude, Gemini, local; told to copy text exactly, never summarize). The text is appended to the question after `
+  * Attachments: a + in the question box (like Claude's) opens Camera (touch screens only), Photos, Files; paste and drop work too. Up to 5, PDFs and photos, 10 MB each; photos are redrawn as JPEG at most 2000 px on the page (iPhone HEIC included). `guidebot/attachments.py` turns each into text before anything else: a PDF with a text layer is read in Python (pypdfium2), photos and scans go to `llm.transcribe` (Claude, then local; told to copy text exactly, never summarize). The text is appended to the question after `
 
 [Attachment: name]`, so routing, the deal reader and the lookup run unchanged; the server sends `{"asked": full question}` so follow-ups see it and saves that. Bubbles hide everything after the marker and show name chips. Derrick chose this with no warning in the UI (2026-11-15), knowing attachments can carry borrower data. Tests in `tests/test_attachments.py`.
   * "What's new" banner (`guidebot/updates.py`, GET `/api/updates?section=`): NDM sheets new or changed since the server's first look (baseline 2026-11-15 in `data/sheets_seen.json`) and agency files after their first load, last 30 days, dismissed per browser.
@@ -197,7 +181,7 @@ programs only, by folder), minus servicing-only titles (`LL_SERVICING`) and lett
 label tells the model a letter newer than the Selling Guide wins. `agency.source_of` picks the deepest folder, so
 they never answer the Selling Guide's notice (2026-11-17). Freddie's bulletins sit on guide.freddiemac.com,
 whose robots.txt bars bots, so Freddie changes arrive with the guide PDF Derrick saves monthly. Model via
-`llm.ask_json` (Claude, Gemini, local); releases with nothing for origination go to `data/tracker_state.json`
+`llm.ask_json` (Claude, then local); releases with nothing for origination go to `data/tracker_state.json`
 "skipped", failures to "errors" and retry next check. `python -m guidebot.tracker --days N` runs it standalone (reads
 agency/, never writes it or the index); `scripts/run_tracker.ps1` has the Task Scheduler line. Tests in
 `tests/test_tracker.py`, fixtures in `tests/fixtures/tracker/`. Design: `guidebot/tracker/DESIGN.md`, steps: `guidebot/tracker/SOP.md`.

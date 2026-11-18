@@ -1,6 +1,6 @@
 """One agency release (a Mortgagee Letter, Circular, Lender Letter, Selling Guide announcement, or the lines a
 guide edition added and removed) turned into plain rule changes by the model. Same fallback chain as answers:
-Claude, then Gemini, then local (llm.ask_json).
+Claude, then local (llm.ask_json).
 
 The model only reads and restates. Every date it gives is checked to look like a date, and a release it says has
 nothing for someone originating a forward loan is left out of the feed.

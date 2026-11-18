@@ -1051,17 +1051,15 @@ function sourcesHtml(src) {
 }
 // Bottom left says who answers right now; the chat itself never names it. The server checks Claude with a free
 // token count at most every 5 minutes (claude_status.py). When it's out of credit or unreachable, answers go to
-// Gemini, then the local model, and the line says so in orange. Under it: this month's spend (everyone's for admin).
+// the local model, and the line says so in orange. Under it: this month's spend (everyone's for admin).
 let MODEL_NAME = "", CLAUDE = null;
 const nice = m => (m || "")
-  .replace(/^claude-(\w+)-(\d+)-(\d+)$/, (_, n, a, b) => `Claude ${n[0].toUpperCase() + n.slice(1)} ${a}.${b}`)
-  .replace(/^gemini-([\d.]+)-(\w+)(-preview)?$/, (_, v, n, p) => `Gemini ${v} ${n[0].toUpperCase() + n.slice(1)}${p ? " Preview" : ""}`);
+  .replace(/^claude-(\w+)-(\d+)-(\d+)$/, (_, n, a, b) => `Claude ${n[0].toUpperCase() + n.slice(1)} ${a}.${b}`);
 const showModel = backup => {
   const s = CLAUDE, down = !!(s && s.claude && !s.claude.ok);
   let t = "Model: " + nice(s && s.model || MODEL_NAME);
   if (down || backup) {
-    const who = s && s.backup === "gemini" ? nice(s.backup_model) + " backup" : "local backup";
-    t = `Model: ${who} (${s && s.claude && s.claude.out ? "Claude credits out" : "Claude unavailable"})`;
+    t = `Model: local backup (${s && s.claude && s.claude.out ? "Claude credits out" : "Claude unavailable"})`;
   }
   $("model").textContent = t;
   $("model").classList.toggle("backup", down || !!backup);

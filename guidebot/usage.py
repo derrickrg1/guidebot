@@ -1,11 +1,11 @@
 """What each answer cost and which engine wrote it. One JSON line per answer in data/usage.jsonl (git-ignored): when,
-who (Access email), engine (claude, gemini or local), model, tokens and dollars. No questions, no answers.
+who (Access email), engine (claude or local; gemini on rows before 2026-11-18), model, tokens and dollars. No questions, no answers.
 
 An answer is several model calls (routing, the yes/no check, the answer itself). llm.py adds each call's cost to the
 answer in progress on this thread (begin/add/end); the server records it when the answer is done. The engine is the
-furthest down the fallback line any call went: claude, then gemini, then local.
+furthest down the fallback line any call went: claude, then local.
 
-Prices are list prices per million tokens. Thinking tokens (Gemini's thoughts_token_count) bill as output.
+Prices are list prices per million tokens.
 """
 import json
 import threading
@@ -18,15 +18,6 @@ PRICES = {   # $ per million tokens: input, output, 5-minute cache write, cache 
     "claude-opus-5-5": {"in": 4.00, "out": 20.00, "write": 5.00, "read": 0.20},
     "claude-sonnet-5-5": {"in": 2.00, "out": 10.00, "write": 2.50, "read": 0.20},
     "claude-haiku-5-5": {"in": 0.10, "out": 0.50, "write": 0.125, "read": 0.01},
-    # Gemini caching is implicit, so no write price
-    "gemini-3.5-flash": {"in": 1.50, "out": 9.00, "write": 0, "read": 0.15},
-    # 3.8 Flash and Gemini 4 at Google's list prices on 2026-11-14 (3.8 Flash promo to Dec 31, Gemini 4 to Nov 30, then
-    # double). Cache read at a tenth of input, Google's usual ratio, not checked on the page.
-    "gemini-3.8-flash": {"in": 0.75, "out": 3.75, "write": 0, "read": 0.075},
-    "gemini-4-hydrogen": {"in": 1.50, "out": 7.50, "write": 0, "read": 0.15},
-    "gemini-4-argon": {"in": 2.00, "out": 10.00, "write": 0, "read": 0.20},
-    "gemini-4-carbon": {"in": 2.00, "out": 10.00, "write": 0, "read": 0.20},
-    "gemini-3.1-pro-preview": {"in": 2.00, "out": 12.00, "write": 0, "read": 0.20},
 }
 ENGINES = ("claude", "gemini", "local")
 _lock = threading.Lock()

@@ -737,9 +737,8 @@ async function approveRules() {
 // ---------- Claude status: checked with a free token count at most every 5 minutes (claude_status.py) ----------
 const hour = t => new Date(t * 1000).toLocaleString([], {weekday: "short", hour: "numeric", minute: "2-digit"});
 const modelName = m => (m || "")
-  .replace(/^claude-(\w+)-(\d+)-(\d+)$/, (_, n, a, b) => `Claude ${n[0].toUpperCase() + n.slice(1)} ${a}.${b}`)
-  .replace(/^gemini-([\d.]+)-(\w+)(-preview)?$/, (_, v, n, p) => `Gemini ${v} ${n[0].toUpperCase() + n.slice(1)}${p ? " Preview" : ""}`);
-const backupName = c => c.backup === "gemini" ? modelName(c.backup_model) : `the local model (${c.backup_model})`;
+  .replace(/^claude-(\w+)-(\d+)-(\d+)$/, (_, n, a, b) => `Claude ${n[0].toUpperCase() + n.slice(1)} ${a}.${b}`);
+const backupName = c => `the local model (${c.backup_model})`;
 async function claudeCard() {
   const box = document.getElementById("claude-card");
   const r = await fetch("/admin/api/claude");

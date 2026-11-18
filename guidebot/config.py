@@ -31,10 +31,6 @@ LOCAL_MODEL = "gemma4:26b"
 LOCAL_CTX = 65536
 CLAUDE_MODEL = "claude-sonnet-5-5"   # 22/22 in the race, same as Opus, faster and cheaper
 CLAUDE_EFFORT = os.environ.get("GUIDEBOT_EFFORT", "medium")
-# Between Claude and the local model: Google's Gemini API (gemini.py). Off: GUIDEBOT_GEMINI=0.
-GEMINI_FALLBACK = os.environ.get("GUIDEBOT_GEMINI", "1") != "0"
-GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.environ.get("GUIDEBOT_GEMINI_MODEL", "gemini-3.8-flash")
 CHAT_MODEL = os.environ.get("GUIDEBOT_MODEL") or (CLAUDE_MODEL if os.environ.get("ANTHROPIC_API_KEY") else LOCAL_MODEL)
 EMBED_MODEL = "nomic-embed-text"
 EMBED_DOC_PREFIX = "search_document: "    # nomic needs these, set both to "" for other embed models

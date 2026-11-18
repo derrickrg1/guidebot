@@ -4,7 +4,7 @@ import sys
 
 import ollama
 
-from guidebot import claude_status, config, gemini, usage
+from guidebot import claude_status, config, usage
 
 FALLBACK_BETA = "server-side-fallback-2026-07-01"   # a declined request reruns on another Claude model
 FALLBACK_SHOWN = "*Answered by the backup model. Double-check this one.*\n\n"
@@ -149,26 +149,11 @@ def _ollama_json(system: str, user: str, schema, model: str, retries: int):
 
 
 # ---------- what the rest of guidebot calls ----------
-# Order: Claude, then Gemini (gemini.py), then the local model. While the status check (claude_status, at most 5
-# minutes old) says Claude can't answer, answers start at Gemini without a failed Claude call first.
+# Order: Claude, then the local model (Gemini removed 2026-11-18). While the status check (claude_status, at most
+# 5 minutes old) says Claude can't answer, answers go to the local model without a failed Claude call first.
 
 def _backup_stream(messages: list[dict]):
-    """Gemini if it's set up and answers, else the local model. A Gemini failure before its first chunk falls through."""
     yield FALLBACK_SHOWN   # chat.respond turns this into {"fallback": True}; the sidebar's model line says who answered
-    if gemini.available():
-        chunks = gemini.stream(messages)
-        try:
-            first = next(chunks)   # the request goes out here: a failure now falls through to the local model
-        except StopIteration as done:   # an empty answer
-            usage.add("gemini", done.value)
-            return
-        except Exception as g:
-            sys.stderr.write(f"Gemini failed too ({type(g).__name__}: {g}); answering with {config.LOCAL_MODEL}\n")
-        else:
-            yield first
-            spent = yield from chunks
-            usage.add("gemini", spent)
-            return
     usage.add("local")
     yield from _ollama_stream(messages, config.LOCAL_MODEL)
 
@@ -194,13 +179,6 @@ def stream_chat(messages: list[dict], model: str = config.CHAT_MODEL):
 
 
 def _backup_json(system: str, user: str, schema, retries: int):
-    if gemini.available():
-        try:
-            parsed, spent = gemini.ask_json(system, user, schema)
-            usage.add("gemini", spent)
-            return parsed
-        except Exception as g:
-            sys.stderr.write(f"Gemini failed too on {schema.__name__} ({type(g).__name__}: {g})\n")
     usage.add("local")
     return _ollama_json(system, user, schema, config.LOCAL_MODEL, retries)
 
@@ -225,13 +203,6 @@ def _claude_transcribe(files: list[tuple[str, bytes]], model: str) -> str:
 
 
 def _backup_transcribe(files: list[tuple[str, bytes]], local_images=None) -> str:
-    if gemini.available():
-        try:
-            text, spent = gemini.transcribe(TRANSCRIBE, files)
-            usage.add("gemini", spent)
-            return text
-        except Exception as g:
-            sys.stderr.write(f"Gemini couldn't read the attachment ({type(g).__name__}: {g})\n")
     images = local_images() if local_images else [d for m, d in files if m != "application/pdf"]
     usage.add("local")
     resp = ollama.chat(model=config.LOCAL_MODEL, messages=[{"role": "user", "content": TRANSCRIBE, "images": images}],
@@ -240,7 +211,7 @@ def _backup_transcribe(files: list[tuple[str, bytes]], local_images=None) -> str
 
 
 def transcribe(files: list[tuple[str, bytes]], local_images=None, model: str = config.CHAT_MODEL) -> str:
-    """The text of photos or a scanned PDF, copied out by a model. Same order as answers: Claude, Gemini, local.
+    """The text of photos or a scanned PDF, copied out by a model. Same order as answers: Claude, then local.
     local_images gives page images for the local model, which can't take a PDF."""
     if not _is_claude(model):
         return _backup_transcribe(files, local_images)
