@@ -232,3 +232,12 @@ def test_quotes_not_on_the_cited_page_lose_their_quote_marks():
     fake = 'BK: "no bankruptcies ever allowed on this sheet" (Ignite 1099 Expanded.pdf, p. 3)'
     assert _unquote_unfound(real) == real
     assert _unquote_unfound(fake) == "BK: no bankruptcies ever allowed on this sheet (Ignite 1099 Expanded.pdf, p. 3)"
+
+
+def test_bare_loan_amounts():
+    from guidebot.answer import _amount
+    assert _amount("Max LTV for a 640 FICO VA purchase, primary, loan 500,000?") == 500000   # 2026-11-18
+    assert _amount("loan 500000, 700 fico") == 500000
+    assert _amount("700 fico, 2,500,000 cash-out") == 2500000
+    assert _amount("zip 78701, 640 fico") is None
+    assert _amount("value 1,200,000 primary") is None   # a value alone isn't the loan amount

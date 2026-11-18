@@ -253,7 +253,10 @@ List any key fields not provided in 'missing' (fico, loan_amount, occupancy, pur
 
 # Python fallbacks for the details the model sometimes drops ("$650,000 loan, 720 FICO" came back as missing).
 _FICO = re.compile(r"\b(\d{3})\s*(?:fico|credit|score|mid)\b|\b(?:fico|score)\s*(?:of|is|:)?\s*(\d{3})\b", re.I)
-_AMOUNT = re.compile(r"\$\s*(\d[\d,]*(?:\.\d+)?)\s*([km]\b)?|\b(\d+(?:\.\d+)?)\s*([km])\b", re.I)
+# $650,000 / 650k / 1.5m, plus a bare "500,000" (2026-11-18: "loan 500,000" came back with no loan amount) and bare
+# digits ("loan 500000") only right after a loan word, so a zip code isn't read as one.
+_AMOUNT = re.compile(r"\$\s*(\d[\d,]*(?:\.\d+)?)\s*([km]\b)?|\b(\d+(?:\.\d+)?)\s*([km])\b"
+                     r"|(?<![\d.,])(\d{1,3}(?:,\d{3})+)(?![\d,]*\d)|(?<![\d.,])(\d{5,8})(?![\d%]|[.,]\d)", re.I)
 _OCCUPANCY = {"Investment Property": r"invest|rental|non[- ]?owner|\bnoo\b",
               "Second Home": r"second home|2nd home|vacation home",
               "Primary Residence": r"primary|owner[- ]occ|\boo\b|\blive (in|there)\b|living in|move in"}
@@ -278,7 +281,10 @@ _DOWN_PCT = re.compile(r"(\d+(?:\.\d+)?)\s*%\s*down", re.I)
 def _amount(text: str) -> int | None:
     loans, prices, downs, other = [], [], [], []
     for m in _AMOUNT.finditer(text):
-        num, unit = (m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4))
+        num, unit = ((m.group(1), m.group(2)) if m.group(1) else (m.group(3), m.group(4)) if m.group(3)
+                     else (m.group(5) or m.group(6), None))
+        if m.group(6) and not _LOAN_BEFORE.search(text[max(0, m.start() - 30):m.start()]):
+            continue
         value = float(num.replace(",", "")) * {"k": 1e3, "m": 1e6}.get((unit or "").lower(), 1)
         if value < 10000:
             continue
