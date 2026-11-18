@@ -19,7 +19,10 @@ _lock = threading.Lock()
 
 
 def is_credit_error(e: Exception) -> bool:
-    return "credit balance" in str(e).lower()
+    """Out of credit, or the workspace's monthly spend limit reached (2026-11-18: "You have reached your specified
+    workspace API usage limits"). Both come back as a 400 and both mean no answers until someone pays or raises it."""
+    s = str(e).lower()
+    return "credit balance" in s or "api usage limits" in s
 
 
 def backup() -> tuple[str, str]:

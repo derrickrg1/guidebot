@@ -42,8 +42,8 @@ def _anthropic():
 def _down(e: Exception) -> bool:
     """Errors where answering from the local model beats no answer: no network, bad key, rate limit, outage."""
     import anthropic
-    if isinstance(e, anthropic.BadRequestError) and "credit balance" in str(e):
-        return True   # out of API credit (2026-11-12): every answer errored instead of falling back
+    if isinstance(e, anthropic.BadRequestError) and claude_status.is_credit_error(e):
+        return True   # out of credit or over the spend limit: every answer errored instead of falling back
     return isinstance(e, (anthropic.APIConnectionError, anthropic.AuthenticationError, anthropic.RateLimitError,
                           anthropic.InternalServerError, anthropic.PermissionDeniedError))
 

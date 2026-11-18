@@ -83,3 +83,11 @@ def test_usage_summary(monkeypatch):
     usage.record("b@x", {"engine": "claude", "usd": 0.25})
     assert usage.summary()["month"] == {"usd": 0.75, "runs": 2}
     assert usage.summary("a@x")["month"] == {"usd": 0.5, "runs": 1}
+
+
+def test_spend_limit_counts_as_out():
+    import anthropic
+    from httpx import Request, Response
+    msg = "You have reached your specified workspace API usage limits. You will regain access on 2026-12-01."
+    e = anthropic.BadRequestError(msg, response=Response(400, request=Request("POST", "http://x")), body=None)
+    assert claude_status.is_credit_error(e) and llm._down(e)
