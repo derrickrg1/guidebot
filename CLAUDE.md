@@ -255,8 +255,8 @@ classed `grid pg-ex|pg-ig`), compared by position only when both effective dates
 grids (`../site/tools/matrices/build_*.py`, matched by PDF hash) answer only where the HTML has nothing.
 A mismatch blocks numbers and approval. Every Express/Ignite grid matches except (2026-11-12):
   * Express 1099 row $2,000,001-$3,000,000 / 700, Primary Cash Out: settled 2026-11-17 as 65% (NDM's PDF; the site's
-    original copy had 60%, below the 680 row's 65%). Site fixed in revo-funding-site#598. The approved JSON still says
-    60%, so crosscheck blocks Express 1099 numbers until Derrick Re-reads the PDF and re-approves it.
+    original copy had 60%, below the 680 row's 65%). Site fixed in revo-funding-site#598. Re-read and approved with 65%
+    2026-11-18 (by Claude at Derrick's explicit instruction; see the 2026-11-18 approvals note below).
   * Express DSCR Units+: the approved JSON was mangled (FICO is the merged cell there, the parser used to fill loan
     amount instead). Parser fixed (`_fill_lead`); Derrick needs to "Re-read the PDF" and re-approve.
   * Express DSCR (2026-11-17): since site v6 the site shows its two DSCR bands side by side in one table; `site_grids.split_bands` splits it and `compare_keyed` checks every PDF row by band top + FICO (site-only rows ignored). Before this, "2 matrices vs 1" blocked Express DSCR numbers.
@@ -270,8 +270,7 @@ sheets are rows (purpose, min FICO, max loan amount, max LTV, sometimes DTI/AUS)
 position on the page. Lookup is Python only: every row the deal fits, best LTV first, all the sheet's footnotes
 shown (funding fee, 203(h), AZ/UT). "96.5%, 100%³" headlines 96.5 (100% is the footnoted case). IRRRL/Streamline
 rows say NA (no LTV limit). Stops at the matrix: the sheets' credit/property pages aren't applied. All five match
-the site's HTML tables (`site_grids.gov_check`). The approved JSONs were saved before this, with no table, so
-Derrick needs to Re-read and approve each; until then the VA/FHA tabs say so instead of giving a number.
+the site's HTML tables (`site_grids.gov_check`). All five re-read with their table and approved 2026-11-18.
 * Conventional LTV tables: `guidebot/conv_matrix.py` (2026-11-12). Each sheet's page 1 table: occupancy, purpose,
   min FICO, units, Conforming and High Balance (Freddie: Super Conforming) columns, plus the per-unit loan limits that
   pick the column. Tried before the gov parser (HomeOne's one-column table also reads as gov). Footnotes stop at the
@@ -292,8 +291,13 @@ Derrick needs to Re-read and approve each; until then the VA/FHA tabs say so ins
   the page with the viewer's own `findMarks`. Answers quote the decisive rule's own words so the viewer lands on it;
   `chat._unquote_unfound` drops the quote marks from any quote whose words aren't on the cited pages (about 1.5%
   were paraphrases or a sibling sheet's line).
-* Express Bank Statements' approved copy has no text on page 1 (matrix only; a fresh read has the credit section,
-  48 months BK/FC seasoning). Derrick needs to Re-read and approve it.
+* 2026-11-18 approvals (by Claude at Derrick's explicit instruction "index and approve each", the same exception as
+  the 2026-11-12 Conventional approvals): every doc's fresh read was compared to its approved copy. Approved the 7 that
+  changed for the better, each with no problems and matching the site: Express 1099 (one cell 60% to 65%), Express
+  Bank Statements (page 1 credit section now read), FHA Standard/Streamline and VA Standard/Cash-Out/IRRRL (tables
+  now read). Then Update index. Not approved: Ignite 1099, Bank Statements, Full Doc. Their fresh reads are the same
+  content reformatted (### headings, - bullets) but drop the Texas 50(a)(6)/50(a)(4) labels, and 3-4 of each one's
+  approved overlay rule quotes would no longer be found. Their current approved copies stay.
 * Express 2nd (Express 8.15.2026, Premier 3.2.2026) parses as text only, no LTV grid yet.
 * NonQM Shared guidelines PDF changed since it was approved: needs a re-check.
 
