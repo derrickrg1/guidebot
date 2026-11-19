@@ -14,10 +14,10 @@ import time
 from guidebot import config
 
 LOG = config.ROOT / "data" / "usage.jsonl"
-PRICES = {   # $ per million tokens: input, output, 5-minute cache write, cache read
-    "claude-opus-5-5": {"in": 4.00, "out": 20.00, "write": 5.00, "read": 0.20},
-    "claude-sonnet-5-5": {"in": 2.00, "out": 10.00, "write": 2.50, "read": 0.20},
-    "claude-haiku-5-5": {"in": 0.10, "out": 0.50, "write": 0.125, "read": 0.01},
+PRICES = {   # $ per million tokens: input, output, 5-minute cache write, 1-hour cache write (2x input), cache read
+    "claude-opus-5-5": {"in": 4.00, "out": 20.00, "write": 5.00, "write1h": 8.00, "read": 0.20},
+    "claude-sonnet-5-5": {"in": 2.00, "out": 10.00, "write": 2.50, "write1h": 4.00, "read": 0.20},
+    "claude-haiku-5-5": {"in": 0.10, "out": 0.50, "write": 0.125, "write1h": 0.20, "read": 0.01},
 }
 ENGINES = ("claude", "gemini", "local")
 _lock = threading.Lock()
@@ -25,16 +25,21 @@ _run = threading.local()
 
 
 def cost(t: dict, model: str) -> dict:
-    """t: {"in", "cached", "wrote", "out"} token counts. A model not in PRICES costs nothing (local)."""
-    p = PRICES.get(model, {"in": 0, "out": 0, "write": 0, "read": 0})
-    usd = (t["in"] * p["in"] + t["out"] * p["out"] + t["wrote"] * p["write"] + t["cached"] * p["read"]) / 1_000_000
+    """t: {"in", "cached", "wrote", "out"} token counts, plus "wrote_1h" (the part of "wrote" cached for an hour).
+    A model not in PRICES costs nothing (local)."""
+    p = PRICES.get(model, {"in": 0, "out": 0, "write": 0, "write1h": 0, "read": 0})
+    long = t.get("wrote_1h", 0)
+    usd = (t["in"] * p["in"] + t["out"] * p["out"] + (t["wrote"] - long) * p["write"] + long * p["write1h"]
+           + t["cached"] * p["read"]) / 1_000_000
     return t | {"model": model, "usd": round(usd, 6)}
 
 
 def claude_tokens(u) -> dict:
     get = lambda k: getattr(u, k, 0) or 0
+    split = getattr(u, "cache_creation", None)
+    long = (getattr(split, "ephemeral_1h_input_tokens", 0) or 0) if split else 0
     return {"in": get("input_tokens"), "cached": get("cache_read_input_tokens"),
-            "wrote": get("cache_creation_input_tokens"), "out": get("output_tokens")}
+            "wrote": get("cache_creation_input_tokens"), "wrote_1h": long, "out": get("output_tokens")}
 
 
 def begin():

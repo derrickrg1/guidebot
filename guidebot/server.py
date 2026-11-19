@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 from guidebot import (admin, agency, analytics, answer_cache, attachments, chat, claude_status, config, history,
-                      regress, revo_rules, shares, updates, usage)
+                      regress, revo_rules, shares, updates, usage, lessons)
 
 PORT = 8600
 PAGE = config.ROOT / "ui" / "guidebot.html"
@@ -97,6 +97,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(analytics.report(int(query.get("days", ["30"])[0] or 30)))
         if path == "/admin/api/revo":
             return self._json({"rules": revo_rules.load()})
+        if path == "/admin/api/lessons":
+            return self._json({"lessons": lessons.load()})
         if path == "/admin/api/regress":
             return self._json(regress.overview())
         if path == "/admin/api/claude":
@@ -190,6 +192,18 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(revo_rules.save(body.get("rule") or {}, history.user(self.headers)))
             if path == "/admin/api/revo/delete":
                 return self._json(revo_rules.delete(str(body.get("id") or "")))
+            if path == "/admin/api/lessons/draft":
+                fb = history.get_feedback(int(body.get("feedback") or 0))
+                if not fb:
+                    return self._json({"error": "not found"}, 404)
+                try:
+                    return self._json(lessons.draft(fb))
+                except Exception as e:
+                    return self._json({"error": f"Couldn't draft one ({type(e).__name__}). Write it by hand."})
+            if path == "/admin/api/lessons/save":
+                return self._json(lessons.save(body.get("lesson") or {}, history.user(self.headers)))
+            if path == "/admin/api/lessons/delete":
+                return self._json(lessons.delete(str(body.get("id") or "")))
             if path == "/admin/api/regress/run":
                 sec = body.get("section") if body.get("section") in chat.SECTIONS else ""
                 if not sec:

@@ -48,12 +48,17 @@ def _down(e: Exception) -> bool:
                           anthropic.InternalServerError, anthropic.PermissionDeniedError))
 
 
+def _long_cache() -> dict:
+    return {"type": "ephemeral", **({"ttl": config.CACHE_TTL} if config.CACHE_TTL != "5m" else {})}
+
+
 def _split(messages: list[dict]) -> tuple[str | list[dict], list[dict]]:
     """Claude takes the system prompt separately and rejects empty turns. A system message marked "cache": True
-    gets its own cache point, so a big fixed block (every program sheet) is reused across different questions."""
+    gets its own cache point, so a big fixed block (every program sheet) is reused across different questions. That
+    block holds guidelines only, never a question, so it gets the long TTL (config.CACHE_TTL)."""
     sys_msgs = [m for m in messages if m["role"] == "system"]
     if any(m.get("cache") for m in sys_msgs):
-        system = [{"type": "text", "text": m["content"], **({"cache_control": {"type": "ephemeral"}} if m.get("cache") else {})}
+        system = [{"type": "text", "text": m["content"], **({"cache_control": _long_cache()} if m.get("cache") else {})}
                   for m in sys_msgs]
     else:
         system = "\n\n".join(m["content"] for m in sys_msgs)
@@ -66,7 +71,7 @@ def _claude_args(model: str, messages: list[dict]) -> dict:
     system, rest = _split(messages)
     return dict(model=model, max_tokens=16000, system=system, messages=rest,
                 output_config={"effort": config.CLAUDE_EFFORT},
-                cache_control={"type": "ephemeral"},   # the guidelines repeat on every question about a program
+                cache_control={"type": "ephemeral"},   # 5 minutes: this one covers the question and chat history too
                 betas=[FALLBACK_BETA], fallbacks="default")
 
 

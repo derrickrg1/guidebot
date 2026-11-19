@@ -23,7 +23,7 @@ from guidebot import config
 DB = config.ROOT / "data" / "answer_cache.db"
 MAX_AGE = 30 * 86400
 WATCH = ("docs", "verified", "overlays", "agency", "guidebot")   # folders whose files change answers
-WATCH_FILES = ("revo_overlays.json",)
+WATCH_FILES = ("revo_overlays.json", "data/lessons.json")
 _lock = threading.Lock()
 _fp = {"at": 0.0, "value": ""}
 

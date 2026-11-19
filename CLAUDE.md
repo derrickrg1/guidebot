@@ -322,3 +322,7 @@ to Opus if it wins.
 
 * `rev-ai` bank statement analyzer (separate project, built earlier). Not the current focus.
 
+
+## Lessons and the 1-hour cache (2026-11-19)
+- Lessons (`guidebot/lessons.py`, `data/lessons.json`): admin Feedback tab "Make a lesson" has Claude draft a short general rule from a "This is wrong" report; Derrick edits and saves it on the Lessons tab. Saved lessons go into the instructions of every answer on their scope (same scope rules as Revo rules). `save()` refuses email, phone, SSN, street address and loan number patterns. Claude never saves a lesson on its own.
+- Cache: the fixed block (instructions, lessons, program docs) has its own cache point at `config.CACHE_TTL` = 1h, the longest Anthropic offers. It never holds a question: on the program tab the agency pages and yes/no lead go in a second, uncached block. Question and history keep the 5-minute top-level cache. A 1h write costs 2x input (`usage.PRICES["write1h"]`).

@@ -116,6 +116,12 @@ def save_feedback(email: str, question: str, answer: str, note: str, chat_id: st
         return cur.lastrowid
 
 
+def get_feedback(fid: int) -> dict | None:
+    with _db() as con:
+        r = con.execute("SELECT * FROM feedback WHERE id = ?", (fid,)).fetchone()
+        return dict(r) if r else None
+
+
 def list_feedback(limit: int = 500) -> list[dict]:
     with _db() as con:
         return [dict(r) for r in con.execute("SELECT * FROM feedback ORDER BY ts DESC LIMIT ?", (limit,))]

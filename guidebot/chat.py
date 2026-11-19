@@ -343,12 +343,12 @@ def _program_answer(question, history, prog, docs, model):
     if len(docs_text) <= config.FULL_DOC_MAX_CHARS:
         yield {"status": f"Reading {prog}…"}
         no_general = "\n\n" + NO_GENERAL_NOTE if _agency_section(prog, "") and not gov else ""
-        answer = yield from _stream(full_doc_messages(question, docs_text + _agency_block(gov) + no_general, history,
-                                                      ltv_ok=ltv_ok, model=model), model)
+        answer = yield from _stream(full_doc_messages(question, docs_text, history, ltv_ok=ltv_ok, model=model,
+                                                      extra=_agency_block(gov) + no_general, program=prog), model)
         return answer, gov
     yield {"status": f"Searching {prog}…"}
     found = retriever().search(question, programs=[prog] + ([SHARED] if prog in NONQM else []))
-    answer = yield from _stream(search_messages(question, found + gov, history), model)
+    answer = yield from _stream(search_messages(question, found + gov, history, program=prog), model)
     return answer, filter_to_cited(answer, found, model) + gov
 
 
@@ -599,7 +599,8 @@ def _respond(question: str, history: list[dict], choice: str = "",
         if routed:
             fname = routed["sections"][0]["file"] if routed["sections"] else ""
             yield {"status": "Reading guidelines…"}
-            raw = "".join(stream_chat(full_section_messages(question, routed["text"], history, filename=fname, model=model), model))
+            raw = "".join(stream_chat(full_section_messages(question, routed["text"], history, filename=fname, model=model,
+                                                              program=choice, section=section), model))
             answer = re.sub(r"\(file,\s*p\.", f"({fname}, p.", raw)
             yield {"replace": answer}
             hits = routed["sections"]
@@ -612,13 +613,15 @@ def _respond(question: str, history: list[dict], choice: str = "",
                 answer = "Nothing indexed yet. Hit Update index first."
                 yield {"replace": answer}
             else:
-                answer = yield from _stream(search_messages(question, found + gov, history), model)
+                answer = yield from _stream(search_messages(question, found + gov, history, program=choice,
+                                                            section=section), model)
                 hits = filter_to_cited(answer, found, model) + gov
 
     if not answer and docs:
         docs_text = "\n\n".join(library.render(d) for d in docs)
         ltv_ok = all(d["status"] == "verified" for d in docs)
-        answer = yield from _stream(full_doc_messages(question, docs_text, history, ltv_ok=ltv_ok, model=model), model)
+        answer = yield from _stream(full_doc_messages(question, docs_text, history, ltv_ok=ltv_ok, model=model,
+                                                      program=choice), model)
 
     # agency pages only count as sources when the answer cited them; unreviewed guides get a line saying so
     if any(h.get("agency") for h in hits) and (fixed := _fix_agency_cites(answer)) != answer:

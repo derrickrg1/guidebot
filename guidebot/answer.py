@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from guidebot import conv_matrix, gov_matrix, overlay_rules
+from guidebot import conv_matrix, gov_matrix, lessons, overlay_rules
 from guidebot.extract_pdf import grid_mark
 from guidebot.llm import ask_json
 from guidebot.matrix_lookup import apply_adjustments, dimension_columns, header_problems, lookup, value_columns
@@ -79,7 +79,7 @@ FULL_SECTION_SYSTEM = (
 
 
 def full_section_messages(question: str, sections_text: str, history: list[dict], filename: str = "",
-                          model: str | None = None) -> list[dict]:
+                          model: str | None = None, program: str = "", section: str = "") -> list[dict]:
     cite_note = (
         f"\nIMPORTANT: The source document is '{filename}'. Every citation must use this exact filename"
         f" and include the subsection number when the fact comes from a numbered subsection visible in the text"
@@ -87,7 +87,7 @@ def full_section_messages(question: str, sections_text: str, history: list[dict]
         f" Never write '(file, p. X)'.\n"
     ) if filename else ""
     return (
-        [{"role": "system", "content": FULL_SECTION_SYSTEM + cite_note
+        [{"role": "system", "content": FULL_SECTION_SYSTEM + lessons.block(program, section) + cite_note
           + (yes_no_lead(question, sections_text, model) if model else "")
           + "\n\nGUIDELINE SECTIONS:\n\n" + sections_text}]
         + history[-6:]
@@ -152,7 +152,8 @@ def broad_messages(question: str, sheets_text: str, extra_text: str, history: li
     with its own cache point, so later questions reuse it; the question-specific sections follow."""
     lead = yes_no_lead(question, sheets_text + "\n\n" + extra_text, model) if model else ""
     return (
-        [{"role": "system", "content": BROAD_SYSTEM + "\n\nPROGRAM SHEETS:\n\n" + sheets_text, "cache": True},
+        [{"role": "system", "content": BROAD_SYSTEM + lessons.block(every=True) + "\n\nPROGRAM SHEETS:\n\n" + sheets_text,
+          "cache": True},
          {"role": "system", "content": "SHARED GUIDE SECTIONS AND LONGER GUIDES:\n\n" + (extra_text or "(none found)") + lead}]
         + history[-6:]
         + [{"role": "user", "content": question}]
@@ -210,21 +211,27 @@ def yes_no_lead(question: str, docs_text: str, model: str) -> str:
 
 
 def full_doc_messages(question: str, docs_text: str, history: list[dict], ltv_ok: bool = True,
-                      model: str | None = None) -> list[dict]:
+                      model: str | None = None, extra: str = "", program: str = "") -> list[dict]:
     """ltv_ok=False when any of the program's docs is unverified: the model must not quote LTVs.
-    model: when given, yes/no questions get their answer settled first (yes_no_lead)."""
-    system = FULL_DOC_SYSTEM + ("" if ltv_ok else NO_LTV_RULE) + (yes_no_lead(question, docs_text, model) if model else "")
+    model: when given, yes/no questions get their answer settled first (yes_no_lead).
+    The instructions, lessons and program docs are one fixed block with its own long cache point (the same for
+    every question on the program). What changes per question (extra: the agency pages found for it, and the
+    yes/no lead) goes in a second block after it."""
+    fixed = FULL_DOC_SYSTEM + ("" if ltv_ok else NO_LTV_RULE) + lessons.block(program) + "\n\nGUIDELINES:\n\n" + docs_text
+    varies = (extra + (yes_no_lead(question, docs_text + extra, model) if model else "")).strip()
     return (
-        [{"role": "system", "content": system + "\n\nGUIDELINES:\n\n" + docs_text}]
+        [{"role": "system", "content": fixed, "cache": True}]
+        + ([{"role": "system", "content": varies}] if varies else [])
         + history[-6:]
         + [{"role": "user", "content": question}]
     )
 
 
-def search_messages(question: str, hits: list[dict], history: list[dict]) -> list[dict]:
+def search_messages(question: str, hits: list[dict], history: list[dict], program: str = "",
+                    section: str = "") -> list[dict]:
     pages = "\n\n".join(h["text"] for h in hits)
     return (
-        [{"role": "system", "content": SEARCH_SYSTEM + "\n\nPAGES:\n\n" + pages}]
+        [{"role": "system", "content": SEARCH_SYSTEM + lessons.block(program, section) + "\n\nPAGES:\n\n" + pages}]
         + history[-6:]
         + [{"role": "user", "content": question}]
     )

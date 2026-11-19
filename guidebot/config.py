@@ -31,6 +31,10 @@ LOCAL_MODEL = "gemma4:26b"
 LOCAL_CTX = 65536
 CLAUDE_MODEL = "claude-sonnet-5-5"   # 22/22 in the race, same as Opus, faster and cheaper
 CLAUDE_EFFORT = os.environ.get("GUIDEBOT_EFFORT", "medium")
+# How long Claude keeps the fixed block (instructions, lessons, program sheets) cached. 1h is the longest Anthropic
+# offers (2026-11-19). Only that block gets it: it holds guidelines, never a question. The question and chat history
+# keep the 5-minute default.
+CACHE_TTL = os.environ.get("GUIDEBOT_CACHE_TTL", "1h")
 CHAT_MODEL = os.environ.get("GUIDEBOT_MODEL") or (CLAUDE_MODEL if os.environ.get("ANTHROPIC_API_KEY") else LOCAL_MODEL)
 EMBED_MODEL = "nomic-embed-text"
 EMBED_DOC_PREFIX = "search_document: "    # nomic needs these, set both to "" for other embed models

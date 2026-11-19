@@ -200,6 +200,7 @@ button.act.small { padding: 5px 12px; font-size: 0.75rem; }
     <button type="button" data-tab="feedback">Feedback</button>
     <button type="button" data-tab="usage">Usage</button>
     <button type="button" data-tab="revo">Revo rules</button>
+    <button type="button" data-tab="lessons">Lessons</button>
     <button type="button" data-tab="index">Index</button>
     <button type="button" data-tab="updates">Updates<span class="badge" id="upd-count" hidden></span></button>
   </nav>
@@ -228,6 +229,7 @@ function showTab(t) {
   if (t === "feedback") feedbackTab();
   if (t === "usage") usageTab();
   if (t === "revo") revoTab();
+  if (t === "lessons") lessonsTab();
 }
 document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
 const setMain = html => { document.getElementById("main").innerHTML = html; };
@@ -238,6 +240,7 @@ async function feedbackTab() {
   const side = document.getElementById("side");
   if (!r.ok) { side.innerHTML = `<div class="note bad">Admin only.</div>`; return; }
   const {feedback} = await r.json();
+  const taught = new Set(((await getJson("/admin/api/lessons"))?.lessons || []).map(x => String(x.feedback)));
   side.innerHTML = `<div class="muted">${feedback.length} report${feedback.length === 1 ? "" : "s"}. Each one runs in the
     stress test (tools.stress_run fb-), so once it's fixed it stays fixed.</div>`;
   setMain(feedback.length ? `<h1>Feedback</h1>` + feedback.map(f => `<div class="panel" style="margin-bottom:14px">
@@ -245,8 +248,60 @@ async function feedbackTab() {
         ${esc(f.mode === "scenario" ? "Scenario" : "Guidelines")} · ${esc(f.program || f.section || "All programs")} · fb-${f.id}</div>
       <div class="msg user">${esc(f.question)}</div>
       <div class="note bad"><strong>What's wrong:</strong> ${esc(f.note)}</div>
-      <details><summary>The answer they got</summary><div class="msg bot md">${md(f.answer)}</div></details></div>`).join("")
+      <details><summary>The answer they got</summary><div class="msg bot md">${md(f.answer)}</div></details>
+      <div class="row" style="margin-top:8px">${taught.has(String(f.id)) ? `<span class="muted">Lesson saved from this one.</span>`
+        : `<button class="act ghost" data-teach="${f.id}">Make a lesson</button><span class="muted" data-teach-msg="${f.id}"></span>`}</div></div>`).join("")
     : `<div class="empty">No reports yet. People see a "This is wrong" link under every answer.</div>`);
+  document.querySelectorAll("[data-teach]").forEach(b => b.onclick = async () => {
+    const msg = document.querySelector(`[data-teach-msg="${b.dataset.teach}"]`);
+    b.disabled = true; msg.textContent = " Drafting (a few cents)…";
+    const d = await post("/admin/api/lessons/draft", {feedback: Number(b.dataset.teach)});
+    if (d.error) { msg.textContent = " " + d.error; b.disabled = false; return; }
+    showTab("lessons"); lessonsTab({...d, feedback: Number(b.dataset.teach)});
+  });
+}
+
+// ---------- lessons (lessons.py): short rules learned from "This is wrong", added to every answer's instructions ----------
+async function lessonsTab(edit) {
+  const r = await fetch("/admin/api/lessons");
+  const side = document.getElementById("side");
+  if (!r.ok) { side.innerHTML = `<div class="note bad">Admin only.</div>`; return; }
+  const {lessons} = await r.json();
+  if (tab !== "lessons") return;
+  side.innerHTML = `<div class="muted">What AskNick learned from mistakes. Each saved lesson goes into the instructions for
+    every answer on its scope, so the same mistake doesn't happen twice. Start one from a report on the Feedback tab
+    (Make a lesson drafts it) or write one here. Nothing counts until you save it.</div>
+    <div class="muted">${lessons.length} lesson${lessons.length === 1 ? "" : "s"}.</div>`;
+  const e = edit || {};
+  setMain(`<h1>Lessons</h1><div class="sub">A general rule, one or two sentences. No borrower details. Scope is a tab
+      (NonQM, Conventional, FHA, VA), a program name or the start of one, or * for everything.</div>
+    <div class="panel"><div class="row">
+      <label class="label">Scope <input class="field" id="l-scope" value="${esc(e.scope || "*")}" style="width:240px"></label>
+      ${e.feedback ? `<span class="muted">From report fb-${esc(String(e.feedback))}</span>` : ""}</div>
+      <label class="label" style="display:block;margin-top:10px">Lesson
+        <textarea id="l-text" style="min-height:80px" placeholder="When a sheet lists a minimum FICO by loan amount...">${esc(e.text || "")}</textarea></label>
+      ${e.warning ? `<div class="note bad">The draft looks like it has ${esc(e.warning)} in it. Take it out before saving.</div>` : ""}
+      <div class="row" style="margin-top:10px"><button class="act" id="l-save">${e.id ? "Save changes" : "Save lesson"}</button>
+        ${e.id || e.text ? `<button class="act ghost" id="l-cancel">Cancel</button>` : ""}<span id="l-msg" class="muted"></span></div></div>
+    ${lessons.slice().reverse().map(x => `<div class="panel"><div class="row" style="justify-content:space-between">
+        <span class="muted">${esc(x.scope === "*" ? "All programs" : x.scope)}${x.feedback ? ` · from fb-${esc(String(x.feedback))}` : ""}</span>
+        <span class="muted">added ${esc(x.added)}${x.updated !== x.added ? `, changed ${esc(x.updated)}` : ""}</span></div>
+      <div style="margin:6px 0">${esc(x.text)}</div>
+      <div class="row"><button class="act ghost" data-ledit="${esc(x.id)}">Edit</button>
+        <button class="act ghost" data-ldel="${esc(x.id)}">Delete</button></div></div>`).join("")}`);
+  const val = id => document.getElementById(id).value;
+  document.getElementById("l-save").onclick = async () => {
+    const res = await post("/admin/api/lessons/save", {lesson: {id: e.id || "", scope: val("l-scope"), text: val("l-text"),
+      feedback: e.feedback || null}});
+    if (res.error) document.getElementById("l-msg").textContent = " " + res.error; else lessonsTab();
+  };
+  document.getElementById("l-cancel")?.addEventListener("click", () => lessonsTab());
+  document.querySelectorAll("[data-ledit]").forEach(b => b.onclick = () => lessonsTab(lessons.find(x => x.id === b.dataset.ledit)));
+  document.querySelectorAll("[data-ldel]").forEach(b => b.onclick = async () => {
+    if (!confirm("Delete this lesson? Answers stop using it.")) return;
+    const res = await post("/admin/api/lessons/delete", {id: b.dataset.ldel});
+    if (res.error) alert(res.error); else lessonsTab();
+  });
 }
 
 // ---------- chats: everyone's, newest first, grouped by person ----------
